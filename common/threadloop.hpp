@@ -9,6 +9,16 @@
 
 namespace ILLIXR {
 
+const record_header __threadloop_iteration_header {"threadloop_iteration", {
+	{"plugin_id", typeid(std::size_t)},
+	{"iteration_no", typeid(std::size_t)},
+	{"skips", typeid(std::size_t)},
+	{"cpu_time_start", typeid(std::chrono::nanoseconds)},
+	{"cpu_time_stop" , typeid(std::chrono::nanoseconds)},
+	{"wall_time_start", typeid(std::chrono::high_resolution_clock::time_point)},
+	{"wall_time_stop" , typeid(std::chrono::high_resolution_clock::time_point)},
+}};
+
 /**
  * @brief A reusable threadloop for plugins.
  *
@@ -24,6 +34,7 @@ public:
 	 * @brief Starts the thread.
 	 */
 	virtual void start() override {
+		plugin::start();
 		_m_thread = std::thread(std::bind(&threadloop::thread_main, this));
 	}
 
@@ -31,49 +42,66 @@ public:
 	 * @brief Stops the thread.
 	 */
 	virtual void stop() override {
-		_m_terminate.store(true);
-		_m_thread.join();
-	}
-
-	virtual ~threadloop() override {
-		if (!should_terminate()) {
-			stop();
+		if (! _m_terminate.load()) {
+			_m_terminate.store(true);
+			_m_thread.join();
+			std::cerr << "Joined " << name << std::endl;
+			plugin::stop();
+		} else {
+			std::cerr << "You called stop() on this plugin twice." << std::endl;
 		}
 	}
 
+	virtual ~threadloop() override {
+		if (!_m_terminate.load()) {
+			std::cerr << "You didn't call stop() before destructing this plugin." << std::endl;
+			abort();
+		}
+	}
+
+protected:
+	std::size_t iteration_no = 0;
+	std::size_t skip_no = 0;
+
 private:
 	void thread_main() {
-		metric_coalescer<start_iteration_record> start_it {metric_logger};
-		metric_coalescer<stop_iteration_record> stop_it {metric_logger};
-		metric_coalescer<start_skip_iteration_record> start_skip {metric_logger};
-		metric_coalescer<stop_skip_iteration_record> stop_skip {metric_logger};
+		record_coalescer it_log {record_logger_};
 
-		std::size_t it = 0;
-		std::size_t skip_it = 0;
+		std::cout << "thread," << std::this_thread::get_id() << ",threadloop," << name << std::endl;
 
 		_p_thread_setup();
 
-		while (!should_terminate()) {
+		auto iteration_start_cpu_time  = thread_cpu_time();
+		auto iteration_start_wall_time = std::chrono::high_resolution_clock::now();
 
-			start_skip.log(std::make_unique<const start_skip_iteration_record>(id, it, skip_it));
+		while (!should_terminate()) {
 			skip_option s = _p_should_skip();
-			stop_skip.log(std::make_unique<const stop_skip_iteration_record>(id, it, skip_it));
 
 			switch (s) {
 			case skip_option::skip_and_yield:
 				std::this_thread::yield();
-				++skip_it;
+				++skip_no;
 				break;
 			case skip_option::skip_and_spin:
-				++skip_it;
+				++skip_no;
 				break;
-			case skip_option::run:
-				start_it.log(std::make_unique<const start_iteration_record>(id, it, skip_it));
+			case skip_option::run: {
 				_p_one_iteration();
-				stop_it.log(std::make_unique<const stop_iteration_record>(id, it, skip_it));
-				++it;
-				skip_it = 0;
+				it_log.log(record{__threadloop_iteration_header, {
+					{id},
+					{iteration_no},
+					{skip_no},
+					{iteration_start_cpu_time},
+					{thread_cpu_time()},
+					{iteration_start_wall_time},
+					{std::chrono::high_resolution_clock::now()},
+				}});
+				iteration_start_cpu_time  = thread_cpu_time();
+				iteration_start_wall_time = std::chrono::high_resolution_clock::now();
+				++iteration_no;
+				skip_no = 0;
 				break;
+			}
 			case skip_option::stop:
 				stop();
 				break;
@@ -105,7 +133,7 @@ protected:
 
 	/**
 	 * @brief Gets called at setup time, from the new thread.
-	 */	
+	 */
 	virtual void _p_thread_setup() { }
 
 	/**
@@ -124,35 +152,7 @@ protected:
 		return _m_terminate.load();
 	}
 
-	/**
-	 * @brief Sleeps until a roughly @p stop.
-	 *
-	 * We attempt to still be somewhat responsive to `stop()` and to be more accurate than
-	 * stdlib's `sleep`, by sleeping for the deadline in chunks.
-	 */
-	void reliable_sleep(std::chrono::high_resolution_clock::time_point stop) {
-		auto start = std::chrono::high_resolution_clock::now();
-		auto sleep_duration = stop - start;
-
-		auto sleep_quantum = std::min<std::common_type_t<decltype(sleep_duration), decltype(MAX_TIMEOUT)>>(
-			sleep_duration / SLEEP_SAFETY_FACTOR,
-			MAX_TIMEOUT
-		);
-
-		// sleep_quantum is at most MAX_TIMEOUT so that we will wake up, and check if should_terminate
-		// Thus, every plugin will respond to termination within MAX_TIMOUT (assuming no long compute-bound thing)
-		while (!should_terminate() && std::chrono::high_resolution_clock::now() - start < sleep_duration) {
-			std::this_thread::sleep_for(sleep_quantum);
-		}
-	}
-
 private:
-	// This factor is related to how accurate reliable_sleep is
-	const size_t SLEEP_SAFETY_FACTOR {100};
-
-	// this factor is related to how quickly we will shutdown when termintae is called
-	std::chrono::milliseconds MAX_TIMEOUT {100};
-
 	std::atomic<bool> _m_terminate {false};
 
 	std::thread _m_thread;

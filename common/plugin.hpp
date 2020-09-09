@@ -1,9 +1,20 @@
 #pragma once
 
 #include "phonebook.hpp"
-#include "logging.hpp"
+#include "record_logger.hpp"
 
 namespace ILLIXR {
+
+	/*
+	 * This gets included, but it is functionally 'private'. Hence the double-underscores.
+	 */
+	const record_header __plugin_start_header {
+		"plugin_name",
+		{
+			{"plugin_id", typeid(std::size_t)},
+			{"plugin_name", typeid(std::string)},
+		},
+	};
 
 	/**
 	 * @brief A dynamically-loadable plugin for Spindle.
@@ -18,36 +29,41 @@ namespace ILLIXR {
 		 * consturctors.
 		 */
 		virtual void start() {
-			metric_logger->log(std::make_unique<const component_start_record>(id, name));
+			record_logger_->log(record{__plugin_start_header, {
+				{id},
+				{name},
+			}});
 		}
 
 		/**
 		 * @brief A method which Spindle calls when it starts the component.
-		 * 
-		 * This is necessary for stop-actions which have to replaced by the subclass. Destructors
-		 * would prepend instead of replace actions.
+		 *
+		 * This is necessary because the parent class might define some actions that need to be
+		 * taken prior to destructing the derived class. For example, threadloop must halt and join
+		 * the thread before the derived class can be safely destructed. However, the derived
+		 * class's destructor is called before its parent (threadloop), so threadloop doesn't get a
+		 * chance to join the thread before the derived class is destroyed, and the thread accesses
+		 * freed memory. Instead, we call plugin->stop manually before destrying anything.
 		 */
-		virtual void stop() {
-			metric_logger->log(std::make_unique<const component_stop_record>(id));
-		}
+		virtual void stop() { }
 
 		plugin(const std::string& name_, phonebook* pb_)
 			: name{name_}
 			, pb{pb_}
-			, metric_logger{pb->lookup_impl<c_metric_logger>()}
-			, gen_guid{pb->lookup_impl<c_gen_guid>()}
-			, id{gen_guid->get()}
+			, record_logger_{pb->lookup_impl<record_logger>()}
+			, gen_guid_{pb->lookup_impl<gen_guid>()}
+			, id{gen_guid_->get()}
 		{ }
 
-		virtual ~plugin() { stop(); }
+		virtual ~plugin() { }
 
 		std::string get_name() { return name; }
 
 	protected:
 		std::string name;
 		const phonebook* pb;
-		const std::shared_ptr<c_metric_logger> metric_logger;
-		const std::shared_ptr<c_gen_guid> gen_guid;
+		const std::shared_ptr<record_logger> record_logger_;
+		const std::shared_ptr<gen_guid> gen_guid_;
 		const std::size_t id;
 	};
 
