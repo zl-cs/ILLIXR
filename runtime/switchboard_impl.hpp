@@ -1,6 +1,5 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
-#include "common/logging.hpp"
 #include <atomic>
 #include <vector>
 #include <iostream>
@@ -68,7 +67,6 @@ namespace ILLIXR {
 				throw std::runtime_error{"this doesn't work yet"};
 				/* TODO: (optimization) avoid this copy if we are the only subscriber. The reader
 				   can read and modify the event in place. */
-				return nullptr;
 			}
 			topic_reader_latest(const topic* topic) : _m_topic{topic} {
 				/* No thread-safety required in constructor. This is only called by one thread. */

@@ -200,16 +200,8 @@ public:
 
 			const fast_pose_type fast_pose = pp->get_fast_pose();
 			const pose_type pose = fast_pose.pose;
-			/*if(counter == 50){
-				std::cerr << "First pose received: quat(wxyz) is " << pose.orientation.w() << ", " << pose.orientation.x() << ", " << pose.orientation.y() << ", " << pose.orientation.z() << std::endl;
-				//offsetQuat = Eigen::Quaternionf(pose.orientation);
-				offsetQuat = Eigen::Quaternionf(1, 0, 0, 0);
-			}*/
-
-			counter++;
 
 			Eigen::Quaternionf combinedQuat = pose.orientation;
-//				Eigen::Quaternionf combinedQuat = offsetQuat.inverse() * pose.orientation;
 
 			auto latest_quat = ksAlgebra::ksQuatf {
 				.x = combinedQuat.x(),
@@ -225,9 +217,6 @@ public:
 			};
 			auto scale = ksAlgebra::ksVector3f{1,1,1};
 			ksAlgebra::ksMatrix4x4f head_matrix;
-#ifndef NDEBUG
-			std::cout<< "App using position: " << latest_position.z << std::endl;
-#endif
 			ksAlgebra::ksMatrix4x4f_CreateTranslationRotationScale(&head_matrix, &latest_position, &latest_quat, &scale);
 			ksAlgebra::ksMatrix4x4f viewMatrix;
 			// View matrix is the inverse of the camera's position/rotation/etc.
@@ -351,9 +340,6 @@ private:
 	#endif
 
 	time_type lastFrameTime;
-
-	uint counter = 0;
-	//Eigen::Quaternionf offsetQuat;
 
 	GLuint eyeTextures[2];
 	GLuint eyeTextureFBO;

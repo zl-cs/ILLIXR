@@ -1,23 +1,14 @@
 #pragma once
 
+#include <any>
 #include <atomic>
 #include <unordered_map>
-#include <any>
-#include <cassert>
-#include <utility>
+#include <sstream>
 #include <vector>
-#include <chrono>
-#include <ctime>
 #include <memory>
 #include "phonebook.hpp"
 
 namespace ILLIXR {
-	static inline std::chrono::system_clock::time_point __high_res_to_sys_tp(const std::chrono::high_resolution_clock::time_point& input) {
-		// https://stackoverflow.com/a/52296562/1078199
-		auto highResNow = std::chrono::high_resolution_clock::now();
-		auto systemNow = std::chrono::system_clock::now();
-		return systemNow + std::chrono::duration_cast<std::chrono::system_clock::duration>(highResNow - input);
-	}
 
 	/**
 	 * @brief Schema of each record.
@@ -32,11 +23,18 @@ namespace ILLIXR {
 			, columns{columns_}
 		{ }
 
+		/**
+		 * @brief Compares two schemata.
+		 */
 		bool operator==(const record_header& other) const {
-			if (id != other.id) {
-				return false;
+			// Check pointer first
+			if (this == &other) {
+				return true;
 			}
-			if (columns.size() != other.columns.size()) {
+
+			if (name != other.name
+				|| columns.size() != other.columns.size()
+				|| id != other.id) {
 				return false;
 			}
 			for (std::size_t i = 0; i < columns.size(); ++i) {
@@ -55,12 +53,12 @@ namespace ILLIXR {
 		const std::type_info& get_column_type(unsigned column) const { return columns[column].second; }
 		unsigned get_columns() const { return columns.size(); }
 		std::string to_string() const {
-			std::string ret = std::string{"record "} + name + std::string{" ( "};
+			std::string ret = std::string{"record_header "} + name + std::string{" { "};
 			for (const auto& pair : columns) {
 				ret += std::string{pair.second.name()} + std::string{" "} + pair.first + std::string{"; "};
 			}
 			ret.erase(ret.size() - 2);
-			ret += std::string{" )"};
+			ret += std::string{" }"};
 			return ret;
 		}
 
@@ -70,25 +68,21 @@ namespace ILLIXR {
 		const std::vector<std::pair<std::string, const std::type_info&>> columns;
 	};
 
-	class use_taint {
+	/**
+	 * @brief A helper class that lets one dynamically determine if some data gets used.
+	 *
+	 * When a data_use_indicator gets copied, the original is considered used and the new one is considered unused.
+	 */
+	class data_use_indicator {
 	public:
-		use_taint() : used{false} { }
-		use_taint(const use_taint& other) : used{false} {
+		data_use_indicator() : used{false} { }
+		data_use_indicator(const data_use_indicator& other) : used{false} {
 			other.used = true;
 		}
-		use_taint& operator=(const use_taint& other) {
+		data_use_indicator& operator=(const data_use_indicator& other) {
 			if (&other != this) {
 				other.used = true;
 				used = false;
-				/*
-				  class_containing_use_taint a;
-				  a.mark_used();
-				  // at this point, the data a is tracking is used.
-
-				  a = b;
-				  // at this point, the data a is tracking is not yet used.
-				  // Therefore a should be marked as unused
-				  */
 			}
 			return *this;
 		}
@@ -103,28 +97,27 @@ namespace ILLIXR {
 		mutable bool used;
 	};
 
+	/**
+	 * @brief This class represents a tuple of fields which get logged by `record_logger`.
+	 *
+	 * `rh_` is a pointer rather than a reference for historical reasons. It should not be null.
+	 */
     class record {
 	public:
-		record()
-			: rh{nullptr}
-			, values{}
-		{ }
-
-		record(const record_header* rh_, std::vector<std::any> values_)
+		record(const record_header& rh_, std::vector<std::any> values_)
 			: rh{rh_}
 			, values{values_}
 		{
 #ifndef NDEBUG
-			assert(rh);
-			if (values.size() != rh->get_columns()) {
-				std::cerr << values.size() << " elements passed, but rh for " << rh->get_name() << " only specifies " << rh->get_columns() << "." << std::endl;
+			if (values.size() != rh.get_columns()) {
+				std::cerr << values.size() << " elements passed, but rh for " << rh.get_name() << " only specifies " << rh.get_columns() << "." << std::endl;
 				abort();
 			}
 			for (std::size_t column = 0; column < values.size(); ++column) {
-				if (values[column].type() != rh->get_column_type(column)) {
-					std::cerr << "Caller got wrong type for column " << column << " of " << rh->get_name() << ". "
+				if (values[column].type() != rh.get_column_type(column)) {
+					std::cerr << "Caller got wrong type for column " << column << " of " << rh.get_name() << ". "
 							  << "Caller passed: " << values[column].type().name() << "; "
-							  << "recod_header for specifies: " << rh->get_column_type(column).name() << ". "
+							  << "recod_header for specifies: " << rh.get_column_type(column).name() << ". "
 							  << std::endl;
 					abort();
 				}
@@ -133,78 +126,62 @@ namespace ILLIXR {
 		}
 
 		~record() {
-			assert(rh == nullptr || data_taint.is_used());
+#ifndef NDEBUG
+			if (!data_use_indicator_.is_used()) {
+				std::cerr << "Record was deleted without being logged." << std::endl;
+				abort();
+			}
+#endif
 		}
 
 		template<typename T>
 		T get_value(unsigned column) const {
 #ifndef NDEBUG
-			assert(rh);
-			data_taint.mark_used();
-			if (rh->get_column_type(column) != typeid(T)) {
-				std::cerr << "Caller column type for " << column << " of " << rh->get_name() << ". "
-						  << "Caller passed: " << typeid(T).name() << "; "
-						  << "record_header specifies: " << rh->get_column_type(column).name() << ". "
-						  << std::endl;
-				abort();
+			data_use_indicator_.mark_used();
+			if (rh.get_column_type(column) != typeid(T)) {
+				std::ostringstream ss;
+				ss << "Caller column type for " << column << " of " << rh.get_name() << ". "
+				   << "Caller passed: " << typeid(T).name() << "; "
+				   << "record_header specifies: " << rh.get_column_type(column).name() << ". ";
+				throw std::runtime_error{ss.str()};
 			}
 #endif
 			return std::any_cast<T>(values[column]);
 		}
 
 		const record_header& get_record_header() const {
-			assert(rh);
-			return *rh;
-		}
-
-		std::string to_string() const {
-			std::string ret = "record{";
-			for (unsigned i = 0; i < values.size(); ++i) {
-				if (false) {
-				} else if (rh->get_column_type(i) == typeid(std::size_t)) {
-					ret += std::to_string(get_value<std::size_t>(i)) + std::string{", "};
-				} else if (rh->get_column_type(i) == typeid(std::chrono::nanoseconds)) {
-					ret += std::to_string(get_value<std::chrono::nanoseconds>(i).count()) + std::string{"ns, "};
-				} else if (rh->get_column_type(i) == typeid(std::chrono::high_resolution_clock::time_point)) {
-					std::time_t timet = std::chrono::system_clock::to_time_t(__high_res_to_sys_tp(get_value<std::chrono::high_resolution_clock::time_point>(i)));
-					ret += std::string{std::ctime(&timet)} + std::string{", "};
-				} else if (rh->get_column_type(i) == typeid(std::string)) {
-					ret += std::string{"\""} + get_value<std::string>(i) + std::string{"\", "};
-				} else {
-					throw std::runtime_error{std::string{"type "} + std::string{rh->get_column_type(i).name()} + std::string{" not implemented"}};
-				}
-			}
-			ret.erase(ret.size() - 2);
-			ret += "}";
-			return ret;
+			return rh;
 		}
 
 		void mark_used() const {
-			data_taint.mark_used();
+#ifndef NDEBUG
+			data_use_indicator_.mark_used();
+#endif
 		}
 
 	private:
 		// Holding a pointer to a record_header is more efficient than
 		// requiring each record to hold a list of its column names
 		// and table name. This is just one pointer.
-		const record_header* rh;
+		const record_header& rh;
 		std::vector<std::any> values;
-        use_taint data_taint;
+#ifndef NDEBUG
+        data_use_indicator data_use_indicator_;
+#endif
     };
 
-
 	/**
-	 * @brief The ILLIXR logging service.
+	 * @brief The ILLIXR logging service for structured records.
 	 *
 	 * This has two advantages over printf logging. It has lower
 	 * overhead (because it goes into a database), won't result in
 	 * spliced messages (no stdout race-conditions), and is used
 	 * uniformly by ILLIXR components.
 	 */
-	class c_metric_logger : public phonebook::service {
+	class record_logger : public phonebook::service {
 	public:
 
-		virtual ~c_metric_logger() { }
+		virtual ~record_logger() { }
 
 		/**
 		 * @brief Writes one log record.
@@ -238,7 +215,7 @@ namespace ILLIXR {
 	 * namespace for everything, if you do not care about generating small integers for the IDs.
 	 *
 	 */
-	class c_gen_guid : public phonebook::service {
+	class gen_guid : public phonebook::service {
 	public:
 		/**
 		 * @brief Generate a number, unique from other calls to the same namespace/subnamespace/subsubnamepsace.
@@ -282,19 +259,19 @@ namespace ILLIXR {
 	 * \endcode
 	 *
 	 */
-	class metric_coalescer {
+	class record_coalescer {
 	private:
-		std::shared_ptr<c_metric_logger> logger;
+		std::shared_ptr<record_logger> logger;
 		std::chrono::time_point<std::chrono::high_resolution_clock> last_log;
 		std::vector<record> buffer;
 
 	public:
-		metric_coalescer(std::shared_ptr<c_metric_logger> logger_)
+		record_coalescer(std::shared_ptr<record_logger> logger_)
 			: logger{logger_}
 			, last_log{std::chrono::high_resolution_clock::now()}
 		{ }
 
-		~metric_coalescer() {
+		~record_coalescer() {
 			flush();
 		}
 
@@ -309,7 +286,7 @@ namespace ILLIXR {
 #ifndef NDEBUG
 			if (&r.get_record_header() != &buffer[0].get_record_header()
 				&& r.get_record_header() == buffer[0].get_record_header()) {
-				std::cerr << "Tried to push a record of type " << r.get_record_header().to_string() << " to a metric logger for type " << buffer[0].get_record_header().to_string() << std::endl;
+				std::cerr << "Tried to push a record of type " << r.get_record_header().to_string() << " to a record logger for type " << buffer[0].get_record_header().to_string() << std::endl;
 				abort();
 			}
 #endif

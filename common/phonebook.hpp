@@ -1,5 +1,4 @@
-#ifndef PHONEBOOK_HH
-#define PHONEBOOK_HH
+#pragma once
 
 #include <typeindex>
 #include <stdexcept>
@@ -99,7 +98,9 @@ namespace ILLIXR {
 			const std::lock_guard<std::mutex> lock{_m_mutex};
 
 			const std::type_index type_index = std::type_index(typeid(specific_service));
-			// std::cerr << "Register " << type_index.name() << std::endl;
+#ifndef DNDEBUG
+			std::cerr << "Register " << type_index.name() << std::endl;
+#endif
 			assert(_m_registry.count(type_index) == 0);
 			_m_registry.try_emplace(type_index, impl);
 		}
@@ -141,4 +142,3 @@ namespace ILLIXR {
 	};
 }
 
-#endif

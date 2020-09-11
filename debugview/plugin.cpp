@@ -332,7 +332,6 @@ public:
 				const pose_type pose = fast_pose.pose;
 
 				Eigen::Quaternionf combinedQuat = pose.orientation;
-//				Eigen::Quaternionf combinedQuat = pose.orientation * offsetQuat.inverse();
 				headsetPose = generateHeadsetTransform(pose.position, combinedQuat, tracking_position_offset);
 			}
 
@@ -383,6 +382,16 @@ public:
 			headsetObject.color = {0.2,0.2,0.2,1};
 			headsetObject.drawMe();
 
+			if(pp->true_pose_reliable()) {
+				const pose_type groundtruth_pose = pp->get_true_pose();
+				headsetPose = generateHeadsetTransform(groundtruth_pose.position, groundtruth_pose.orientation, tracking_position_offset);
+			}
+			modelView = userView * headsetPose;
+			glUniformMatrix4fv(modelViewAttr, 1, GL_FALSE, (GLfloat*)modelView.data());
+
+			headsetObject.color = {0,0.8,0,1};
+			headsetObject.drawMe();
+
 			draw_GUI();
 			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -400,8 +409,6 @@ private:
 	GLFWwindow* gui_window;
 
 	uint8_t test_pattern[TEST_PATTERN_WIDTH][TEST_PATTERN_HEIGHT];
-
-	//Eigen::Quaternionf offsetQuat = Eigen::Quaternionf::Identity();
 
 	Eigen::Vector3d view_euler = Eigen::Vector3d::Zero();
 	Eigen::Vector2d last_mouse_pos = Eigen::Vector2d::Zero();

@@ -9,15 +9,15 @@
 
 namespace ILLIXR {
 
-	const record_header __threadloop_iteration_header {"threadloop_iteration", {
-		{"plugin_id", typeid(std::size_t)},
-		{"iteration_no", typeid(std::size_t)},
-		{"skips", typeid(std::size_t)},
-		{"cpu_time_start", typeid(std::chrono::nanoseconds)},
-		{"cpu_time_stop" , typeid(std::chrono::nanoseconds)},
-		{"wall_time_start", typeid(std::chrono::high_resolution_clock::time_point)},
-		{"wall_time_stop" , typeid(std::chrono::high_resolution_clock::time_point)},
-	}};
+const record_header __threadloop_iteration_header {"threadloop_iteration", {
+	{"plugin_id", typeid(std::size_t)},
+	{"iteration_no", typeid(std::size_t)},
+	{"skips", typeid(std::size_t)},
+	{"cpu_time_start", typeid(std::chrono::nanoseconds)},
+	{"cpu_time_stop" , typeid(std::chrono::nanoseconds)},
+	{"wall_time_start", typeid(std::chrono::high_resolution_clock::time_point)},
+	{"wall_time_stop" , typeid(std::chrono::high_resolution_clock::time_point)},
+}};
 
 /**
  * @brief A reusable threadloop for plugins.
@@ -65,7 +65,7 @@ protected:
 
 private:
 	void thread_main() {
-		metric_coalescer it_log {metric_logger};
+		record_coalescer it_log {record_logger_};
 
 		std::cout << "thread," << std::this_thread::get_id() << ",threadloop," << name << std::endl;
 
@@ -87,7 +87,7 @@ private:
 				break;
 			case skip_option::run: {
 				_p_one_iteration();
-				it_log.log(record{&__threadloop_iteration_header, {
+				it_log.log(record{__threadloop_iteration_header, {
 					{id},
 					{iteration_no},
 					{skip_no},

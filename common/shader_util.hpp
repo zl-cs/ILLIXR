@@ -11,22 +11,18 @@ using namespace ILLIXR;
 
 static void GLAPIENTRY
 	MessageCallback([[maybe_unused]] GLenum source,
-					GLenum type,
+					[[maybe_unused]] GLenum type,
 					[[maybe_unused]] GLuint id,
-					GLenum severity,
+					[[maybe_unused]] GLenum severity,
 					[[maybe_unused]] GLsizei length,
-					const GLchar* message,
+					[[maybe_unused]] const GLchar* message,
 					[[maybe_unused]] const void* userParam )
 	{
-        // Don't log low-severity GL issues.
-        if(severity == GL_DEBUG_SEVERITY_NOTIFICATION)
-        {
-            return;
-        }
-
-        fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-                ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-                    type, severity, message );
+#ifndef NDEBUG
+	fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+			( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+				type, severity, message );
+#endif
 	}
 
 static GLuint init_and_link (const char* vertex_shader, const char* fragment_shader){

@@ -3,19 +3,18 @@
 #include "common/runtime.hpp"
 #include "common/extended_window.hpp"
 #include "common/dynamic_lib.hpp"
-#include "switchboard_impl.hpp"
 #include "common/plugin.hpp"
-#include "sqlite_logger.hpp"
-#include "noop_logger.hpp"
-// #include "stdout_logger.hpp"
+#include "switchboard_impl.hpp"
+#include "stdout_record_logger.hpp"
+#include "noop_record_logger.hpp"
 
 using namespace ILLIXR;
 
 class runtime_impl : public runtime {
 public:
 	runtime_impl(GLXContext appGLCtx) {
-		pb.register_impl<c_metric_logger>(std::make_shared<sqlite_metric_logger>());
-		pb.register_impl<c_gen_guid>(std::make_shared<c_gen_guid>());
+		pb.register_impl<record_logger>(std::make_shared<noop_record_logger>());
+		pb.register_impl<gen_guid>(std::make_shared<gen_guid>());
 		pb.register_impl<switchboard>(create_switchboard(&pb));
 		pb.register_impl<xlib_gl_extended_window>(std::make_shared<xlib_gl_extended_window>(448*2, 320*2, appGLCtx));
 	}
@@ -46,7 +45,10 @@ public:
 	}
 
 	virtual ~runtime_impl() override {
-		stop();
+		if (!terminate.load()) {
+			std::cerr << "You didn't call stop() before destructing this plugin." << std::endl;
+			abort();
+		}
 	}
 
 private:
