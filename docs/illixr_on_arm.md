@@ -1,8 +1,3 @@
-To do:
-- [x] Test this instruction
-- [x] Update packages before build the kernel
-- [ ] Try to compile miniconda to ARM64 ISA
-
 # ILLIXR on ARM
 
 ILLIXR runs on Ubuntu 18.04, while the most recent publicly available Ubuntu for ARM64 architecture is 16.04.<br>
