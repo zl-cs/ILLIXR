@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-. $HOME/miniconda3/etc/profile.d/conda.sh
+# . $HOME/miniconda3/etc/profile.d/conda.sh
 
 orig_cwd="${PWD}"
 
@@ -14,6 +14,6 @@ if ! echo "${config_file}" | grep "^/"; then
 fi
 
 
-conda deactivate
-conda activate illixr-runner
-python runner/main.py "${config_file}"
+# conda deactivate
+# conda activate illixr-runner
+python3.8 runner/main.py "${config_file}"

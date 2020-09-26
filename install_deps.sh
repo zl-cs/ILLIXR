@@ -91,17 +91,17 @@ then
 		. ./scripts/install_euroc.sh
 	fi
 
-	if ! which conda 2> /dev/null; then
-		if [ ! -d "$HOME/miniconda3" ]; then
-			if y_or_n "Next: Install Conda"; then
-				. ./scripts/install_conda.sh
-			fi
-		fi
-	fi
+	# if ! which conda 2> /dev/null; then
+	#	if [ ! -d "$HOME/miniconda3" ]; then
+	#		if y_or_n "Next: Install Conda"; then
+	#			. ./scripts/install_conda.sh
+	#		fi
+	#	fi
+	# fi
 
 	# I won't ask the user first, because this is not a global installation.
 	# All of this stuff goes into a project-specific venv.
-	$HOME/miniconda3/bin/conda env create --force -f runner/environment.yml
+	# $HOME/miniconda3/bin/conda env create --force -f runner/environment.yml
 else
 	echo "${0} does not support ${ID_LIKE} yet."
 	exit 1

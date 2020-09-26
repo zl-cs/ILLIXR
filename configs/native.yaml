@@ -5,7 +5,7 @@ plugins:
   - path: pose_prediction/
   - path: gldemo/
   - path: timewarp_gl/
-  - path: debugview/
+# - path: debugview/
   - path: audio_pipeline/
   # - path: hologram/
   # - path: zed/
