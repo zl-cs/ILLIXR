@@ -1,15 +1,10 @@
-To do:
-- [ ] Test this instruction
-- [ ] Update packages before building the kernel
-- [ ] Try to compile miniconda to ARM64 ISA
-
 # ILLIXR on ARM
 
 ILLIXR runs on Ubuntu 18.04, while the most recent publicly available Ubuntu for ARM64 architecture is 16.04.<br>
 Therefore, we will cross-compile an Ubuntu 18.04 for ARM and run ILLIXR on it. This instruction mainly contains the following parts:
 - Cross-compile Ubuntu 18.04 for ARM64
-- Install and setup the Operating System on ARM board
-- Install and run ILLIXR on ARM board
+- Install and setup the operating system
+- Install and run ILLIXR
 
 ## Cross-compile Ubuntu 18.04
 
@@ -43,19 +38,21 @@ Now you will see the main menu of the `Bionic-Builder System`.
 
 3. Config and build:
     - (1) Create minimal base root filesystem:
-        - Select option 1 by input `1`
-        - Set username and password for logging into the compiled system
-        - Select the first mirror to download packages
-        - Set access point name and password for the internet connection
+        - Select option 1 by input `1`.
+        - Set username and password for logging into the compiled system.
+        - Select the first mirror to download packages.
+        - Set access point name and password for the internet connection.
     - (2) Build Kernel Linux v4.9.78:
-        - Select option 2 by input `2`
-        - Select option B to automatically perform all kernel build options
-        - After the finish of build, make sure the kernel `Image-hikey970-v4.9.gz` and the device tree `kirin970-hikey970.dtb` in the following path
+        - Select option 2 by input `2`.
+        - Select option B to automatically perform all kernel build options.
+        - After the finish of build, make sure the kernel `Image-hikey970-v4.9.gz` and the device tree `kirin970-hikey970.dtb` in the following path:
             ```~/Bionic-Builder/Install/kernel-install/```
     - (3) Copy and install kernels:
-        - Select option 3 by input `3`
+        - Select option 3 by input `3`.
     - (4) Generate flashable and compressed images:
-        - Select option 4 by input `4`
+        - Select option 4 by input `4`.
+    - (5) Exit `Bionic-Builder System`:
+        - Select option 99 by input `99`.
 
 ## Install the Operating System
 4. Flash the compiled Ubuntu 18.04 to an ARM board:
@@ -63,21 +60,22 @@ Now you will see the main menu of the `Bionic-Builder System`.
         |   1   |   2   |   3   |   4   |
         |  ---- | ----  | ----  | ----  |
         |   ON  |  OFF  |  ON   |  OFF  |
-    - (2) Connect the USB-C cable to the port next to the HDMI port
-    - (3) Change directory to `~/Bionic-Builder/Install`
-    - (4) Make sure the board is correctly detected (expected output contains device ID and `fastboot`):
+    - (2) Connect the USB-C cable to the port next to the HDMI port.
+    - (3) Power on the board.
+    - (4) Change directory of the host machine to `~/Bionic-Builder/Install`.
+    - (5) Make sure the board is correctly detected (expected output contains device ID and `fastboot`):
         ```
             sudo fastboot devices
         ```
-    - (5) Install necessary tools:
+    - (6) Install necessary tools:
         ```
             sudo apt-get install android tools-adb android-tools-fastboot
         ```
-    - (6) Flash the board:
+    - (7) Flash the board:
         ```
             sudo ./update_Hikey970.sh
         ```
-    - (7) Power off the board when flashing is finished
+    - (8) Power off the board when flashing is finished.
 
 ---
 #### * *Run the following commands on the target machine (ARM64)*:
@@ -88,20 +86,26 @@ Now you will see the main menu of the `Bionic-Builder System`.
         |   1   |   2   |   3   |   4   |
         |  ---- | ----  | ----  | ----  |
         |   ON  |  OFF  |  OFF  |  OFF |
-    - (2) Connect the board to a monitor by the HDMI cable
-    - (3) Power on the board, input the username and password you set when building the kernel
-    - (4) Make sure the board is connected to the internet
+    - (2) Connect the board to a monitor by the HDMI cable.
+    - (3) Power on the board, input the username and password you set when building the kernel.
+    - (4) List and connect to an available access point:
+        ```
+            nmcli dev wifi list
+            nmcli d wifi connect <essid> password <password>
+        ```
     - (5) Run the following commands to finish setup:
         ```
-            cd /etc
-            sudo ./init.sh
-            sudo apt-get install xubuntu-desktop
+            sudo /etc/./init.sh
         ```
-    - (6) Switch to the graphics mode
+        Please ignore any error and select `Yes` during the setup.<br>
+        Make sure to select `Yes` for installing `Ubuntu-desktop`, otherwise the Ubuntu will not have graphics mode.
+
+    - (6) Switch to the graphics mode.
         ``` 
-            service lightdm start
+            sudo service lightdm start
         ```
-    
+
+<!--
 ## Setup the Operating System
 1. Update Python3 to Python3.8
     - (1) Install Python3.8:
@@ -139,11 +143,12 @@ Now you will see the main menu of the `Bionic-Builder System`.
         ```
             pip3 install <package_name>
         ```
+-->
 
 ## Install and Run ILLIXR
 1. Clone the repository:
     ```
-        git clone --recursive --branch issue-57-headless https://github.com/ILLIXR/ILLIXR
+        git clone --recursive --branch issue-136-illixr-on-arm https://github.com/ILLIXR/ILLIXR
     ```
 
 2. Update the submodules. Submodules are git repositories inside a git repository that needs to be
@@ -157,7 +162,7 @@ Now you will see the main menu of the `Bionic-Builder System`.
         ./install_deps.sh
     ```
 
-4. Inspect `configs/native.yaml` and comment out `debug_view`. The schema definition (with documentation inline) is in `runner/config_schema.yaml`.
+4. Inspect `configs/native.yaml`. The schema definition (with documentation inline) is in `runner/config_schema.yaml`.
 
 
 5. Build and run ILLIXR standalone:
