@@ -14,6 +14,7 @@
 #include "shaders/basic_shader.hpp"
 #include "shaders/timewarp_shader.hpp"
 #include "common/pose_prediction.hpp"
+#include "common/reprojection.hpp"
 
 using namespace ILLIXR;
 
@@ -43,6 +44,7 @@ public:
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, pp{pb->lookup_impl<pose_prediction>()}
+		, ow{pb->lookup_impl<reprojection>()}
 		, xwin{pb->lookup_impl<xlib_gl_extended_window>()}
 		, _m_eyebuffer{sb->subscribe_latest<rendered_frame>("eyebuffer")}
 		, _m_hologram{sb->publish<hologram_input>("hologram_in")}
@@ -56,6 +58,7 @@ public:
 private:
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
+	const std::shared_ptr<reprojection> ow;
 
 	static constexpr int   SCREEN_WIDTH    = 550*2;
 	static constexpr int   SCREEN_HEIGHT   = 320*2;
@@ -396,12 +399,6 @@ public:
 	virtual void warp([[maybe_unused]] float time) {
 		glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc);
 
-		glBindFramebuffer(GL_FRAMEBUFFER,0);
-		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-		glClearColor(0, 0, 0, 0);
-    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-		glDepthFunc(GL_LEQUAL);
-
 		auto most_recent_frame = _m_eyebuffer->get_latest_ro();
 		// This should be null-checked in _p_should_skip
 		assert(most_recent_frame);
@@ -445,8 +442,8 @@ public:
 		Eigen::Matrix4f timeWarpEndTransform4x4;
 
 		// Calculate timewarp transforms using predictive view transforms
-		CalculateTimeWarpTransform(timeWarpStartTransform4x4, basicProjection, viewMatrix, viewMatrixBegin);
-		CalculateTimeWarpTransform(timeWarpEndTransform4x4, basicProjection, viewMatrix, viewMatrixEnd);
+		CalculateTimeWarpTransform(timeWarpStartTransform4x4, basicProjection, viewMatrix, viewMatrix);
+		CalculateTimeWarpTransform(timeWarpEndTransform4x4, basicProjection, viewMatrix, viewMatrix);
 
 		if(tw_start_transform_unif != -1)
 			glUniformMatrix4fv(tw_start_transform_unif, 1, GL_FALSE, (GLfloat*)(timeWarpStartTransform4x4.data()));
@@ -455,11 +452,6 @@ public:
 
 		glUniform1i(eye_sampler, 0);
 
-		
-
-
-		glBindVertexArray(tw_vao);
-
 		auto gpu_start_wall_time = std::chrono::high_resolution_clock::now();
 
 		GLuint query;
@@ -467,11 +459,26 @@ public:
 		glGenQueries(1, &query);
 		glBeginQuery(GL_TIME_ELAPSED, query);
 
+		// Perform advanced reprojection.
+		reprojected_frame result;
+		if((int)(glfwGetTime() * 0.5f) % 2 == 0)
+			ow->reproject(*most_recent_frame, latest_pose, result);
+		else
+			ow->reproject(*most_recent_frame, most_recent_frame->render_pose, result);
+
+		glUseProgram(timewarpShaderProgram);
+		glBindFramebuffer(GL_FRAMEBUFFER,0);
+		glBindVertexArray(tw_vao);
+		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+		glClearColor(0, 0, 0, 0);
+    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glDepthFunc(GL_LEQUAL);
+
 		// Loop over each eye.
 		for(int eye = 0; eye < HMD::NUM_EYES; eye++){
 			
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, most_recent_frame->texture_handles[eye]);
+			glBindTexture(GL_TEXTURE_2D, result.texture_handles[eye]);
 
 			// The distortion_positions_vbo GPU buffer already contains
 			// the distortion mesh for both eyes! They are contiguously

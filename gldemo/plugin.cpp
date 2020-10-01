@@ -113,6 +113,8 @@ public:
 			// Essentially, XRWaitFrame.
 			wait_vsync();
 
+			std::this_thread::sleep_for(100ms);
+
 			glUseProgram(demoShaderProgram);
 
 			glBindFramebuffer(GL_FRAMEBUFFER, eyeTextureFBO);
@@ -206,6 +208,10 @@ public:
 
 			frame->render_projection = basicProjection;
 
+			// Propagate eyebuffer dimensions through Switchboard.
+			frame->eyebuffer_width = EYE_TEXTURE_WIDTH;
+			frame->eyebuffer_height = EYE_TEXTURE_HEIGHT;
+
 			frame->render_pose = fast_pose;
 			which_buffer.store(buffer_to_use == 1 ? 0 : 1);
 			frame->render_time = std::chrono::high_resolution_clock::now();
@@ -266,8 +272,8 @@ private:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
 
 		glBindTexture(GL_TEXTURE_2D, 0); // unbind texture, will rebind later
@@ -289,8 +295,8 @@ private:
 		// mapped into.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage2D(GL_TEXTURE_2D, 0, DEPTH_FORMAT, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 
 		glBindTexture(GL_TEXTURE_2D, 0); // unbind texture, will rebind later

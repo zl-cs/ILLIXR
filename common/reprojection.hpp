@@ -14,6 +14,8 @@ public:
 	// frame:      rendered frame
 	// fresh_pose: fast pose sampled at warp time
 	// result:     resulting frames. Must be pre-allocated
-	virtual void reproject(const rendered_frame& frame, const fast_pose_type& fresh_pose, reprojected_frame& result) = 0;
+	virtual void reproject(const rendered_frame& frame,
+						   const fast_pose_type& fresh_pose,
+						   reprojected_frame& result) = 0;
 	virtual ~reprojection() { }
 };
