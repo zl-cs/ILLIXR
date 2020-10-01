@@ -188,6 +188,10 @@ private:
         // Pre-compute things
         const imu_raw_type *imu_raw = _m_imu_raw->get_latest_ro();
 
+        // Account for IMU staleness
+        double imu_age = (std::chrono::duration<double>(std::chrono::system_clock::now() - imu_raw->imu_time)).count();
+        dt += imu_age;
+
         Eigen::Vector3d w_hat =imu_raw->w_hat;
         Eigen::Vector3d a_hat = imu_raw->a_hat;
         Eigen::Vector3d w_alpha = (imu_raw->w_hat2-imu_raw->w_hat)/dt;
