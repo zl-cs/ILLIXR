@@ -32,14 +32,18 @@ std::shared_ptr<Camera> start_camera() {
     init_params.camera_resolution = RESOLUTION::VGA;
     init_params.coordinate_units = UNIT::METER;
     init_params.coordinate_system = COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD; // Coordinate system used in ROS
-    init_params.camera_fps = 60;
+    init_params.camera_fps = 15;
     init_params.depth_mode = DEPTH_MODE::NONE;
     // Open the camera
     ERROR_CODE err = zedm->open(init_params);
     if (err != ERROR_CODE::SUCCESS) {
         printf("%s\n", toString(err).c_str());
         zedm->close();
+        abort();
     }
+
+    // This is 4% of camera frame time, not 4 ms
+    zedm->setCameraSettings(VIDEO_SETTINGS::EXPOSURE, 4);
 
     return zedm;
 }
@@ -129,9 +133,9 @@ public:
 
 protected:
     virtual skip_option _p_should_skip() override {
+        std::this_thread::sleep_for(std::chrono::milliseconds{2});
         zedm->getSensorsData(sensors_data, TIME_REFERENCE::CURRENT);
         if (sensors_data.imu.timestamp > last_imu_ts) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{2});
             return skip_option::run;
         } else {
             return skip_option::skip_and_yield;
@@ -176,10 +180,9 @@ protected:
             imu_time,
         });
 
-        auto imu_integrator_params = new imu_integrator_seq{
-			.seq = static_cast<int>(++_imu_integrator_seq),
-		};
-		_m_imu_integrator->put(imu_integrator_params);
+        _m_imu_integrator->put(new imu_integrator_seq {
+            .seq = static_cast<int>(++_imu_integrator_seq)
+        });
 
         last_imu_ts = sensors_data.imu.timestamp;
     }
