@@ -57,8 +57,8 @@ private:
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
 
-	static constexpr int   SCREEN_WIDTH    = 550*2;
-	static constexpr int   SCREEN_HEIGHT   = 320*2;
+	static constexpr int   SCREEN_WIDTH    = 2560;
+	static constexpr int   SCREEN_HEIGHT   = 1440;
 
 	static constexpr double DISPLAY_REFRESH_RATE = 60.0;
 	static constexpr double FPS_WARNING_TOLERANCE = 0.5;
@@ -394,7 +394,7 @@ public:
 		glBindFramebuffer(GL_FRAMEBUFFER,0);
 		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 		glClearColor(0, 0, 0, 0);
-    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 		glDepthFunc(GL_LEQUAL);
 
 		auto most_recent_frame = _m_eyebuffer->get_latest_ro();
