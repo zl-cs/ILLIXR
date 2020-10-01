@@ -55,46 +55,22 @@ const char* const timeWarpChromaticFragmentProgramGLSL =
 
 const char* const meshWarpVertexProgramGLSL =
 	"#version " GLSL_VERSION "\n"
-	"uniform highp mat4x4 TimeWarpStartTransform;\n"
-	"uniform highp mat4x4 TimeWarpEndTransform;\n"
 
 	"uniform highp mat4x4 u_renderInverseP;\n"
 	"uniform highp mat4x4 u_renderInverseV;\n"
 	"uniform highp mat4x4 u_warpVP;\n"
 
-	"in highp vec3 vertexPosition;\n"
-	"in highp vec2 vertexUv0;\n"
-	"in highp vec2 vertexUv1;\n"
-	"in highp vec2 vertexUv2;\n"
-	"in highp vec2 flatUv;\n"
+	"layout(location = 0) in vec3 in_position;\n"
+    "layout(location = 1) in vec2 in_uv;\n"
+
 	"uniform highp sampler2D Texture;\n"
 	"uniform highp sampler2D _Depth;\n"
-	"uniform highp float u_NearClip;\n"
-	"uniform highp float u_FarClip;\n"
-	"out mediump vec2 fragmentUv0;\n"
-	"out mediump vec2 fragmentUv1;\n"
-	"out mediump vec2 fragmentUv2;\n"
 	"out mediump vec4 test;\n"
 	"out mediump vec2 warpUv;\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
 
 	"void main( void )\n"
 	"{\n"
-	"	gl_Position = vec4( vertexPosition, 1.0 );\n"
-	"\n"
-	// "	float displayFraction = vertexPosition.x * 0.5 + 0.5;\n"	// landscape left-to-right
-	"\n"
-	// "	vec3 startUv0 = (TimeWarpStartTransform * vec4( vertexUv0, -1, 1 )).xyz;\n"
-	// "	vec3 startUv1 = (TimeWarpStartTransform * vec4( vertexUv1, -1, 1 )).xyz;\n"
-	// "	vec3 startUv2 = (TimeWarpStartTransform * vec4( vertexUv2, -1, 1 )).xyz;\n"
-	// "	fragmentUv0 = startUv0.xy * ( 1.0 / max( startUv0.z, 0.00001 ) );\n"
-	// "	fragmentUv1 = startUv1.xy * ( 1.0 / max( startUv1.z, 0.00001 ) );\n"
-	// "	fragmentUv2 = startUv2.xy * ( 1.0 / max( startUv2.z, 0.00001 ) );\n"
-
-	// "	fragmentUv0 = vertexUv0 * 0.7 + vec2(0.5,0.5);\n"
-	// "	fragmentUv1 = vertexUv1 * 0.7 + vec2(0.5,0.5);\n"
-	// "	fragmentUv2 = vertexUv2 * 0.7 + vec2(0.5,0.5);\n"
-
 	"	float z = textureLod(_Depth, flatUv, 0.0).x * 2.0 - 1.0;\n"
 	"	vec4 clipSpacePosition = vec4(flatUv * 2.0 - 1.0, z, 1.0);\n"
 

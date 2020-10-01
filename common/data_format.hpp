@@ -79,6 +79,12 @@ namespace ILLIXR {
 		std::chrono::time_point<std::chrono::system_clock> render_time;
 	};
 
+	// Result from a reprojection system.
+	struct reprojected_frame {
+		GLuint texture_handles[2];
+		std::chrono::time_point<std::chrono::system_clock> reproject_time;
+	};
+
 	typedef struct {
 		int seq;
 	} hologram_input;
