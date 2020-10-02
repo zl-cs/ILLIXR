@@ -14,3 +14,12 @@ sudo apt-get install -y \
 	 build-essential libx11-xcb-dev libxcb-glx0-dev libxkbcommon-dev libwayland-dev libxrandr-dev xvfb \
 	 libgtest-dev pkg-config libgtk2.0-dev wget
 
+# compile cmake3.18 for ARM
+if [ $(cmake --version | grep "version" | cut -d " " -f3) != 3.18.3 ]
+then
+	sudo apt remove cmake
+	wget https://github.com/Kitware/CMake/releases/download/v3.18.3/cmake-3.18.3.tar.gz
+	tar -xzvf cmake-3.18.3.tar.gz && cd cmake-3.18.3
+	./bootstrap && make && sudo make install
+	cd ../ && rm -rf cmake-3.18.3*
+fi
