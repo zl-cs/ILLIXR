@@ -217,7 +217,7 @@ private:
 			}
 		}
 		// Construct a basic perspective projection
-		math_util::projection_fov( &basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.1f, 0.0f );
+		math_util::projection_fov( &basicProjection, 45.0f, 45.0f, 45.0f, 45.0f, 0.1f, 0.0f );
 		// This was just temporary.
 		free(tw_mesh_base_ptr);
 
