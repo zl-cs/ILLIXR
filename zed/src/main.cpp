@@ -35,9 +35,9 @@ std::shared_ptr<Camera> start_camera() {
     init_params.coordinate_units = UNIT::MILLIMETER; // for kf
     init_params.coordinate_system = COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD; // Coordinate system used in ROS
     init_params.camera_fps = 15;
-    // init_params.depth_mode = DEPTH_MODE::ULTRA;
-		// init_params.depth_stabilization = true;
-		// init_params.depth_minimum_distance = 0.1;
+    init_params.depth_mode = DEPTH_MODE::PERFORMANCE;
+    // init_params.depth_stabilization = true;
+    // init_params.depth_minimum_distance = 0.1;
     // Open the camera
     ERROR_CODE err = zedm->open(init_params);
     if (err != ERROR_CODE::SUCCESS) {
