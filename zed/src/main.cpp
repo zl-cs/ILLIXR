@@ -102,7 +102,7 @@ protected:
         zedm->retrieveImage(imageL_zed, VIEW::LEFT, MEM::CPU, image_size);
         zedm->retrieveImage(imageR_zed, VIEW::RIGHT, MEM::CPU, image_size);
 				zedm->retrieveMeasure(depth_zed, MEASURE::DEPTH, MEM::CPU, image_size);
-				zedm->retrieveImage(rgb_zed, VIEW::LEFT_UNRECTIFIED, MEM::CPU, image_size);
+				zedm->retrieveImage(rgb_zed, VIEW::LEFT, MEM::CPU, image_size);
 
         auto start_cpu_time  = thread_cpu_time();
         auto start_wall_time = std::chrono::high_resolution_clock::now();
