@@ -248,6 +248,7 @@ def threading_imap_unordered(
             get_results(results),
             total=my_length_hint(iterable, length_hint),
             desc=desc,
+            unit="plugins",
         )
     )
 
@@ -312,7 +313,7 @@ class TqdmOutputFile(Generic[AnyStr]):
     desc: Optional[str] = None
 
     def __post_init__(self) -> None:
-        self.t = tqdm(total=self.length, desc=self.desc)
+        self.t = tqdm(total=self.length, desc=self.desc, unit="bytes", unit_scale=True)
 
     def read(self, block_size: int = BLOCKSIZE) -> AnyStr:
         buf = self.fileobj.read(block_size)
@@ -349,7 +350,7 @@ def unzip_with_progress(zip_path: Path, output_dir: Path, desc: Optional[str] = 
     try:
         with zipfile.PyZipFile(zip_path) as zf:
             total = sum(zi.file_size for zi in zf.infolist())
-            progress = tqdm(desc=desc, total=total)
+            progress = tqdm(desc=desc, total=total, unit="bytes", unit_scale=True)
             for zi in zf.infolist():
                 output_path = output_dir / zi.filename
                 if not zi.is_dir():
