@@ -12,5 +12,6 @@ data:
 demo_data: demo_data/
 loader:
   name: native
-  # command: gdb -q --args %a
+  command: ./apitrace trace --output=trace %a
+  ILLIXR_RUN_DURATION: 30
 profile: opt

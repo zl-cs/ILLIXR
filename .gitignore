@@ -11,3 +11,5 @@ output.*
 metrics/
 .cache
 install/
+output/
+apitrace_src/

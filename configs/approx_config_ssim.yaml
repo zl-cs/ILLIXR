@@ -1,9 +1,12 @@
-# Run with ground truth pose lookup instead of pose prediction
+# Run with deviated pose
 plugin_groups:
   - plugin_group:
-      - path: pose_lookup
-      - path: timewarp_gl/
-      - path: gldemo/
+    - path: offline_imu_cam/
+    - path: open_vins/
+    - path: gtsam_integrator/
+    - path: pose_prediction/
+    - path: timewarp_gl/
+    - path: gldemo/
 data:
   subpath: mav0
   relative_to:
@@ -12,5 +15,6 @@ data:
 demo_data: demo_data/
 loader:
   name: native
-  # command: gdb -q --args %a
+  command: ./apitrace trace --output=trace %a
+  ILLIXR_RUN_DURATION: 30
 profile: opt

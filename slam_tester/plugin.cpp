@@ -42,7 +42,8 @@ public:
 	}
 
 	virtual ~slam_tester() {
-		std::cout
+		std::ofstream output_file {"pose_accuracy.csv"};
+		output_file
 			<< "position_abs_err,angular_a_abs_err,position_rel_err,angular_a_rel_err\n"
 			<< position_abs_err << ","
 			<< position_rel_err << ","

@@ -1,9 +1,9 @@
+# Run with deviated pose
 plugin_groups:
   - plugin_group:
-    - path: offline_imu_cam/
-    - path: open_vins/
-    - path: slam_tester/
-
+    - path: pose_deviation/
+    - path: gldemo/
+    - path: timewarp_gl/
 data:
   subpath: mav0
   relative_to:
@@ -12,6 +12,6 @@ data:
 demo_data: demo_data/
 loader:
   name: native
-  # command: gdb -q --args %a
+  command: ./apitrace trace --output=trace %a
   ILLIXR_RUN_DURATION: 30
-profile: dbg
+profile: opt

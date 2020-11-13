@@ -1,9 +1,8 @@
-# Run with ground truth pose lookup instead of pose prediction
 plugin_groups:
   - plugin_group:
-      - path: pose_lookup
-      - path: timewarp_gl/
-      - path: gldemo/
+    - path: offline_imu_cam/
+    - path: open_vins/
+    - path: slam_tester/
 data:
   subpath: mav0
   relative_to:
@@ -12,5 +11,5 @@ data:
 demo_data: demo_data/
 loader:
   name: native
-  # command: gdb -q --args %a
+  ILLIXR_RUN_DURATION: 30
 profile: opt
