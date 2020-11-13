@@ -11,9 +11,18 @@ fi
 
 mkdir -p output
 
-# TODO: in the future, scan over all approx knobs
-# configs=(ground_truth_ssim approx_config_ssim pose_accuracy_ssim approx_config_pose_accuracy)
-configs=(approx_config_pose_accuracy)
+if [ -n "${1}" ]; then
+	configs=("${1}")
+else
+	# TODO: in the future, scan over all approx knobs
+	configs=(
+		ground_truth_ssim
+		approx_config_ssim
+		pose_accuracy_ssim
+		approx_config_pose_accuracy
+	)
+fi
+
 for config in "${configs[@]}"; do
 	./runner.sh "configs/${config}.yaml" > "output/${config}.log"
 	if [ -f trace ]; then
