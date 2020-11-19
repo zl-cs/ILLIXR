@@ -108,7 +108,7 @@ def load_native(config: Mapping[str, Any]) -> None:
     runtime_exe_path = build_runtime(config, "exe")
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
-    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
+    consts_map = flatten_maps_list(config["constants"])
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
         [
@@ -140,7 +140,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
     runtime_exe_path = build_runtime(config, "exe", test=True)
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
-    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
+    consts_map = flatten_maps_list(config["constants"])
     make(Path("common"), ["tests/run"])
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config, test=True),
@@ -175,7 +175,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
 
-    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
+    consts_map = flatten_maps_list(config["constants"])
 
     cmake(
         monado_path,

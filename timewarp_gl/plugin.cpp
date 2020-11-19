@@ -19,10 +19,10 @@
 
 using namespace ILLIXR;
 
-static const int SCREEN_WIDTH  { ILLIXR::DEFAULT_FB_WIDTH  };
-static const int SCREEN_HEIGHT { ILLIXR::DEFAULT_FB_HEIGHT };
+static const int SCREEN_WIDTH  { ILLIXR::FB_WIDTH  };
+static const int SCREEN_HEIGHT { ILLIXR::FB_HEIGHT };
 
-static const double DISPLAY_REFRESH_RATE { ILLIXR::DEFAULT_REFRESH_RATE };
+static const double DISPLAY_REFRESH_RATE { ILLIXR::REFRESH_RATE };
 static const std::chrono::nanoseconds VSYNC_PERIOD { static_cast<size_t>(NANO_SEC/DISPLAY_REFRESH_RATE) };
 
 

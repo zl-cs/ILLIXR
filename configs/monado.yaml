@@ -20,3 +20,6 @@ loader:
       version: master
     config: {}
 profile: opt
+
+#constants:
+#  - !include "global_module_defs.yaml"

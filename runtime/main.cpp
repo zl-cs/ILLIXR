@@ -3,7 +3,7 @@
 #include "common/global_module_defs.hpp"
 
 //constexpr std::chrono::seconds ILLIXR_RUN_DURATION_DEFAULT {60};
-const std::chrono::seconds ILLIXR_RUN_DURATION { ILLIXR::DEFAULT_RUN_DURATION };
+const std::chrono::seconds ILLIXR_RUN_DURATION { ILLIXR::RUN_DURATION };
 
 ILLIXR::runtime* r;
 

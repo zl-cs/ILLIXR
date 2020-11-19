@@ -15,3 +15,6 @@ loader:
   name: tests
   kimera_path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO/
 profile: dbg
+
+#constants:
+#  - !include "global_module_defs.yaml"

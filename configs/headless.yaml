@@ -15,3 +15,6 @@ loader:
   name: native
   command: xvfb-run %a
 profile: opt
+
+#constants:
+#  - !include "global_module_defs.yaml"
