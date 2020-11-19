@@ -18,6 +18,11 @@ typedef struct {
 	int iteration;
 } cam_type;
 
+typedef struct {
+	rs2_vector* accel_data;
+	int iteration;
+} accel_type;
+
 class realsense : public plugin {
 public:
 	realsense(std::string name_, phonebook *pb_)
@@ -27,7 +32,8 @@ public:
         , _m_imu_integrator{sb->publish<imu_integrator_seq>("imu_integrator_seq")}
         {
             cfg.disable_all_streams();
-            cfg.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
+            cfg.enable_stream(RS2_STREAM_ACCEL);
+            cfg.enable_stream(RS2_STREAM_GYRO);
             cfg.enable_stream(RS2_STREAM_FISHEYE, 1, RS2_FORMAT_Y8);
             cfg.enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
             profiles = pipe.start(cfg, [&](const rs2::frame& frame) { this->callback(frame); });
@@ -43,57 +49,77 @@ public:
             if (auto fs = frame.as<rs2::frameset>()) {
                 rs2::video_frame frame_left = fs.get_fisheye_frame(1);
                 rs2::video_frame frame_right = fs.get_fisheye_frame(2);
-                cv::Mat ir_left = cv::Mat(cv::Size(IMAGE_WIDTH, IMAGE_HEIGHT), CV_8UC1, (void*)frame_left.get_data());
-                cv::Mat ir_right = cv::Mat(cv::Size(IMAGE_WIDTH, IMAGE_HEIGHT), CV_8UC1, (void *)frame_right.get_data());
+                cv::Mat left = cv::Mat(cv::Size(IMAGE_WIDTH, IMAGE_HEIGHT), CV_8UC1, (void*)frame_left.get_data());
+                cv::Mat right = cv::Mat(cv::Size(IMAGE_WIDTH, IMAGE_HEIGHT), CV_8UC1, (void *)frame_right.get_data());
                 cam_type_ = cam_type{
-                    new cv::Mat{ir_left},
-                    new cv::Mat{ir_right},
+                    new cv::Mat{left},
+                    new cv::Mat{right},
                     iteration_cam,
                 };
                 iteration_cam++;
             }
 
-            if (auto pf = frame.as<rs2::pose_frame>()) {
+            if (auto mf = frame.as<rs2::motion_frame>()) {
+                std::string s = mf.get_profile().stream_name();
 
-                rs2::pose_frame pose = pf;
-                double ts = pose.get_timestamp();
-                pose_data = pose.get_pose_data();
-
-                // IMU data
-                Eigen::Vector3f la = {pose_data.acceleration.x, pose_data.acceleration.y, pose_data.acceleration.z};
-                Eigen::Vector3f av = {pose_data.angular_velocity.x, pose_data.angular_velocity.y, pose_data.angular_velocity.z};
-
-                // Time as ullong (nanoseconds)
-                ullong imu_time = static_cast<ullong>(ts * 1000000);
-
-                // Time as time_point
-                using time_point = std::chrono::system_clock::time_point;
-                time_type imu_time_point{std::chrono::duration_cast<time_point::duration>(std::chrono::nanoseconds(imu_time))};
-
-                // Images
-                std::optional<cv::Mat *> img0 = std::nullopt;
-                std::optional<cv::Mat *> img1 = std::nullopt;
-                if (last_iteration_cam != cam_type_.iteration)
+                if (s == "Accel")
                 {
-                    last_iteration_cam = cam_type_.iteration;
-                    img0 = cam_type_.img0;
-                    img1 = cam_type_.img1;
+                    rs2::motion_frame accel = mf;
+                    accel_data = accel.get_motion_data();
+                    accel_type_.accel_data = &accel_data;
+                    accel_type_.iteration = iteration_accel;
+                    iteration_accel++;
                 }
 
-                // Submit to switchboard
-                _m_imu_cam->put(new imu_cam_type{
-                        imu_time_point,
-                        av,
-                        la,
-                        img0,
-                        img1,
-                        imu_time,
-                    });
+                if (s == "Gyro")
+                {
+                    if (last_iteration_accel == accel_type_.iteration) { return; }
 
-                auto imu_integrator_params = new imu_integrator_seq{
-                    .seq = static_cast<int>(++_imu_integrator_seq),
-                };
-                _m_imu_integrator->put(imu_integrator_params);
+                    last_iteration_accel = accel_type_.iteration;
+                    rs2_vector accel = *accel_type_.accel_data;
+                    rs2::motion_frame gyro = mf;
+                    double ts = gyro.get_timestamp();
+                    gyro_data = gyro.get_motion_data();
+
+                    // IMU data
+                    Eigen::Vector3f la = {accel.x, accel.y, accel.z};
+                    Eigen::Vector3f av = {gyro_data.x, gyro_data.y, gyro_data.z};
+
+                    // Eigen::Vector3f la = {accel.z, accel.x, -accel.y};
+                    // Eigen::Vector3f av = {-gyro_data.y, gyro_data.z, -gyro_data.x};
+
+                    // Time as ullong (nanoseconds)
+                    ullong imu_time = static_cast<ullong>(ts * 1000000);
+
+                    // Time as time_point
+                    using time_point = std::chrono::system_clock::time_point;
+                    time_type imu_time_point{std::chrono::duration_cast<time_point::duration>(std::chrono::nanoseconds(imu_time))};
+
+                    // Images
+                    std::optional<cv::Mat *> img0 = std::nullopt;
+                    std::optional<cv::Mat *> img1 = std::nullopt;
+                    if (last_iteration_cam != cam_type_.iteration)
+                    {
+                        last_iteration_cam = cam_type_.iteration;
+                        img0 = cam_type_.img0;
+                        img1 = cam_type_.img1;
+                    }
+
+                    // Submit to switchboard
+                    _m_imu_cam->put(new imu_cam_type{
+                            imu_time_point,
+                            av,
+                            la,
+                            img0,
+                            img1,
+                            imu_time,
+                        });
+
+                    auto imu_integrator_params = new imu_integrator_seq{
+                        .seq = static_cast<int>(++_imu_integrator_seq),
+                    };
+                    _m_imu_integrator->put(imu_integrator_params);
+                }
             }
 			
         };
@@ -109,14 +135,17 @@ private:
 	rs2::pipeline_profile profiles;
 	rs2::pipeline pipe;
 	rs2::config cfg;
-	rs2_pose pose_data;
+	rs2_vector gyro_data;
+	rs2_vector accel_data;
 
 	cam_type cam_type_;
+	accel_type accel_type_;
 	int iteration_cam = 0;
+	int iteration_accel = 0;
 	int last_iteration_cam;
+	int last_iteration_accel;
 
     long long _imu_integrator_seq{0};
 };
 
 PLUGIN_MAIN(realsense);
-
