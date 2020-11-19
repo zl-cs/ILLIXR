@@ -21,6 +21,10 @@ from util import (
     subprocess_run,
     threading_map,
     unflatten,
+    noop_context,
+    make,
+    cmake,
+    flatten_maps_list,
 )
 from yamlinclude import YamlIncludeConstructor
 
@@ -90,6 +94,7 @@ def load_native(config: Mapping[str, Any]) -> None:
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
     realsense_cam_string = config["realsense_cam"]
+    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
         [plugin_config for plugin_group in config["plugin_groups"] for plugin_config in plugin_group["plugin_group"]],
@@ -137,6 +142,7 @@ def load_native(config: Mapping[str, Any]) -> None:
         subprocess_run(
             actual_cmd_list,
             env_override=env_override,
+            env_constants=consts_map,
             stdout=log_stdout,
             check=True,
         )
@@ -148,6 +154,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
+    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
     env_override: Mapping[str, str] = dict(ILLIXR_INTEGRATION="yes")
     make(Path("common"), ["tests/run"], env_override=env_override)
     realsense_cam_string = config["realsense_cam"]
@@ -176,6 +183,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
             KIMERA_ROOT=config["action"]["kimera_path"],
             REALSENSE_CAM=str(realsense_cam_string),
         ),
+        env_constants=consts_map,
         check=True,
     )
 
@@ -194,6 +202,8 @@ def load_monado(config: Mapping[str, Any]) -> None:
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
     realsense_cam_string = config["realsense_cam"]
+
+    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
 
     cmake(
         monado_path,
@@ -239,6 +249,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
             KIMERA_ROOT=config["action"]["kimera_path"],
             REALSENSE_CAM=str(realsense_cam_string),
         ),
+        env_constants=consts_map,
         check=True,
     )
 
