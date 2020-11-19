@@ -1,17 +1,19 @@
 plugins:
   # Consumers first
-  - path: hologram/
-  - path: open_vins/
-  - path: imu_integrator/
-  - path: pose_prediction/
+  - path: ground_truth_slam/
+  - path: offline_imu_cam/
+  # - path: record_imu_cam/
+  # - path: hologram/
+  # - path: open_vins/
+  # - path: imu_integrator/
+  # - path: pose_prediction/
+  - path: pose_lookup/
   - path: timewarp_gl/
-  - path: audio_pipeline/
-  - path: debugview/
-  # Producers last
   - path: gldemo/
-  - path: zed/
-  # - path: offline_imu_cam/
-  # - path: ground_truth_slam/
+  # - path: audio_pipeline/
+  # - path: debugview/
+  # Producers last
+  # - path: zed/
 #data: zip+http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip?path=mav0
 data: ../data1/
 demo_data: ../demo_data/
