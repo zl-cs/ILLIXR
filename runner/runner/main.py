@@ -94,7 +94,7 @@ def load_native(config: Mapping[str, Any]) -> None:
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
     realsense_cam_string = config["realsense_cam"]
-    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
+    consts_map = flatten_maps_list(config["constants"])
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
         [plugin_config for plugin_group in config["plugin_groups"] for plugin_config in plugin_group["plugin_group"]],
@@ -154,7 +154,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
-    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
+    consts_map = flatten_maps_list(config["constants"])
     env_override: Mapping[str, str] = dict(ILLIXR_INTEGRATION="yes")
     make(Path("common"), ["tests/run"], env_override=env_override)
     realsense_cam_string = config["realsense_cam"]
@@ -203,7 +203,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
     enable_alignment_flag = config["enable_alignment"]
     realsense_cam_string = config["realsense_cam"]
 
-    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
+    consts_map = flatten_maps_list(config["constants"])
 
     cmake(
         monado_path,

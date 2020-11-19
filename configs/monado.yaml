@@ -30,3 +30,6 @@ action:
   
 
 profile: opt
+
+#constants:
+#  - !include "global_module_defs.yaml"
