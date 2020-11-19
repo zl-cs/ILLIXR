@@ -2,7 +2,7 @@ plugins:
   # Consumers first
   - path: ground_truth_slam/
   - path: offline_imu_cam/
-  # - path: record_imu_cam/
+  - path: record_imu_cam/
   # - path: hologram/
   # - path: open_vins/
   # - path: imu_integrator/
