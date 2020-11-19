@@ -18,6 +18,7 @@ from util import (
     subprocess_run,
     threading_map,
     unflatten,
+    flatten_maps_list,
 )
 from yamlinclude import YamlIncludeConstructor
 
@@ -107,6 +108,7 @@ def load_native(config: Mapping[str, Any]) -> None:
     runtime_exe_path = build_runtime(config, "exe")
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
+    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
         [
@@ -129,6 +131,7 @@ def load_native(config: Mapping[str, Any]) -> None:
     subprocess_run(
         command_lst_sbst,
         env_override=dict(ILLIXR_DATA=str(data_path), ILLIXR_DEMO_DATA=str(demo_data_path), KIMERA_ROOT=config["loader"]["kimera_path"]),
+        env_constants=consts_map,
         check=True,
     )
 
@@ -137,6 +140,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
     runtime_exe_path = build_runtime(config, "exe", test=True)
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
+    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
     make(Path("common"), ["tests/run"])
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config, test=True),
@@ -150,6 +154,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
     subprocess_run(
         ["xvfb-run", str(runtime_exe_path), *map(str, plugin_paths)],
         env_override=dict(ILLIXR_DATA=str(data_path), ILLIXR_DEMO_DATA=str(demo_data_path), ILLIXR_RUN_DURATION="10", KIMERA_ROOT=config["loader"]["kimera_path"]),
+        env_constants=consts_map,
         check=True,
     )
 
@@ -169,6 +174,8 @@ def load_monado(config: Mapping[str, Any]) -> None:
     )
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
+
+    consts_map = flatten_maps_list(config["constants"], key_prefix="DEFAULT_")
 
     cmake(
         monado_path,
@@ -212,6 +219,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
             ILLIXR_DATA=str(data_path),
             ILLIXR_DEMO_DATA=str(demo_data_path),
         ),
+        env_constants=consts_map,
         check=True,
     )
 

@@ -17,3 +17,6 @@ loader:
   name: native
   # command: gdb -q --args %a
 profile: opt
+
+constants:
+  - !include "global_module_defs.yaml"

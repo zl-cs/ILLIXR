@@ -129,3 +129,12 @@ properties:
     default: dbg
     type: string
     description: "Currently supports 'dbg' and 'opt'"
+  constants:
+    type: array
+    default: []
+    items:
+      type: object
+      default: {}
+      additionalProperties:
+        type: string
+      description: A map of constant names to their set (stringified) values. For examples, a constant with name "FOO" will be set in the application environment to the value provided under the name "DEFAULT_FOO". The value can be destringified at application run-time.

@@ -1,22 +1,49 @@
-/*
-This is the file where default values are defined
-*/
-
 #pragma once
 
-namespace ILLIXR{
-	
-#ifndef FB_WIDTH
-#define FB_WIDTH FB_WIDTH
+#include <cstdlib>
+#include <string>
 
-//Setting default Framebuffer width
-static constexpr int FB_WIDTH = 2560; //Pixels
-#endif
 
-#ifndef FB_HEIGHT
-#define FB_HEIGHT FB_HEIGHT
+namespace ILLIXR
+{
 
-//Setting default framebuffer height
-static constexpr int FB_HEIGHT = 1440; //Pixels
-#endif //FB_HEIGHT
+/**
+ * (Macro expansion) Function used to create string literals from variable names
+ */
+#ifndef STRINGIFY
+#define STRINGIFY_HELP(X) #X
+#define STRINGIFY(X) STRINGIFY_HELP(X)
+#endif // STRINGIFY
+
+/**
+ * (Macro expansion) Function used to declare constants used by modules
+ *
+ * _NAME:       The constant's name to be used by module code
+ * _TYPE:       The type name for the constant
+ * _FROM_STR:   The conversion function from a std::string to a value of type _TYPE
+ * _VALUE:      The default value for the constant
+ *
+ * TODO: Support dynamic type casting
+ * TODO: Support more than just longs/integers
+ * TODO: Support constexpr
+ */
+#ifndef DECLARE_CONST
+#define DECLARE_CONST(_NAME, _TYPE, _FROM_STR, _VALUE) \
+static const std::string VAL_STR_##_NAME{ var_from_env(STRINGIFY(_NAME)) }; \
+static const _TYPE _NAME{ (VAL_STR_##_NAME.empty()) ? _VALUE : _FROM_STR(VAL_STR_##_NAME) }
+#endif // DECLARE_CONST
+
+
+std::string var_from_env(const char * const var_name) noexcept
+{
+    char* const c_str{ std::getenv(var_name) };
+    return (c_str == nullptr) ? std::string{""} : std::string{c_str};
+}
+
+
+DECLARE_CONST(DEFAULT_FB_WIDTH,     int,    std::stoi,  2560); // Pixels
+DECLARE_CONST(DEFAULT_FB_HEIGHT,    int,    std::stoi,  1440); // Pixels
+DECLARE_CONST(DEFAULT_RUN_DURATION, long,   std::stol,  60L ); // Seconds
+DECLARE_CONST(DEFAULT_REFRESH_RATE, double, std::stod,  60.0); // Hz
+
 }
