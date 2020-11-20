@@ -462,10 +462,10 @@ public:
 
 		auto gpu_start_wall_time = std::chrono::high_resolution_clock::now();
 
-		GLuint query;
+		//GLuint query;
 		GLuint64 elapsed_time = 0;
-		glGenQueries(1, &query);
-		glBeginQuery(GL_TIME_ELAPSED, query);
+		//glGenQueries(1, &query);
+		//glBeginQuery(GL_TIME_ELAPSED, query);
 
 		// Loop over each eye.
 		for(int eye = 0; eye < HMD::NUM_EYES; eye++){
@@ -513,7 +513,7 @@ public:
 			glDrawElements(GL_TRIANGLES, num_distortion_indices, GL_UNSIGNED_INT, (void*)0);
 		}
 
-		glEndQuery(GL_TIME_ELAPSED);
+		//glEndQuery(GL_TIME_ELAPSED);
 
 #ifndef NDEBUG
 		auto delta = std::chrono::high_resolution_clock::now() - most_recent_frame->render_time;
@@ -563,15 +563,15 @@ public:
 
 		// retrieving the recorded elapsed time
 		// wait until the query result is available
-		int done = 0;
-		glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
-		while (!done) {
-			std::this_thread::yield();
-			glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
-		}
+		//int done = 0;
+		//glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
+		//while (!done) {
+		//	std::this_thread::yield();
+		//	glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
+		//}
 
 		// get the query result
-		glGetQueryObjectui64v(query, GL_QUERY_RESULT, &elapsed_time);
+		//glGetQueryObjectui64v(query, GL_QUERY_RESULT, &elapsed_time);
 		timewarp_gpu_logger.log(record{timewarp_gpu_record, {
 			{iteration_no},
 			{gpu_start_wall_time},
