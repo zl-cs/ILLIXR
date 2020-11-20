@@ -62,11 +62,11 @@ private:
 	static constexpr int   SCREEN_WIDTH    = 2560;
 	static constexpr int   SCREEN_HEIGHT   = 1440;
 
-	static constexpr double DISPLAY_REFRESH_RATE = 60.0;
+	static constexpr double DISPLAY_REFRESH_RATE = 120.0;
 	static constexpr double FPS_WARNING_TOLERANCE = 0.5;
 
-	// Note: 0.9 works fine without hologram, but we need a larger safety net with hologram enabled
-	static constexpr double DELAY_FRACTION = 0.9;
+	// Note: 0.91 works fine without hologram, but we need a larger safety net with hologram enabled
+	static constexpr double DELAY_FRACTION = 0.91;
 
 	static constexpr double RUNNING_AVG_ALPHA = 0.1;
 
