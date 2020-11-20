@@ -514,6 +514,7 @@ public:
 		}
 
 		//glEndQuery(GL_TIME_ELAPSED);
+		glFinish();
 
 #ifndef NDEBUG
 		auto delta = std::chrono::high_resolution_clock::now() - most_recent_frame->render_time;
