@@ -7,6 +7,8 @@
 /*pyh: reusing data_loading from ground_truth_slam*/
 #include "data_loading.hpp"
 
+#define ALIGN
+
 using namespace ILLIXR;
 
 class pose_lookup_impl : public pose_prediction {
@@ -21,6 +23,11 @@ public:
     {
     	auto newoffset = correct_pose(_m_sensor_data_it->second).orientation;
     	set_offset(newoffset);
+	init_pos_offset = correct_pose(_m_sensor_data_it->second).position;
+
+	raw_init_pos_offset = _m_sensor_data_it->second.position;
+
+	// could write a line to automatically read align matrix from file later
     }
 
     virtual fast_pose_type get_fast_pose() const override {
@@ -100,6 +107,7 @@ public:
 
 		auto looked_up_pose = _m_sensor_data.find(nearest_timestamp)->second;
 		looked_up_pose.sensor_time = _m_start_of_time + std::chrono::nanoseconds{nearest_timestamp - dataset_first_time};
+
 		return fast_pose_type{
 			.pose = correct_pose(looked_up_pose),
 			.predict_computed_time = std::chrono::system_clock::now(),
@@ -112,6 +120,8 @@ public:
 private:
 	const std::shared_ptr<switchboard> sb;
 
+	Eigen::Vector3f init_pos_offset {0};
+	Eigen::Vector3f raw_init_pos_offset {0};
 	mutable Eigen::Quaternionf offset {Eigen::Quaternionf::Identity()};
 	mutable std::shared_mutex offset_mutex;
 
@@ -122,21 +132,139 @@ private:
 	time_type _m_start_of_time;
 	std::unique_ptr<reader_latest<time_type>> _m_vsync_estimate;
 
+        Eigen::Matrix<float, 3, 3> skew_x(const Eigen::Matrix<float, 3, 1> &w) const
+	{
+		Eigen::Matrix<float, 3, 3> w_x;
+		w_x << 0, -w(2), w(1),
+			w(2), 0, -w(0),
+			-w(1), w(0), 0;
+		return w_x;
+	}
+
+	Eigen::Matrix<float, 4, 1> quat_inv(Eigen::Matrix<float, 4, 1> q) const
+	{
+		Eigen::Matrix<float, 4, 1> qinv;
+		qinv.block(0, 0, 3, 1) = -q.block(0, 0, 3, 1);
+		qinv(3, 0) = q(3, 0);
+		return qinv;
+	}
+
+        Eigen::Matrix<float, 4, 1> quat_multiply(const Eigen::Matrix<float, 4, 1> &q, const Eigen::Matrix<float, 4, 1> &p) const
+	{
+		Eigen::Matrix<float, 4, 1> q_t;
+		Eigen::Matrix<float, 4, 4> Qm;
+		// create big L matrix
+		Qm.block(0, 0, 3, 3) = q(3, 0) * Eigen::MatrixXf::Identity(3, 3) - skew_x(q.block(0, 0, 3, 1));
+		Qm.block(0, 3, 3, 1) = q.block(0, 0, 3, 1);
+		Qm.block(3, 0, 1, 3) = -q.block(0, 0, 3, 1).transpose();
+		Qm(3, 3) = q(3, 0);
+		q_t = Qm * p;
+		// ensure unique by forcing q_4 to be >0
+		if (q_t(3, 0) < 0)
+		{
+			q_t *= -1;
+		}
+		// normalize and return
+		return q_t / q_t.norm();
+	}
+
 	pose_type correct_pose(const pose_type pose) const {
 		pose_type swapped_pose;
+		pose_type aligned_pose;
 
+
+#ifdef ALIGN
+		std::cout << "Aligned pose lookup !!!" << std::endl;
+
+		pose_type temp_pose;
+
+		temp_pose.position(0) = pose.position.x() - raw_init_pos_offset(0);
+		temp_pose.position(1) = pose.position.y() - raw_init_pos_offset(1);
+		temp_pose.position(2) = pose.position.z() - raw_init_pos_offset(2);
+
+		Eigen::Matrix3f R_ESTtoGT;
+
+		R_ESTtoGT(0, 0) = 0.92096;
+		R_ESTtoGT(0, 1) = -0.389658;
+		R_ESTtoGT(0, 2) = 0;
+		R_ESTtoGT(1, 0) = 0.389658;
+		R_ESTtoGT(1, 1) = 0.92096;
+		R_ESTtoGT(1, 2) = 0;
+		R_ESTtoGT(2, 0) = 0;
+		R_ESTtoGT(2, 1) = 0;
+		R_ESTtoGT(2, 2) = 1;
+
+		Eigen::Vector3f t_ESTinGT = {0.0645829, 0.00112691, 0.160771};
+		Eigen::Vector4f q_ESTtoGT = {0, 0, -0.198797, 0.980041};
+
+		float s_ESTtoGT = 1.0;
+
+		// enforce the trajectories start from (0, 0, 0)
+		// Eigen::Vector3f zero_offset = {-0.0282369, 0.0144951, -0.150525};
+		/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+		Eigen::Matrix<float,7,1> pose_ESTinGT;
+		aligned_pose.position = s_ESTtoGT * R_ESTtoGT * temp_pose.position + t_ESTinGT;//  + zero_offset;
+		// aligned_pose.position = s_ESTtoGT * R_ESTtoGT * temp_pose.position + t_ESTinGT + zero_offset;
+
+
+		Eigen::Vector4f quat = {pose.orientation.x(), pose.orientation.y(), pose.orientation.z(), pose.orientation.w()};
+		// Eigen::Vector4f quat = {pose.orientation.w(), pose.orientation.x(), pose.orientation.y(), pose.orientation.z()};
+		Eigen::Vector4f quat_out;
+
+		// pose_ESTinGT.block(3,0,4,1) = quat_multiply(pose.orientation, quat_inv(q_ESTtoGT));
+
+		// pose_ESTinGT.block(3,0,4,1) = quat_multiply(quat, quat_inv(q_ESTtoGT));
+		quat_out = quat_multiply(quat, quat_inv(q_ESTtoGT));
+
+		// std::cout << "quat: " << quat_out(0) << " " << quat_out(1) << std::endl;
+		/*
+		aligned_pose.orientation.w() = quat_out(0);
+		aligned_pose.orientation.x() = quat_out(1);
+		aligned_pose.orientation.y() = quat_out(2);
+		aligned_pose.orientation.z() = quat_out(3);
+		*/
+		aligned_pose.orientation.x() = quat_out(0);
+		aligned_pose.orientation.y() = quat_out(1);
+		aligned_pose.orientation.z() = quat_out(2);
+		aligned_pose.orientation.w() = quat_out(3);
+
+		swapped_pose.position.x() = -aligned_pose.position.y();
+		swapped_pose.position.y() = aligned_pose.position.z();
+		swapped_pose.position.z() = -aligned_pose.position.x();
+
+		Eigen::Quaternionf raw_o (aligned_pose.orientation.w(), -aligned_pose.orientation.y(), aligned_pose.orientation.z(), -aligned_pose.orientation.x());
+
+		swapped_pose.orientation = apply_offset(raw_o);
+#endif
+
+
+#ifndef ALIGN
+		std::cout << "No alignment !!!" << std::endl;
 		// This uses the OpenVINS standard output coordinate system.
 		// This is a mapping between the OV coordinate system and the OpenGL system.
 		swapped_pose.position.x() = -pose.position.y();
 		swapped_pose.position.y() = pose.position.z();
 		swapped_pose.position.z() = -pose.position.x();
 
+
 		// There is a slight issue with the orientations: basically,
 		// the output orientation acts as though the "top of the head" is the
 		// forward direction, and the "eye direction" is the up direction.
-	Eigen::Quaternionf raw_o (pose.orientation.w(), -pose.orientation.y(), pose.orientation.z(), -pose.orientation.x());
+		Eigen::Quaternionf raw_o (pose.orientation.w(), -pose.orientation.y(), pose.orientation.z(), -pose.orientation.x());
 
-	swapped_pose.orientation = apply_offset(raw_o);
+		swapped_pose.orientation = apply_offset(raw_o);
+
+
+		swapped_pose.position(0) -= init_pos_offset(0);
+		swapped_pose.position(1) -= init_pos_offset(1);
+		swapped_pose.position(2) -= init_pos_offset(2);
+
+
+#endif
 
 		return swapped_pose;
 	}
