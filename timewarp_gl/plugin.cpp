@@ -2,6 +2,7 @@
 #include <future>
 #include <iostream>
 #include <thread>
+#include <numeric>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "common/threadloop.hpp"
@@ -53,6 +54,7 @@ public:
 		, _m_frame_age{sb->publish<std::chrono::duration<double, std::nano>>("warp_frame_age")}
 		, timewarp_gpu_logger{record_logger_}
 		, mtp_logger{record_logger_}
+		, _m_offload_data{sb->publish<texture_pose>("texture_pose")}
 	{ }
 
 private:
@@ -90,12 +92,18 @@ private:
 	// Switchboard plug for publishing frame stale-ness metrics
 	std::unique_ptr<writer<std::chrono::duration<double, std::nano>>> _m_frame_age;
 
+	// Switchboard plug for publishing offloaded data
+	std::unique_ptr<writer<texture_pose>> _m_offload_data;
+
 	record_coalescer timewarp_gpu_logger;
 	record_coalescer mtp_logger;
 
 	GLuint timewarpShaderProgram;
 
 	time_type lastSwapTime;
+
+	time_type startGetTexTime;
+	time_type endGetTexTime;
 
 	HMD::hmd_info_t hmd_info;
 	HMD::body_info_t body_info;
@@ -141,6 +149,67 @@ private:
 
 	// Hologram call data
 	long long _hologram_seq{0};
+
+	// sequence number of offload data
+	long long _offload_seq{0};
+
+	// PBO buffer for reading texture image
+	GLuint PBO_buffer;
+
+	// Time sequence of reading texture image
+	std::vector<int> _time_seq;
+
+	// Temporally hard coded the dimensions for performance
+	GLint WIDTH = 1024;
+	GLint HEIGHT = 1024;
+	GLint CHANNEL = 3;
+
+	GLubyte* readTextureImage(){
+		// Dynamically get dimensions of texture image.
+		/*
+		GLint *WIDTH = new GLint;
+		GLint *HEIGHT = new GLint;
+		GLint *CHANNEL = new GLint;
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, WIDTH);
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, HEIGHT);
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_DEPTH, CHANNEL);
+		*/
+
+		GLubyte* pixels = new GLubyte[WIDTH * HEIGHT * CHANNEL];
+
+		// Start timer
+		startGetTexTime = std::chrono::high_resolution_clock::now();
+
+		// Enable PBO buffer
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO_buffer);
+
+		// Read texture image to PBO buffer
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, (GLvoid*)0);
+
+		// Transfer texture image from GPU to Pinned Memory(CPU)
+		GLubyte *ptr = (GLubyte*)glMapNamedBuffer(PBO_buffer, GL_READ_ONLY);
+
+		// Copy texture to CPU memory
+		memcpy(pixels, ptr, WIDTH * HEIGHT * CHANNEL);
+
+		// Unmap the buffer
+		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+
+		// Unbind the buffer
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+		// Terminate timer
+		endGetTexTime = std::chrono::high_resolution_clock::now();
+
+		// Record the image collection time
+		int mstime = std::chrono::duration_cast<std::chrono::milliseconds>(endGetTexTime - startGetTexTime).count();
+		_time_seq.push_back(mstime);
+
+		std::cout << "Texture image collecting time: " << mstime << std::endl;
+
+		return pixels;
+	}
+
 
 	void BuildTimewarp(HMD::hmd_info_t* hmdInfo){
 
@@ -387,6 +456,12 @@ public:
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, distortion_indices_vbo);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, num_distortion_indices * sizeof(GLuint), distortion_indices, GL_STATIC_DRAW);
 
+
+		// Config PBO for texture image collection
+		glGenBuffers(1, &PBO_buffer);
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO_buffer);
+		glBufferData(GL_PIXEL_PACK_BUFFER, WIDTH * HEIGHT * CHANNEL, 0, GL_STREAM_DRAW);
+
 		glXMakeCurrent(xwin->dpy, None, NULL);
 	}
 
@@ -554,6 +629,20 @@ public:
 			{render_to_display},
 		}});
 
+		// Read texture image from texture buffer
+		GLubyte* image = readTextureImage();
+
+		// Publish image and pose for offloading
+		auto offload_data = new texture_pose;
+		offload_data->seq = ++_offload_seq;
+		offload_data->image = image;
+		offload_data->pose_time = lastSwapTime;
+		offload_data->position = latest_pose.pose.position;
+		offload_data->latest_quaternion = latest_pose.pose.orientation;
+		offload_data->render_quaternion = most_recent_frame->render_pose.pose.orientation;
+
+		_m_offload_data->put(offload_data);
+
 #ifndef NDEBUG
 		auto afterSwap = glfwGetTime();
 		printf("\033[1;36m[TIMEWARP]\033[0m Swap time: %5fms\n", (float)(afterSwap - beforeSwap) * 1000);
@@ -587,6 +676,52 @@ public:
  		glXDestroyContext(xwin->dpy, xwin->glc);
  		XDestroyWindow(xwin->dpy, xwin->win);
  		XCloseDisplay(xwin->dpy);
+
+		double mean  = std::accumulate(_time_seq.begin(), _time_seq.end(), 0.0) / _time_seq.size();
+		std::cout << "mean value: " << std::accumulate(_time_seq.begin(), _time_seq.end(), 0.0) / _time_seq.size() << std::endl;
+
+		double accum = 0.0;
+		std::for_each(std::begin(_time_seq), std::end(_time_seq), [&](const double d){
+			accum += (d - mean) * (d - mean);
+		});
+		double stdev = sqrt(accum/(_time_seq.size() - 1));
+		std::cout << "variance: " << stdev << std::endl;
+
+		std::vector<int>::iterator max = std::max_element(_time_seq.begin(), _time_seq.end());
+		std::vector<int>::iterator min = std::min_element(_time_seq.begin(), _time_seq.end());
+		std::cout << "max: " << *max << " min: " << *min << std::endl;
+
+
+		char* obj_dir = std::getenv("ILLIXR_OUTPUT_DATA");
+		if(obj_dir == NULL) {
+				std::cerr << "Please define ILLIXR_OUTPUT_DATA." << std::endl;
+				abort();
+		}
+
+		std::cout << "Writing metafile metadata.txt." << std::endl;
+		std::ofstream meta_file (std::string(obj_dir) + "metadata.txt");
+		if (meta_file.is_open())
+		{
+			meta_file << "mean: " << mean << std::endl;
+			meta_file << "max: " << *max << std::endl;
+			meta_file << "min: " << *min << std::endl;
+			meta_file << "stdev: " << stdev << std::endl;
+			meta_file << "total number: " << _time_seq.size() << std::endl;
+
+			meta_file << "raw time: " << std::endl;
+			for (int i = 0; i < _time_seq.size(); i++)
+				meta_file << _time_seq[i] << " ";
+			meta_file << std::endl << std::endl << std::endl;
+
+			meta_file << "ordered time: " << std::endl;
+			std::sort(_time_seq.begin(), _time_seq.end(), [](int x, int y) {return x > y;});
+			for (int i = 0; i < _time_seq.size(); i++)
+			{
+				std::cout << _time_seq[i] << " ";
+				meta_file << _time_seq[i] << " ";
+			}
+		}
+		meta_file.close();
 	}
 };
 
