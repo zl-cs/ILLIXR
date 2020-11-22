@@ -157,6 +157,7 @@ async def load_native(config: Dict[str, Any]) -> None:
         env=dict(
             ILLIXR_DATA=config["data"],
             ILLIXR_DEMO_DATA=config["demo_data"],
+            ILLIXR_OUTPUT_DATA=config["output_data"],
             **os.environ,
         ),
     )
@@ -193,6 +194,7 @@ async def load_gdb(config: Dict[str, Any]) -> None:
         env=dict(
             ILLIXR_DATA=config["data"],
             ILLIXR_DEMO_DATA=config["demo_data"],
+            ILLIXR_OUTPUT_DATA=config["output_data"],
             **os.environ,
         ),
     )
@@ -271,6 +273,7 @@ async def load_monado(config: Dict[str, Any]) -> None:
             ILLIXR_COMP=":".join(map(str, plugin_paths)),
             ILLIXR_DATA=config["data"],
             ILLIXR_DEMO_DATA=config["demo_data"],
+            ILLIXR_OUTPUT_DATA=config["output_data"],
             **os.environ,
         ),
     )

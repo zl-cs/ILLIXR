@@ -5,16 +5,18 @@ plugins:
   - path: imu_integrator/
   - path: pose_prediction/
   - path: timewarp_gl/
+  - path: offload_data/
   - path: audio_pipeline/
   # Producers last
   - path: gldemo/
-  - path: zed/
   - path: debugview/
+  - path: zed/
   # - path: offline_imu_cam/
   # - path: ground_truth_slam/
 #data: zip+http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip?path=mav0
 data: ../data1/
 demo_data: ../demo_data/
+output_data: ../output_data/
 loader:
   name: native
 profile: opt

@@ -1,20 +1,20 @@
 plugins:
-  # Consumers first
-  - path: hologram/
-  - path: open_vins/
-  - path: imu_integrator/
-  - path: pose_prediction/
+  - path: ground_truth_slam/
+  # - path: offline_imu_cam/
+  # - path: open_vins/
+  # - path: pose_prediction/
+  - path: pose_lookup/
+  # - path: gldemo/
   - path: timewarp_gl/
   - path: offload_data/
+  # - path: debugview/
   - path: audio_pipeline/
-  # Producers last
-  - path: zed/
-  # - path: offline_imu_cam/
-  # - path: ground_truth_slam/
+  # - path: holgoram/
+  # - path: zed/
 #data: zip+http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip?path=mav0
 data: ../data1/
-demo_data: ../demo_data/
-output_data: ../output_data/
+demo_data: ../../ILLIXR/demo_data/
+output_data: ../../ILLIXR/output_data/
 loader:
   name: monado
   monado:
@@ -22,6 +22,6 @@ loader:
     config:
       ILLIXR_PATH: ../../ILLIXR
   openxr_app:
-    path: ../apps/openxr-simple-example
+    path: ../Monado_OpenXR_Simple_Example
     config: {}
 profile: opt
