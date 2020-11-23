@@ -1,6 +1,6 @@
 plugins:
   # Consumers first
-  - path: hologram/
+  #- path: hologram/
   - path: open_vins/
   - path: imu_integrator/
   - path: pose_prediction/
@@ -8,8 +8,8 @@ plugins:
   - path: offload_data/
   - path: audio_pipeline/
   # Producers last
-  - path: zed/
-  # - path: offline_imu_cam/
+  #- path: zed/
+  - path: offline_imu_cam/
   # - path: ground_truth_slam/
 #data: zip+http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip?path=mav0
 data: ../data1/
