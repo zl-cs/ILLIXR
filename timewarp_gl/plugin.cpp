@@ -160,20 +160,15 @@ private:
 	std::vector<int> _time_seq;
 
 	// Temporally hard coded the dimensions for performance
-	GLint WIDTH = 1024;
-	GLint HEIGHT = 1024;
+	GLint WIDTH = 1280;
+	GLint HEIGHT = 1440;
 	GLint CHANNEL = 3;
 
 	GLubyte* readTextureImage(){
 		// Dynamically get dimensions of texture image.
-		/*
-		GLint *WIDTH = new GLint;
-		GLint *HEIGHT = new GLint;
-		GLint *CHANNEL = new GLint;
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, WIDTH);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, HEIGHT);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_DEPTH, CHANNEL);
-		*/
+		//glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &WIDTH);
+		//glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &HEIGHT);
+		//glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_DEPTH, &CHANNEL);
 
 		GLubyte* pixels = new GLubyte[WIDTH * HEIGHT * CHANNEL];
 

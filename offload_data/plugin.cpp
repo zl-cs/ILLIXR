@@ -69,7 +69,7 @@ public:
 				std::string pose_name = obj_dir + std::to_string(i) + ".txt";
 
 				// write image
-				is_success = stbi_write_png(image_name.c_str(), 1024, 1024, 3, _offload_data_container[i]->image, 0);
+				is_success = stbi_write_png(image_name.c_str(), 1280, 1440, 3, _offload_data_container[i]->image, 0);
 				if (!is_success)
 					std::cout << "image create failed!!!" << std::endl;
 
