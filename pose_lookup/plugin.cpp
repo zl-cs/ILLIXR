@@ -139,7 +139,7 @@ private:
 	Eigen::Vector4f	align_quat;
 	double align_scale;
 	// change path to alignment file here
-	std::string path_to_alignment = "/home/power-rdx/Desktop/ILLIXR-Evaluation/alignTrajectory/alignMatrix.txt";
+	std::string path_to_alignment = "/home/huzaifa2/all_scratch/ILLIXR-Evaluation/alignTrajectory/alignMatrix.txt";
 
 
 	void load_align_parameters(std::string path)
