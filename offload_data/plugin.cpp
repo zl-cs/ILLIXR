@@ -35,6 +35,7 @@ public:
 			auto in = _offload_data_reader->get_latest_ro();
 			if (!in || in->seq == _seq_expect-1) {
 				// No new data, sleep
+				std::this_thread::sleep_for(std::chrono::milliseconds{1});
 				return skip_option::skip_and_yield;
 			} else {
 				if (in->seq != _seq_expect) {
