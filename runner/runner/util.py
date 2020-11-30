@@ -497,3 +497,46 @@ Returns:
             return cache_dest
     else:
         raise ValueError(f"Unsupported path description {path_descr}")
+
+def make(
+    path: Path,
+    targets: List[str],
+    var_dict: Optional[Mapping[str, str]] = None,
+    parallelism: Optional[int] = None,
+) -> None:
+
+    if parallelism is None:
+        parallelism = max(1, multiprocessing.cpu_count() // 2)
+
+    var_dict_args = shlex.join(
+        f"{key}={val}" for key, val in (var_dict if var_dict else {}).items()
+    )
+
+    subprocess_run(
+        ["make", "-j", str(parallelism), "-C", str(path), *targets, *var_dict_args],
+        check=True,
+        capture_output=True,
+    )
+
+
+def cmake(
+    path: Path, build_path: Path, var_dict: Optional[Mapping[str, str]] = None
+) -> None:
+    parallelism = max(1, multiprocessing.cpu_count() // 2)
+    var_args = [f"-D{key}={val}" for key, val in (var_dict if var_dict else {}).items()]
+    build_path.mkdir(exist_ok=True)
+    subprocess_run(
+        [
+            "cmake",
+            "-S",
+            str(path),
+            "-B",
+            str(build_path),
+            "-G",
+            "Unix Makefiles",
+            *var_args,
+        ],
+        check=True,
+        capture_output=True,
+    )
+    make(build_path, ["all"])

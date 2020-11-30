@@ -10,25 +10,29 @@
 
 using namespace ILLIXR;
 
-// define to add deviation
-//#define DEVIATION_POSITION
-#define DEVIATION_ORIENTATION
+// Use env vars to add deviation
 
-#define UNIFORM_MIN 	0
-#define UNIFORM_MAX 	0
-#define GAUSSIAN_MEAN 	0
-#define GAUSSIAN_SIGMA	0.01
-
+std::string getenv_or(std::string var, std::string default_) {
+	if (std::getenv(var)) {
+		return {std::getenv(var)}
+	} else {
+		return default_;
+	}
+}
 
 class pose_deviation_impl : public pose_prediction {
 public:
     pose_deviation_impl(const phonebook* const pb)
 		: sb{pb->lookup_impl<switchboard>()}
-	, _m_sensor_data{load_data()}
-	, _m_sensor_data_it{_m_sensor_data.cbegin()}
-	, dataset_first_time{_m_sensor_data_it->first}
-	, _m_start_of_time{std::chrono::high_resolution_clock::now()}
-	, _m_vsync_estimate{sb->subscribe_latest<time_type>("vsync_estimate")}
+		, _m_sensor_data{load_data()}
+		, _m_sensor_data_it{_m_sensor_data.cbegin()}
+		, dataset_first_time{_m_sensor_data_it->first}
+		, _m_start_of_time{std::chrono::high_resolution_clock::now()}
+		, _m_vsync_estimate{sb->subscribe_latest<time_type>("vsync_estimate")}
+		, _m_orientation_noise_offset{stof(getenv_or("orientation_noise_offset", "0"))}
+		, _m_orientation_noise_stddev{stof(getenv_or("orientation_noise_stddev", "0"))}
+		, _m_position_noise_offset{stof(getenv_or("orientation_noise_offset", "0"))}
+		, _m_position_noise_stddev{stof(getenv_or("orientation_noise_stddev", "0"))}
     {
     	auto newoffset = correct_pose(_m_sensor_data_it->second).orientation;
     	set_offset(newoffset);
@@ -116,14 +120,14 @@ public:
 			.predict_computed_time = std::chrono::system_clock::now(),
 			.predict_target_time = vsync
 		};
-#ifdef DEVIATION_POSITION
-		Deviation::add_gaussian_to_pos(fast_pose, GAUSSIAN_MEAN, GAUSSIAN_SIGMA);
-		Deviation::add_uniform_to_pos(fast_pose, UNIFORM_MIN, UNIFORM_MAX);
-#endif
-#ifdef DEVIATION_ORIENTATION
-		Deviation::add_gaussian_to_ori(fast_pose, GAUSSIAN_MEAN, GAUSSIAN_SIGMA);
-		Deviation::add_uniform_to_ori(fast_pose, UNIFORM_MIN, UNIFORM_MAX);
-#endif
+// #ifdef DEVIATION_POSITION
+		Deviation::add_gaussian_to_pos(fast_pose, _m_position_offset, _m_position_stddev);
+		// Deviation::add_uniform_to_pos(fast_pose, UNIFORM_MIN, UNIFORM_MAX);
+// #endif
+// #ifdef DEVIATION_ORIENTATION
+		Deviation::add_gaussian_to_ori(fast_pose, _m_orientation_offset, _m_orientation_stddev);
+		// Deviation::add_uniform_to_ori(fast_pose, UNIFORM_MIN, UNIFORM_MAX);
+// #endif
 		return fast_pose;
 	}
 
@@ -140,6 +144,10 @@ private:
 	ullong dataset_first_time;
 	time_type _m_start_of_time;
 	std::unique_ptr<reader_latest<time_type>> _m_vsync_estimate;
+	float _m_orientation_noise_offset;
+	float _m_orientation_noise_stddev;
+	float _m_position_noise_offset;
+	float _m_position_noise_stddev;
 
 	pose_type correct_pose(const pose_type pose) const {
 		pose_type swapped_pose;
