@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <string_view>
 
 
 namespace ILLIXR
@@ -40,16 +41,29 @@ static constexpr _TYPE DEFAULT_##_NAME{ _VALUE }
 #endif // DECLARE_CONST
 
 
+using RawPath = std::string_view;
+
+
+template<typename T>
+const T& noop(const T& obj) noexcept
+{
+    return obj;
+}
+
+
 std::string var_from_env(const char * const var_name) noexcept
 {
-    char* const c_str{ std::getenv(var_name) };
+    const char* const c_str{ std::getenv(var_name) };
     return (c_str == nullptr) ? std::string{""} : std::string{c_str};
 }
 
 
-DECLARE_CONST(FB_WIDTH,     int,    std::stoi,  2560); // Pixels
-DECLARE_CONST(FB_HEIGHT,    int,    std::stoi,  1440); // Pixels
-DECLARE_CONST(RUN_DURATION, long,   std::stol,  60L ); // Seconds
-DECLARE_CONST(REFRESH_RATE, double, std::stod,  60.0); // Hz
+DECLARE_CONST(DATA_PATH,     RawPath, noop,       "/dev/null");
+DECLARE_CONST(DEMO_OBJ_PATH, RawPath, noop,       "/dev/null");
+
+DECLARE_CONST(FB_WIDTH,      int,     std::stoi,  2560); // Pixels
+DECLARE_CONST(FB_HEIGHT,     int,     std::stoi,  1440); // Pixels
+DECLARE_CONST(RUN_DURATION,  long,    std::stol,  60L ); // Seconds
+DECLARE_CONST(REFRESH_RATE,  double,  std::stod,  60.0); // Hz
 
 }

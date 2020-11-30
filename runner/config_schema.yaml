@@ -119,12 +119,6 @@ properties:
         additionalProperties:
           type: string
         description: Interpretation of these vars is loader-dependent
-  data:
-    $ref: '#/definitions/path'
-    description: URL to offline IMU/cam data. Omit if not applicable.
-  demo_data:
-    $ref: '#/definitions/path'
-    description: URL to OBJs to render in gldemo.
   profile:
     default: dbg
     type: string
@@ -136,5 +130,5 @@ properties:
       type: object
       default: {}
       additionalProperties:
-        type: string
+        $ref: '#/definitions/path'
       description: A map of constant names to their set (stringified) values. The value can be destringified at application run-time.

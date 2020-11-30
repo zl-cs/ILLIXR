@@ -2,7 +2,6 @@
 #include "runtime_impl.hpp"
 #include "common/global_module_defs.hpp"
 
-//constexpr std::chrono::seconds ILLIXR_RUN_DURATION_DEFAULT {60};
 const std::chrono::seconds ILLIXR_RUN_DURATION { ILLIXR::RUN_DURATION };
 
 ILLIXR::runtime* r;
@@ -44,11 +43,6 @@ int main(int argc, char* const* argv) {
 	signal(SIGINT, signal_handler);
 
 	// And timer
-	// std::chrono::seconds run_duration = 
-	// 	getenv("ILLIXR_RUN_DURATION")
-	// 	? std::chrono::seconds{std::stol(std::string{getenv("ILLIXR_RUN_DURATION")})}
-	// 	: ILLIXR_RUN_DURATION_DEFAULT
-	// ;
     std::chrono::seconds run_duration = ILLIXR_RUN_DURATION;
 
 	cancellable_sleep cs;

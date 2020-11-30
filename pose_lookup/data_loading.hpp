@@ -25,19 +25,16 @@ typedef pose_type sensor_types;
 static
 std::map<ullong, sensor_types>
 load_data() {
-	const char* illixr_data_c_str = std::getenv("ILLIXR_DATA");
-	if (!illixr_data_c_str) {
-		std::cerr << "Please define ILLIXR_DATA" << std::endl;
-		abort();
-	}
-	std::string illixr_data = std::string{illixr_data_c_str};
+	std::string illixr_data {ILLIXR::DATA_PATH};
 
 	std::map<ullong, sensor_types> data;
 
-	std::ifstream gt_file {illixr_data + "/state_groundtruth_estimate0/data.csv"};
+    const std::string subpath {"/state_groundtruth_estimate0/data.csv"};
+    std::ifstream gt_file {illixr_data + subpath};
 
 	if (!gt_file.good()) {
-		std::cerr << "${ILLIXR_DATA}/state_groundtruth_estimate0/data.csv (" << illixr_data <<  "/state_groundtruth_estimate0/data.csv) is not a good path" << std::endl;
+		std::cerr << "'" << illixr_data << subpath << "' is not a good path"
+		          << std::endl;
 		abort();
 	}
 
