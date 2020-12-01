@@ -13,3 +13,4 @@ metrics/
 install/
 output/
 apitrace_src/
+__pycache__

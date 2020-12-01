@@ -91,4 +91,21 @@ namespace ILLIXR {
 			}
 		}
 	};
+
+	bool is_close(float a, float b) {
+		return std::fabs(a - b) < 1e-6;
+	}
+
+	template<typename DerivedA, typename DerivedB>
+	bool all_close(const Eigen::DenseBase<DerivedA>& a,
+				   const Eigen::DenseBase<DerivedB>& b,
+				   const typename DerivedA::RealScalar& rtol
+				   = Eigen::NumTraits<typename DerivedA::RealScalar>::dummy_precision(),
+				   const typename DerivedA::RealScalar& atol
+				   = Eigen::NumTraits<typename DerivedA::RealScalar>::epsilon())
+	{
+		return ((a.derived() - b.derived()).array().abs()
+				<= (atol + rtol * b.derived().array().abs())).all();
+	}
+
 }

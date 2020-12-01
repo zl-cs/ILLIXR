@@ -13,4 +13,4 @@ demo_data: demo_data/
 loader:
   name: native
   # command: gdb -q --args %a
-profile: opt
+profile: dbg

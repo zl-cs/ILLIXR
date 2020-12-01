@@ -32,7 +32,7 @@ public:
 
     virtual pose_type get_true_pose() const override {
 		const pose_type* pose_ptr = _m_true_pose->get_latest_ro();
-		return correct_pose(
+		return gt_transform(
 			pose_ptr ? *pose_ptr : pose_type{
 				.sensor_time = std::chrono::system_clock::now(),
 				.position = Eigen::Vector3f{0, 0, 0},
@@ -47,7 +47,7 @@ public:
 		if (!slow_pose) {
 			// No slow pose, return 0
             return fast_pose_type{
-                .pose = correct_pose(pose_type{}),
+                .pose = gt_transform(pose_type{}),
 				.predict_computed_time = std::chrono::system_clock::now(),
 				.predict_target_time = future_timestamp,
             };
@@ -56,11 +56,11 @@ public:
 		const imu_raw_type* imu_raw = _m_imu_raw->get_latest_ro();
         if (!imu_raw) {
 #ifndef NDEBUG
-            printf("FAST POSE IS SLOW POSE!");
+            printf("[WARNING] using slow_pose -> fast_pose, because no IMU biases");
 #endif
 			// No imu_raw, return slow_pose
             return fast_pose_type{
-                .pose = correct_pose(*slow_pose),
+                .pose = gt_transform(ov_transform(*slow_pose)),
 				.predict_computed_time = std::chrono::system_clock::now(),
 				.predict_target_time = future_timestamp,
             };
@@ -76,21 +76,11 @@ public:
         // predictor_imu_time is the most recent IMU sample that was used to compute the prediction.
         auto predictor_imu_time = predictor_result.second;
         
-        pose_type predicted_pose = correct_pose({
+        pose_type predicted_pose = gt_transform(ov_transform({
             .sensor_time = predictor_imu_time,
             .position = Eigen::Vector3f{static_cast<float>(state_plus(4)), static_cast<float>(state_plus(5)), static_cast<float>(state_plus(6))}, 
             .orientation = Eigen::Quaternionf{static_cast<float>(state_plus(3)), static_cast<float>(state_plus(0)), static_cast<float>(state_plus(1)), static_cast<float>(state_plus(2))}
-		});
-
-		// Make the first valid fast pose be straight ahead.
-		if (first_time) {
-			std::unique_lock lock {offset_mutex};
-			// check again, now that we have mutual exclusion
-			if (first_time) {
-				first_time = false;
-				offset = predicted_pose.orientation.inverse();
-			}
-		}
+		}));
 
         // Several timestamps are logged:
         //       - the prediction compute time (time when this prediction was computed, i.e., now)
@@ -101,25 +91,6 @@ public:
             .predict_target_time = future_timestamp
         };
     }
-
-	virtual void set_offset(const Eigen::Quaternionf& raw_o_times_offset) override {
-		std::unique_lock lock {offset_mutex};
-		Eigen::Quaternionf raw_o = raw_o_times_offset * offset.inverse();
-		offset = raw_o.inverse();
-		/*
-		  Now, `raw_o` is maps to the identity quaternion.
-		  Proof:
-		  apply_offset(raw_o)
-		      = raw_o * offset
-		      = raw_o * raw_o.inverse()
-		      = Identity.
-		 */
-	}
-
-	Eigen::Quaternionf apply_offset(const Eigen::Quaternionf& orientation) const {
-		std::shared_lock lock {offset_mutex};
-		return orientation * offset;
-	}
 
 
 	virtual bool fast_pose_reliable() const override {
@@ -155,30 +126,6 @@ private:
     std::unique_ptr<reader_latest<imu_raw_type>> _m_imu_raw;
 	std::unique_ptr<reader_latest<pose_type>> _m_true_pose;
     std::unique_ptr<reader_latest<time_type>> _m_vsync_estimate;
-	mutable Eigen::Quaternionf offset {Eigen::Quaternionf::Identity()};
-	mutable std::shared_mutex offset_mutex;
-
-    // Correct the orientation of the pose due to the lopsided IMU in the EuRoC Dataset
-    pose_type correct_pose(const pose_type pose) const {
-        pose_type swapped_pose;
-
-        // This uses the OpenVINS standard output coordinate system.
-        // This is a mapping between the OV coordinate system and the OpenGL system.
-        swapped_pose.position.x() = -pose.position.y();
-        swapped_pose.position.y() = pose.position.z();
-        swapped_pose.position.z() = -pose.position.x();
-
-		
-        // There is a slight issue with the orientations: basically,
-        // the output orientation acts as though the "top of the head" is the
-        // forward direction, and the "eye direction" is the up direction.
-		Eigen::Quaternionf raw_o (pose.orientation.w(), -pose.orientation.y(), pose.orientation.z(), -pose.orientation.x());
-
-		swapped_pose.orientation = apply_offset(raw_o);
-        swapped_pose.sensor_time = pose.sensor_time;
-
-        return swapped_pose;
-    }
 
     // Slightly modified copy of OpenVINS method found in propagator.cpp
     // Returns a pair of the predictor state_plus and the time associated with the

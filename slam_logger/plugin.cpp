@@ -13,11 +13,9 @@ public:
         : plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_output_file {"poses.csv"}
-		, _m_frame_no{0}
 	{
 		_m_output_file
-			<< "frame_no" << ","
-			<< "dataset_time" << ","
+			<< "time" << ","
 			<< "position_x" << ","
 			<< "position_y" << ","
 			<< "position_z" << ","
@@ -33,7 +31,6 @@ public:
 
 	void feed_pose(const pose_type *datum) {
 		_m_output_file
-			<< _m_frame_no++ << ","
 			<< datum->dataset_time << ","
 			<< datum->position.x() << ","
 			<< datum->position.y() << ","
@@ -48,7 +45,6 @@ public:
 private:
 	const std::shared_ptr<switchboard> sb;
 	std::ofstream _m_output_file;
-	std::size_t _m_frame_no;
 
 };
 

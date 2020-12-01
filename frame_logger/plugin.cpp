@@ -13,21 +13,23 @@ public:
         : plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_output_file {"frames.csv"}
-		, _m_frame_no{0}
 		, _m_start{std::chrono::system_clock::now()}
 	{
 		_m_output_file
-			<< "frame_no" << ","
-			<< "dataset_time"
+			<< "time"
 			<< std::endl;
+	}
+
+	virtual void start() override {
+		_m_start = std::chrono::system_clock::now();
 		sb->schedule<time_type>(id, "m_vsync_estimate", [&](const time_type *datum) {
 			this->feed_pose(datum);
 		});
+		plugin::start();
 	}
 
 	void feed_pose(const time_type *) {
 		_m_output_file
-			<< _m_frame_no++ << ","
 			<< std::chrono::nanoseconds{std::chrono::system_clock::now() - _m_start}.count()
 			<< std::endl;
 	}
@@ -35,7 +37,6 @@ public:
 private:
 	const std::shared_ptr<switchboard> sb;
 	std::ofstream _m_output_file;
-	std::size_t _m_frame_no;
 	std::chrono::system_clock::time_point _m_start;
 };
 

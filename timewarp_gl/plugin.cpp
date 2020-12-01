@@ -515,12 +515,13 @@ public:
 
 #ifndef NDEBUG
 		auto delta = std::chrono::high_resolution_clock::now() - most_recent_frame->render_time;
-		printf("\033[1;36m[TIMEWARP]\033[0m Time since render: %3fms\n", (float)(delta.count() / 1000000.0));
+		//printf("\033[1;36m[TIMEWARP]\033[0m Time since render: %3fms\n", (float)(delta.count() / 1000000.0));
 		if(delta > vsync_period)
 		{
 			printf("\033[0;31m[TIMEWARP: CRITICAL]\033[0m Stale frame!\n");
 		}
-		printf("\033[1;36m[TIMEWARP]\033[0m Warping from swap %d\n", most_recent_frame->swap_indices[0]);
+		// Even in debug builds, this is quite verbose
+		// printf("\033[1;36m[TIMEWARP]\033[0m Warping from swap %d\n", most_recent_frame->swap_indices[0]);
 #endif
 		// Call Hologram
 		auto hologram_params = new hologram_input;
