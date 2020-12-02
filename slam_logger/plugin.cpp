@@ -12,7 +12,7 @@ public:
     slam_logger(std::string name_, phonebook* pb_)
         : plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
-		, _m_output_file {"poses.csv"}
+		, _m_output_file {"data/poses.csv"}
 	{
 		_m_output_file
 			<< "time" << ","

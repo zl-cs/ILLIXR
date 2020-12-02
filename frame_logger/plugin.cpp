@@ -12,7 +12,7 @@ public:
     frame_logger(std::string name_, phonebook* pb_)
         : plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
-		, _m_output_file {"frames.csv"}
+		, _m_output_file {"data/frames.csv"}
 		, _m_start{std::chrono::system_clock::now()}
 	{
 		_m_output_file
@@ -22,7 +22,7 @@ public:
 
 	virtual void start() override {
 		_m_start = std::chrono::system_clock::now();
-		sb->schedule<time_type>(id, "m_vsync_estimate", [&](const time_type *datum) {
+		sb->schedule<time_type>(id, "vsync_estimate", [&](const time_type *datum) {
 			this->feed_pose(datum);
 		});
 		plugin::start();

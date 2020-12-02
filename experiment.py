@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import copy
 from pathlib import Path
-from typing import Optional, List, Any, NamedTuple, Union, Iterable, TypeVar, Type, Iterator, Final, Mapping, cast
+from typing import Optional, List, Any, NamedTuple, Union, Iterable, TypeVar, Type, Iterator, Final, Mapping, cast, Callable, Tuple
 import contextlib
 import bisect
 import multiprocessing
@@ -23,6 +23,8 @@ from tqdm import tqdm
 import numpy as np
 import quaternion
 import matplotlib.pyplot as plt
+from skimage.metrics import structural_similarity
+from skimage.io import imread, imsave
 
 from load_gt import get_gt_pose_fns
 from coordinate_transformations import ov_transform, gt_transform
@@ -73,15 +75,15 @@ class ApproxConfig:
     @classmethod
     def sample(Class: Type[ApproxConfig]) -> Iterable[ApproxConfig]:
         # yield ApproxConfig(downsample_cameras=True)
-        yield ApproxConfig(num_pts=200)
-        yield ApproxConfig(num_pts=100)
-        yield ApproxConfig(num_pts=50)
-        yield ApproxConfig(use_rk4_integration=False)
         # yield ApproxConfig(try_zupt=False)
-        yield ApproxConfig(use_stereo=False)
-        yield ApproxConfig(use_klt=False)
-        yield ApproxConfig(num_pts=200, use_klt=False)
-        yield ApproxConfig(use_stereo=False, use_klt=False)
+        yield ApproxConfig(num_pts=200)
+        # yield ApproxConfig(num_pts=100)
+        # yield ApproxConfig(num_pts=50)
+        # yield ApproxConfig(use_rk4_integration=False)
+        # yield ApproxConfig(use_stereo=False)
+        # yield ApproxConfig(use_klt=False)
+        # yield ApproxConfig(num_pts=200, use_klt=False)
+        # yield ApproxConfig(use_stereo=False, use_klt=False)
 
 @dataclass(frozen=True)
 class Config:
@@ -151,7 +153,7 @@ rest_of_yaml_config: Final[Mapping[str, Any]] = dict(
 class Results:
     poses: pd.DataFrame # frame_no, time, orientation_err, position err
     frames: pd.DataFrame # frame_no, time, path, nearest_gt_time, gt_path, err
-
+    config: Config
 
 @ch_cache.decor(ch_cache.FileStore.create(cache_path))
 def get_apitrace() -> Path:
@@ -197,7 +199,7 @@ def run_illixr(config: Config) -> Results:
     pose_columns = ["position_x", "position_y", "position_z", "orientation_w", "orientation_x", "orientation_y", "orientation_z"]
     poses = pd.DataFrame([], columns=pose_columns)
     if config.capture_poses:
-        poses_file = "poses.csv"
+        poses_file = "data/poses.csv"
         poses = pd.read_csv(poses_file, index_col=0)
     assert list(poses.columns) == pose_columns
 
@@ -205,15 +207,15 @@ def run_illixr(config: Config) -> Results:
         frame_columns = ["frame_path"]
         frames = pd.DataFrame([], columns=frame_columns)
         if config.capture_frames:
+            frames_file = "data/frames.csv"
+            frames = pd.read_csv(frames_file, index_col=0)
             trace_path = cache_path / f"trace-{random.randint(0, 2**256):x}"
             trace_path.mkdir()
             Path("trace").rename(trace_path / "trace")
             apitrace = get_apitrace()
             Subcommand(apitrace)("dump-images", (trace_path / "trace").resolve(), _subprocess_kwargs=dict(cwd=trace_path, capture_output=True))
-            frames_file = "frames.csv"
-            frames2 = pd.read_csv(frames_file, index_col=0)
-            os.remove(frames_file)
-            frames["frame_path"] = sorted(trace_path.glob("*.png"))
+            frame_paths = list(trace_path.glob("*.png"))
+            frames["frame_path"] = sorted(frame_paths)[:len(frames)]
         assert list(frames.columns) == frame_columns
 
     return Results(
@@ -221,7 +223,83 @@ def run_illixr(config: Config) -> Results:
         frames=frames,
     )
 
-def run_illixr_with_post(config: Config) -> Results:
+
+def compute_pose_error(
+        poses: pd.DataFrame,
+        gt_pos: Callable[[np.ndarray[np.float32]], np.ndarray[np.float32]],
+        gt_ori: Callable[[np.ndarray[np.float32]], np.ndarray[np.float32]],
+) -> pd.DataFrame:
+
+    def vector_distance(X: np.ndarray[np.float64], Y: np.ndarray[np.float64]) -> np.ndarray[np.float64]:
+        result = ((X - Y)**2).sum(axis=1)
+        assert result.shape == (len(X),)
+        return result
+
+    def quaternion_distance(X: np.ndarray[np.float64], Y: np.ndarray[np.float64]) -> np.ndarray[np.float64]:
+        dot = np.sum(quaternion.as_float_array(X) * quaternion.as_float_array(Y), axis=1)
+        assert dot.shape == (len(X),)
+        return np.arccos(2*dot**2 - 1)
+
+    poses = poses.copy()
+    poses["pos_err"] = vector_distance(
+        poses[["pos_x", "pos_y", "pos_z"]],
+        gt_pos(poses.index),
+    )
+    poses["ori_err"] = quaternion_distance(
+        quaternion.as_quat_array(poses[["ori_w", "ori_x", "ori_y", "ori_z"]].to_numpy()),
+        gt_ori(poses.index),
+    )
+    return poses
+
+
+@ch_cache.decor(ch_cache.FileStore.create(cache_path))
+def compute_ssim_error(frames: pd.DataFrame, gt_frames: pd.DataFrame) -> pd.DataFrame:
+    (cache_path / "ssim").mkdir(exist_ok=True)
+
+    frames = frames.copy()
+    frames["ssim"] = np.zeros(len(frames))
+    frames["ssim_path"] = [None for _ in range(len(frames))]
+    frames["gt_frame_no"] = [0 for _ in range(len(frames))]
+
+    start = bisect.bisect_left(frames.index, frames.index[0] + 2e9)
+    real_frames = frames.iloc[start:]
+
+    for time, path in tqdm(real_frames["path"].iteritems(), total=len(real_frames), unit="frames"):
+        gt_frame_no = bisect.bisect_left(gt_frames.index, time)
+        if gt_frames.index[gt_frame_no + 1] - time < time - gt_frames.index[gt_frame_no]:
+            gt_frame_no += 1
+
+        real_img = imread(path)
+        gt_img = imread(gt_frames.iloc[gt_frame_no]["path"])
+
+        frames.loc[time, "gt_frame_no"] = gt_frame_no
+        frames.loc[time, "ssim_path"] = cache_path / "ssim" / f"{random.randint(0, 2**256):x}.png"
+
+        save_img = True
+
+        if save_img and random.randint(0, 50) == 0:
+            frames.loc[time, "ssim"], ssim_img = structural_similarity(
+                real_img,
+                gt_img,
+                multichannel=True,
+                full=True,
+            )
+            ssim_img = ((ssim_img - ssim_img.min()) * 255 / ssim_img.max()).astype(np.uint8)
+            imsave(frames.loc[time, "ssim_path"], ssim_img)
+        else:
+            frames.loc[time, "ssim"] = structural_similarity(
+                real_img,
+                gt_img,
+                multichannel=True,
+            )
+
+    return frames
+
+gt_pos, gt_ori = get_gt_pose_fns()
+
+gt_result = None
+
+def run_illixr_with_post(config: Config, is_gt: bool) -> Results:
     results = cast(Results, run_illixr(config))
     if not results.poses.empty:
         results.poses = results.poses.rename(columns={
@@ -234,77 +312,74 @@ def run_illixr_with_post(config: Config) -> Results:
             "orientation_z": "ori_z",
         })
         results.poses = gt_transform(results.poses)
+        if not is_gt:
+            results.poses = compute_pose_error(results.poses, gt_pos, gt_ori)
+    if not results.frames.empty:
+        results.frames = results.frames.rename(columns={
+            "frame_path": "path",
+        })
+        if not is_gt:
+            assert gt_result is not None
+            results.frames = compute_ssim_error(results.frames, gt_result.frames)
     return results
 
-gt_pos, gt_ori = get_gt_pose_fns()
+gt_result = run_illixr_with_post(Config(capture_frames=True, gt_slam=True), is_gt=True)
 
-gt_result = run_illixr_with_post(Config(capture_frames=True, gt_slam=True))
-
-approx_results = dict(
+approx_results = dict(tqdm((
     (
-        (
-            approx_config,
-            run_illixr_with_post(Config(
-                capture_poses=True,
-                capture_frames=True,
-                approx_slam_config=approx_config,
-            )),
-        )
-        for approx_config in ApproxConfig.sample()
+        approx_config,
+        run_illixr_with_post(Config(
+            capture_poses=True,
+            capture_frames=True,
+            approx_slam_config=approx_config,
+        ), is_gt=False),
     )
-)
+    for approx_config in ApproxConfig.sample()
+), total=len(list(ApproxConfig.sample())), desc="trials"))
 
-approx_poses = {
+str_approx_results = {
     str(approx_config): result.poses
     for approx_config, result in approx_results.items()
 }
 
-visualize_2d({"approx": approx_poses["pts=100"]}, gt_pos, "pos", ("x", "y"))
-plt.show()
+# fig, ax = visualize_2d(str_approx_results, gt_ori, "pos", ("x", "y"))
+# fig.show()
 
-# visualize_2d(approx_poses, gt_ori, "ori", ("x", "y"))
-# plt.show()
+# fig, ax = visualize_2d(str_approx_results, gt_ori, "ori", ("x", "y"))
+# fig.show()
 
-def vector_distance(X: np.ndarray[np.float64], Y: np.ndarray[np.float64]) -> np.ndarray[np.float64]:
-    result = ((X - Y)**2).sum(axis=1)
-    assert result.shape == (len(X),)
-    return result
+# fig, ax = visualize_ts(str_approx_results, "pos_err")
+# fig.show()
 
-def quaternion_distance(X: np.ndarray[np.float64], Y: np.ndarray[np.float64]) -> np.ndarray[np.float64]:
-    dot = np.sum(quaternion.as_float_array(X) * quaternion.as_float_array(Y), axis=1)
-    assert dot.shape == (len(X),)
-    return np.arccos(2*dot**2 - 1)
+# fig, ax = visualize_ts(str_approx_results, "ori_err")
+# fig.show()
 
+fig, ax = visualize_ts({
+    str(approx_config): result.frames
+    for approx_config, result in approx_results.items()
+}, "ssim")
+fig.show()
 
-for config, result in approx_results.items():
-    result.poses["pos_err"] = vector_distance(
-        result.poses[["pos_x", "pos_y", "pos_z"]],
-        gt_pos(result.poses.index) - gt_pos(result.poses.index[0]),
-    )
-    result.poses["ori_err"] = quaternion_distance(
-        quaternion.as_quat_array(result.poses[["ori_w", "ori_x", "ori_y", "ori_z"]].to_numpy()),
-        gt_ori(result.poses.index),
-    )
+def plot_bars() -> None:
+    labels = [str(approx_config).replace(",", "\n") for approx_config in approx_results.keys()]
+    width = 0.4
+    xs = np.arange(len(labels))
 
-# visualize_ts(approx_poses, "pos_err")
-# plt.show()
+    fig, ax = plt.subplots()
+    bars: List[Tuple[str, Callable[[Results], pd.Series]]] = [
+        ("pos_err", lambda result: result.poses["pos_err"]),
+        ("ori_err", lambda result: result.poses["ori_err"]),
+        ("ssim", lambda result: result.frames["ssim"]),
+    ]
+    for i, (name, series_fn) in enumerate(bars):
+        
+        height = [series_fn(result).mean() for result in approx_results.values()]
+        yerr = [series_fn(result).std() for result in approx_results.values()]
+        ax.bar(xs + i*width, height, width=width, yerr=yerr, label=name)
+    ax.set_xticks(xs + len(bars)*width / 2)
+    ax.set_xticklabels(labels)
+    ax.set_xlabel("Approximation Configuration")
+    ax.legend()
+    fig.show()
 
-# visualize_ts(approx_poses, "ori_err")
-# plt.show()
-
-labels = [str(approx_config).replace(",", "\n") for approx_config in approx_results.keys()]
-width = 0.4
-xs = np.arange(len(labels))
-
-fig, ax = plt.subplots()
-height = [approx_config.poses["pos_err"].mean() for approx_config in approx_results.values()]
-yerr = [0.1*approx_config.poses["pos_err"].std() for approx_config in approx_results.values()]
-ax.bar(xs + 0*width, height, width=width, yerr=yerr, label="Position Err")
-height = [approx_config.poses["ori_err"].mean() for approx_config in approx_results.values()]
-yerr = [approx_config.poses["ori_err"].std() for approx_config in approx_results.values()]
-ax.bar(xs + 1*width, height, width=width, yerr=yerr, label="Orientation Err")
-ax.set_xticks(xs + 0.5*width)
-ax.set_xticklabels(labels)
-ax.set_xlabel("Approximation Configuration")
-ax.legend()
-plt.show()
+plot_bars()

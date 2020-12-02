@@ -14,7 +14,7 @@ def visualize_2d(
         gt_func: Optional[Callable[[float], np.ndarray[np.float32]]] = None,
         kind: str = "pos",
         plane: Tuple[str, str] = ("x", "y"),
-) -> plt.Axes:
+) -> Tuple[plt.Figure, plt.Axes]:
     if not label_to_pose:
         initial_index = np.array([0.0])
     else:
@@ -41,12 +41,12 @@ def visualize_2d(
     ax.set_xlabel(f"{plane[0]} position (m)")
     ax.set_ylabel(f"{plane[1]} position (m)")
     ax.legend()
-    return ax
+    return fig, ax
 
 def visualize_ts(
         label_to_data: Mapping[str, pd.DataFrame],
         column: str,
-) -> plt.Axes:
+) -> Tuple[plt.Figure, plt.Axes]:
     if not label_to_data:
         initial_index = np.array([0.0])
     else:
@@ -62,19 +62,19 @@ def visualize_ts(
             alpha=0.3,
         )
     ax.legend()
-    return ax
+    return fig, ax
 
 def visualize_1d_ts(
         label_to_pose: Mapping[str, pd.DataFrame],
         gt_func: Optional[Callable[[float], np.ndarray[np.float32]]] = None,
         kind: str = "pos",
         axis: str = "z",
-) -> plt.Axes:
+) -> Tuple[plt.Figure, plt.Axes]:
     if not label_to_pose:
         initial_index = np.array([0.0])
     else:
         initial_index = list(label_to_pose.values())[0].index.to_numpy()
-    ax = visualize_ts(label_to_pose, f"{kind}_{axis}")
+    fig, ax = visualize_ts(label_to_pose, f"{kind}_{axis}")
     if gt_func:
         gt = gt_func(initial_index)
         axis_labels = {"pos": "xyz", "ori": "wxyz"}[kind]
@@ -84,7 +84,7 @@ def visualize_1d_ts(
             gt[:, axis_num],
             label="gt",
         )
-    return ax
+    return fig, ax
 
 def visualize_3d(poses: pd.DataFrame) -> None:
     pos = poses[["pos_x", "pos_y", "pos_z"]].to_numpy()
