@@ -88,12 +88,12 @@ public:
 			std::this_thread::sleep_for(std::chrono::seconds{1});
 			// Uncomment this block to log in "real time";
 			// Otherwise, everything gets loged "post real time".
-			/*
+
 			const std::chrono::seconds max_record_match_wait_time {10};
 			actual_batch_size = queue.wait_dequeue_bulk_timed(record_batch.begin(), record_batch.size(), max_record_match_wait_time);
 			process(record_batch, actual_batch_size);
 			processed += actual_batch_size;
-			*/
+
 		}
 
 		// We got the terminate commnad,
