@@ -6,7 +6,7 @@
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
-#include "common/threadloop.hpp"
+#include "common/plugin.hpp"
 
 #include <gtsam/base/Matrix.h>
 #include <gtsam/base/Vector.h>
@@ -30,38 +30,20 @@ typedef struct {
 	Eigen::Matrix<double, 3, 1> am;
 } imu_type;
 
-class imu_integrator : public threadloop {
+class imu_integrator : public plugin {
 public:
 	imu_integrator(std::string name_, phonebook* pb_)
-		: threadloop{name_, pb_}
+		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
-		, _m_imu_cam{sb->subscribe_latest<imu_cam_type>("imu_cam")}
-		, _m_in{sb->subscribe_latest<imu_integrator_seq>("imu_integrator_seq")}
-		, _m_imu_integrator_input{sb->subscribe_latest<imu_integrator_input>("imu_integrator_input")}
-		, _m_imu_raw{sb->publish<imu_raw_type>("imu_raw")}
-		, _seq_expect(1)
-	{}
-
-	virtual skip_option _p_should_skip() override {
-		auto in = _m_in->get_latest_ro();
-		if (!in || in->seq == _seq_expect-1) {
-			// No new data, sleep to keep CPU utilization low
-			std::this_thread::sleep_for(std::chrono::milliseconds{1});
-			return skip_option::skip_and_yield;
-		} else {
-			if (in->seq != _seq_expect) {
-				_stat_missed = in->seq - _seq_expect;
-			} else {
-				_stat_missed = 0;
-			}
-			_stat_processed++;
-			_seq_expect = in->seq+1;
-			return skip_option::run;
-		}
+		, _m_imu_integrator_input{sb->get_reader<imu_integrator_input>("imu_integrator_input")}
+		, _m_imu_raw{sb->get_writer<imu_raw_type>("imu_raw")}
+	{
+		sb->schedule<imu_cam_type>(id, "imu_cam", [&](switchboard::ptr<const imu_cam_type> datum, size_t) {
+			callback(datum);
+		});
 	}
 
-	void _p_one_iteration() override {
-		const imu_cam_type *datum = _m_imu_cam->get_latest_ro();
+	void callback(switchboard::ptr<const imu_cam_type> datum) {
 		double timestamp_in_seconds = (double(datum->dataset_time) / NANO_SEC);
 
 		imu_type data;
@@ -78,19 +60,16 @@ private:
 	const std::shared_ptr<switchboard> sb;
 
 	// IMU Data, Sequence Flag, and State Vars Needed
-	std::unique_ptr<reader_latest<imu_cam_type>> _m_imu_cam;
-	std::unique_ptr<reader_latest<imu_integrator_seq>> _m_in;
-	std::unique_ptr<reader_latest<imu_integrator_input>> _m_imu_integrator_input;
+	switchboard::reader<imu_integrator_input> _m_imu_integrator_input;
 
 	// Write IMU Biases for PP
-	std::unique_ptr<writer<imu_raw_type>> _m_imu_raw;
+	switchboard::writer<imu_raw_type> _m_imu_raw;
 
 	std::vector<imu_type> _imu_vec;
   	PimUniquePtr pim_ = NULL;
 
 	[[maybe_unused]] double last_cam_time = 0;
 	double last_imu_offset = 0;
-	int64_t _seq_expect, _stat_processed, _stat_missed;
 
 	// Remove IMU values older than 'IMU_TTL' from the imu buffer
 	void clean_imu_vec(double timestamp) {
@@ -109,10 +88,10 @@ private:
 
 	// Timestamp we are propagating the biases to (new IMU reading time)
 	void propagate_imu_values(double timestamp, time_type real_time) {
-		const imu_integrator_input *input_values = _m_imu_integrator_input->get_latest_ro();
-		if (input_values == NULL) {
-			return;
-		}
+		 auto input_values = _m_imu_integrator_input.get_nullable();
+		 if (!input_values) {
+			 return;
+		 }
 
 		ImuBias imu_bias = ImuBias(input_values->biasAcc, input_values->biasGyro);
 		if (pim_ == NULL) {
@@ -180,7 +159,7 @@ private:
 				<< out_pose.z() << std::endl;
 #endif
 
-		_m_imu_raw->put(new imu_raw_type{
+		_m_imu_raw.put(new (_m_imu_raw.allocate()) imu_raw_type{
 			prev_bias.gyroscope(),
 			prev_bias.accelerometer(),
 			bias.gyroscope(),

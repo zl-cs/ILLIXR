@@ -2,9 +2,14 @@
 # Simply define them before including common.mk
 CXX := clang++-10
 STDCXX ?= c++17
-CFLAGS := $(CFLAGS) -DGLSL_VERSION='"330 core"'
-DBG_FLAGS ?= -Og -g -Wall -Wextra -Werror
+DBG_FLAGS ?= -Og -g -Wall -Wextra -Werror -fsanitize=address,undefined
+#-fsanitize=thread
+# Unfortunately, we have what I believe to be a false-positive TSan datarace in Switchboard.
+# Therefore, I will not enable TSan.
+# We can have ASan and UBSan instead, at least.
+
 OPT_FLAGS ?= -O3 -DNDEBUG -Wall -Wextra -Werror
+CFLAGS := $(CFLAGS) -DGLSL_VERSION='"330 core"'
 CPP_FILES ?= $(shell find . -name '*.cpp' -not -name 'plugin.cpp' -not -name 'main.cpp' -not -path '*/tests/*')
 CPP_TEST_FILES ?= $(shell find tests/ -name '*.cpp' 2> /dev/null)
 HPP_FILES ?= $(shell find -L . -name '*.hpp')
@@ -48,18 +53,18 @@ tests/run: tests/test.exe
 	./tests/test.exe
 
 tests/gdb: tests/test.exe
-	gdb -q ./tests/test.exe -ex r
+	gdb -q ./tests/test.exe
 
 tests/test.exe: $(CPP_TEST_FILES) $(CPP_FILES) $(HPP_FILES)
 	$(CXX) -ggdb -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(DBG_FLAGS) \
-	$(GTEST_FLAGS) -fsanitize=address,undefined -o ./tests/test.exe \
+	$(GTEST_FLAGS) -o ./tests/test.exe \
 	$(CPP_TEST_FILES) $(CPP_FILES) $(LDFLAGS)
 endif
 
 .PHONY: clean
 clean:
 	touch _target && \
-	$(RM) _target *.so *.exe *.o
+	$(RM) _target *.so *.exe *.o tests/test.exe
 # if *.so and *.o do not exist, rm will still work, because it still receives an operand (target)
 
 .PHONY: deepclean
