@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import copy
 from pathlib import Path
-from typing import Optional, List, Any, NamedTuple, Union, Iterable, TypeVar, Type, Iterator, Final, Mapping, cast, Callable, Tuple
+from typing import Optional, List, Any, NamedTuple, Union, Iterable, TypeVar, Type, Iterator, Final, Mapping, cast, Callable, Tuple, Generic, Dict
 import contextlib
 import bisect
 import multiprocessing
@@ -76,14 +76,16 @@ class ApproxConfig:
     def sample(Class: Type[ApproxConfig]) -> Iterable[ApproxConfig]:
         # yield ApproxConfig(downsample_cameras=True)
         # yield ApproxConfig(try_zupt=False)
-        yield ApproxConfig(num_pts=200)
+
         # yield ApproxConfig(num_pts=100)
-        # yield ApproxConfig(num_pts=50)
-        # yield ApproxConfig(use_rk4_integration=False)
-        # yield ApproxConfig(use_stereo=False)
-        # yield ApproxConfig(use_klt=False)
-        # yield ApproxConfig(num_pts=200, use_klt=False)
-        # yield ApproxConfig(use_stereo=False, use_klt=False)
+
+        yield ApproxConfig(num_pts=200)
+        yield ApproxConfig(num_pts=50)
+        yield ApproxConfig(use_rk4_integration=False)
+        yield ApproxConfig(use_stereo=False)
+        yield ApproxConfig(use_klt=False)
+        yield ApproxConfig(num_pts=200, use_klt=False)
+        yield ApproxConfig(use_stereo=False, use_klt=False)
 
 @dataclass(frozen=True)
 class Config:
@@ -155,6 +157,19 @@ class Results:
     frames: pd.DataFrame # frame_no, time, path, nearest_gt_time, gt_path, err
     config: Config
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Results):
+            return self.config == other.config
+        else:
+            return False
+
+    def __ne__(self, other: object) -> bool:
+        return not self == other
+
+    def __hash__(self) -> int:
+        return hash(self.config)
+
+
 @ch_cache.decor(ch_cache.FileStore.create(cache_path))
 def get_apitrace() -> Path:
     apitrace_dir = cache_path / "apitrace"
@@ -181,7 +196,6 @@ def env_sanitize(env: Mapping[str, Any]) -> Mapping[str, str]:
 @ch_cache.decor(ch_cache.FileStore.create(cache_path))
 @ch_time_block.decor()
 def run_illixr(config: Config) -> Results:
-    print(config)
     env = copy.deepcopy(os.environ)
     if config.approx_slam_config:
         env.update(env_sanitize(asdict(config.approx_slam_config)))
@@ -219,6 +233,7 @@ def run_illixr(config: Config) -> Results:
         assert list(frames.columns) == frame_columns
 
     return Results(
+        config=config,
         poses=poses,
         frames=frames,
     )
@@ -251,9 +266,14 @@ def compute_pose_error(
     )
     return poses
 
+def compute_ssim_error_one(path: Tuple[Path, Path]) -> float:
+    return structural_similarity(
+        imread(path[0]),
+        imread(path[1]),
+        multichannel=True,
+    )
 
-@ch_cache.decor(ch_cache.FileStore.create(cache_path))
-def compute_ssim_error(frames: pd.DataFrame, gt_frames: pd.DataFrame) -> pd.DataFrame:
+def compute_ssim_error_(frames: pd.DataFrame, gt_frames: pd.DataFrame) -> pd.DataFrame:
     (cache_path / "ssim").mkdir(exist_ok=True)
 
     frames = frames.copy()
@@ -264,40 +284,51 @@ def compute_ssim_error(frames: pd.DataFrame, gt_frames: pd.DataFrame) -> pd.Data
     start = bisect.bisect_left(frames.index, frames.index[0] + 2e9)
     real_frames = frames.iloc[start:]
 
-    for time, path in tqdm(real_frames["path"].iteritems(), total=len(real_frames), unit="frames"):
-        gt_frame_no = bisect.bisect_left(gt_frames.index, time)
-        if gt_frames.index[gt_frame_no + 1] - time < time - gt_frames.index[gt_frame_no]:
-            gt_frame_no += 1
+    save_img = False
+    inputs = []
 
-        real_img = imread(path)
-        gt_img = imread(gt_frames.iloc[gt_frame_no]["path"])
+    for time, path in real_frames["path"].iteritems():
+        gt_frame_no = bisect.bisect_left(gt_frames.index, time)
+        if gt_frame_no >= len(gt_frames):
+            gt_frame_no = len(gt_frames) - 1
+
+        if gt_frame_no + 1 < len(gt_frames) and gt_frames.index[gt_frame_no + 1] - time < time - gt_frames.index[gt_frame_no]:
+            gt_frame_no += 1
 
         frames.loc[time, "gt_frame_no"] = gt_frame_no
         frames.loc[time, "ssim_path"] = cache_path / "ssim" / f"{random.randint(0, 2**256):x}.png"
 
-        save_img = True
-
-        if save_img and random.randint(0, 50) == 0:
-            frames.loc[time, "ssim"], ssim_img = structural_similarity(
-                real_img,
-                gt_img,
-                multichannel=True,
-                full=True,
-            )
-            ssim_img = ((ssim_img - ssim_img.min()) * 255 / ssim_img.max()).astype(np.uint8)
-            imsave(frames.loc[time, "ssim_path"], ssim_img)
-        else:
-            frames.loc[time, "ssim"] = structural_similarity(
-                real_img,
-                gt_img,
-                multichannel=True,
-            )
+        # if save_img and random.randint(0, 50) == 0:
+        #     frames.loc[time, "ssim"], ssim_img = structural_similarity(
+        #         imread(path),
+        #         imread(gt_frames.iloc[gt_frame_no]["path"]),
+        #         multichannel=True,
+        #         full=True,
+        #     )
+        #     ssim_img = ((ssim_img - ssim_img.min()) * 255 / ssim_img.max()).astype(np.uint8)
+        #     imsave(frames.loc[time, "ssim_path"], ssim_img)
+        # else:
+        #     frames.loc[time, "ssim"] = compute_ssim_error_one((path, gt_frames.iloc[gt_frame_no]["path"]))
+        inputs.append((path, gt_frames.iloc[gt_frame_no]["path"]))
+    frames.iloc[start:, list(frames.columns).index("ssim")] = list(tqdm(
+        multiprocessing.Pool(2).imap(compute_ssim_error_one, inputs),
+        total=len(real_frames),
+        unit="frames",
+    ))
 
     return frames
+
+
+@ch_cache.decor(ch_cache.FileStore.create(cache_path))
+def compute_ssim_error(result: Results) -> pd.DataFrame:
+    assert gt_result is not None
+    assert len(gt_result.frames)
+    return compute_ssim_error_(result.frames, gt_result.frames)
 
 gt_pos, gt_ori = get_gt_pose_fns()
 
 gt_result = None
+
 
 def run_illixr_with_post(config: Config, is_gt: bool) -> Results:
     results = cast(Results, run_illixr(config))
@@ -320,9 +351,10 @@ def run_illixr_with_post(config: Config, is_gt: bool) -> Results:
         })
         if not is_gt:
             assert gt_result is not None
-            results.frames = compute_ssim_error(results.frames, gt_result.frames)
+            results.frames = compute_ssim_error(results)
     return results
 
+print("gt_result")
 gt_result = run_illixr_with_post(Config(capture_frames=True, gt_slam=True), is_gt=True)
 
 approx_results = dict(tqdm((
@@ -380,6 +412,7 @@ def plot_bars() -> None:
     ax.set_xticklabels(labels)
     ax.set_xlabel("Approximation Configuration")
     ax.legend()
-    fig.show()
+    # fig.show()
+    plt.show()
 
 plot_bars()
