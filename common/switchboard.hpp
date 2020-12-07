@@ -14,7 +14,8 @@
 #include "cpu_timer.hpp"
 #include "record_logger.hpp"
 #include "managed_thread.hpp"
-#include "../runtime/concurrentqueue/blockingconcurrentqueue.hpp"
+// #include "../runtime/concurrentqueue/blockingconcurrentqueue.hpp"
+#include "../runtime/concurrentqueue/queue.hpp"
 
 namespace ILLIXR {
 
@@ -144,8 +145,8 @@ private:
 		std::function<void(ptr<const event>&&, std::size_t)> _m_callback;
 		const std::shared_ptr<record_logger> _m_record_logger;
 		record_coalescer _m_cb_log;
-		moodycamel::BlockingConcurrentQueue<ptr<const event>> _m_queue {8 /*max size estimate*/};
-		moodycamel::ConsumerToken _m_ctok {_m_queue};
+		moodycamel::LockQueue<ptr<const event>> _m_queue {8 /*max size estimate*/};
+		// moodycamel::ConsumerToken _m_ctok {_m_queue};
 		static constexpr std::chrono::milliseconds _m_queue_timeout {100};
 		std::size_t _m_enqueued {0};
 		std::size_t _m_dequeued {0};
@@ -166,7 +167,8 @@ private:
 			ptr<const event> this_event;
 			std::int64_t timeout_usecs = std::chrono::duration_cast<std::chrono::microseconds>(_m_queue_timeout).count();
 			// Note the use of timed blocking wait
-			if (_m_queue.wait_dequeue_timed(_m_ctok, this_event, timeout_usecs)) {
+			if (_m_queue.wait_dequeue_timed(// _m_ctok,
+											this_event, timeout_usecs)) {
 				// Process event
 				// Also, record and log the time
 				_m_dequeued++;
@@ -198,7 +200,8 @@ private:
 				// 
 				ptr<const event> this_event;
 				for (std::size_t i = 0; i < unprocessed; ++i) {
-					[[maybe_unused]] bool ret = _m_queue.try_dequeue(_m_ctok, this_event);
+					[[maybe_unused]] bool ret = _m_queue.try_dequeue(// _m_ctok,
+																	 this_event);
 					assert(ret);
 					// std::cerr << "deq (stopping) " << ptr_to_str(reinterpret_cast<const void*>(this_event.get())) << " " << this_event.use_count() << " v\n";
 					this_event.reset();

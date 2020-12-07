@@ -270,7 +270,7 @@ private:
         state_plus.block(4,0,3,1) = p_0+(1.0/6.0)*k1_p+(1.0/3.0)*k2_p+(1.0/3.0)*k3_p+(1.0/6.0)*k4_p;
         state_plus.block(7,0,3,1) = v_0+(1.0/6.0)*k1_v+(1.0/3.0)*k2_v+(1.0/3.0)*k3_v+(1.0/6.0)*k4_v;
 
-        return {state_plus, imu_raw->imu_time};
+        return {state_plus, imu_raw->imu_directly_time};
     }
 
     /**

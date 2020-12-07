@@ -43,6 +43,7 @@ public:
 		, pp{pb->lookup_impl<pose_prediction>()}
 		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_type>>("vsync_estimate")}
 		, _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}
+		, _m_imu_raw{sb->get_reader<imu_raw_type>("imu_raw")}
 	{ }
 
 	// Essentially, a crude equivalent of XRWaitFrame.
@@ -130,6 +131,7 @@ public:
 
 			Eigen::Matrix4f modelMatrix = Eigen::Matrix4f::Identity();
 
+			switchboard::ptr<const imu_raw_type> imu_raw = _m_imu_raw.get();
 			const fast_pose_type fast_pose = pp->get_fast_pose();
 			pose_type pose = fast_pose.pose;
 
@@ -193,6 +195,11 @@ public:
 			frame->render_pose = fast_pose;
 			which_buffer.store(buffer_to_use == 1 ? 0 : 1);
 			frame->render_time = std::chrono::high_resolution_clock::now();
+
+			frame->imu_via_integrator_time = imu_raw->imu_directly_time;
+			frame->imu_via_integrator_slam_time = imu_raw->imu_via_slam_time;
+			frame->cam_via_integrator_slam_time = imu_raw->cam_via_slam_time;
+
 			_m_eyebuffer.put(frame);
 			lastFrameTime = std::chrono::high_resolution_clock::now();
 		}
@@ -237,6 +244,8 @@ private:
 	Eigen::Matrix4f basicProjection;
 
 	double lastTime;
+
+	switchboard::reader<imu_raw_type> _m_imu_raw;
 
 	int createSharedEyebuffer(GLuint* texture_handle){
 

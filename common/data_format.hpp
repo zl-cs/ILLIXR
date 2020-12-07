@@ -76,6 +76,8 @@ namespace ILLIXR {
 		Eigen::Matrix<double,3,1> position;
 		Eigen::Matrix<double,3,1> velocity;
 		Eigen::Quaterniond quat;
+		time_type imu_time;
+		time_type cam_time;
 		imu_integrator_input(
 							 double last_cam_integration_time_,
 							 double t_offset_,
@@ -84,7 +86,9 @@ namespace ILLIXR {
 							 Eigen::Vector3d biasGyro_,
 							 Eigen::Matrix<double,3,1> position_,
 							 Eigen::Matrix<double,3,1> velocity_,
-							 Eigen::Quaterniond quat_
+							 Eigen::Quaterniond quat_,
+							 time_type imu_time_,
+							 time_type cam_time_
 							 )
 			: last_cam_integration_time{last_cam_integration_time_}
 			, t_offset{t_offset_}
@@ -94,6 +98,8 @@ namespace ILLIXR {
 			, position{position_}
 			, velocity{velocity_}
 			, quat{quat_}
+			, imu_time{imu_time_}
+			, cam_time{cam_time_}
 		{ }
 	};
 
@@ -109,7 +115,9 @@ namespace ILLIXR {
 		Eigen::Matrix<double,3,1> pos;
 		Eigen::Matrix<double,3,1> vel;
 		Eigen::Quaterniond quat;
-		time_type imu_time;
+		time_type imu_directly_time;
+		time_type imu_via_slam_time;
+		time_type cam_via_slam_time;
 		imu_raw_type(Eigen::Matrix<double,3,1> w_hat_,
 					 Eigen::Matrix<double,3,1> a_hat_,
 					 Eigen::Matrix<double,3,1> w_hat2_,
@@ -117,7 +125,10 @@ namespace ILLIXR {
 					 Eigen::Matrix<double,3,1> pos_,
 					 Eigen::Matrix<double,3,1> vel_,
 					 Eigen::Quaterniond quat_,
-					 time_type imu_time_)
+					 time_type imu_directly_time_,
+					 time_type imu_via_slam_time_,
+					 time_type cam_via_slam_time_
+					 )
 			: w_hat{w_hat_}
 			, a_hat{a_hat_}
 			, w_hat2{w_hat2_}
@@ -125,7 +136,9 @@ namespace ILLIXR {
 			, pos{pos_}
 			, vel{vel_}
 			, quat{quat_}
-			, imu_time{imu_time_}
+			, imu_directly_time{imu_directly_time_}
+			, imu_via_slam_time{imu_via_slam_time_}
+			, cam_via_slam_time{cam_via_slam_time_}
 		{ }
 	};
 
@@ -168,6 +181,9 @@ namespace ILLIXR {
 		fast_pose_type render_pose; // The pose used when rendering this frame.
 		std::chrono::time_point<std::chrono::system_clock> sample_time;
 		std::chrono::time_point<std::chrono::system_clock> render_time;
+		time_type imu_via_integrator_time;
+		time_type imu_via_integrator_slam_time;
+		time_type cam_via_integrator_slam_time;
 	};
 
 	typedef struct {

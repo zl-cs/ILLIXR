@@ -93,6 +93,9 @@ private:
 			 return;
 		 }
 
+		 time_type imu_via_slam = input_values->imu_time;
+		 time_type cam_via_slam = input_values->cam_time;
+
 		ImuBias imu_bias = ImuBias(input_values->biasAcc, input_values->biasGyro);
 		if (pim_ == NULL) {
 			boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params =
@@ -167,7 +170,9 @@ private:
 			out_pose.translation(), // Position
 			navstate_k.velocity(), // Velocity
 			out_pose.rotation().toQuaternion(), // Eigen Quat
-			real_time
+				real_time,
+				imu_via_slam,
+				cam_via_slam
 		});
 	}
 

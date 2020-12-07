@@ -34,6 +34,17 @@ const record_header mtp_record {"mtp_record", {
 	{"render_to_display", typeid(std::chrono::nanoseconds)},
 }};
 
+const record_header latency_record {"latency_record", {
+	{"iteration_no", typeid(std::size_t)},
+	{"vsync", typeid(std::chrono::high_resolution_clock::time_point)},
+	{"imu_via_integrator_directly", typeid(time_type)},
+	{"imu_via_integrator_via_slam", typeid(time_type)},
+	{"cam_via_integrator_via_slam", typeid(time_type)},
+	{"imu_via_gldemo_integrator_directly", typeid(time_type)},
+	{"imu_via_gldemo_integrator_via_slam", typeid(time_type)},
+	{"cam_via_gldemo_integrator_via_slam", typeid(time_type)},
+}};
+
 class timewarp_gl : public threadloop {
 
 public:
@@ -53,6 +64,8 @@ public:
 		, _m_frame_age{sb->get_writer<switchboard::event_wrapper<std::chrono::duration<double, std::nano>>>("warp_frame_age")}
 		, timewarp_gpu_logger{record_logger_}
 		, mtp_logger{record_logger_}
+		, latency_logger{record_logger_}
+		, _m_imu_raw{sb->get_reader<imu_raw_type>("imu_raw")}
 	{ }
 
 private:
@@ -92,6 +105,7 @@ private:
 
 	record_coalescer timewarp_gpu_logger;
 	record_coalescer mtp_logger;
+	record_coalescer latency_logger;
 
 	GLuint timewarpShaderProgram;
 
@@ -141,6 +155,16 @@ private:
 
 	// Hologram call data
 	std::size_t _hologram_seq{0};
+
+	switchboard::reader<imu_raw_type> _m_imu_raw;
+
+	time_type
+		imu_via_integrator_directly,
+		imu_via_integrator_via_slam,
+		cam_via_integrator_via_slam,
+		imu_via_gldemo_integrator_directly,
+		imu_via_gldemo_integrator_via_slam,
+		cam_via_gldemo_integrator_via_slam;
 
 	void BuildTimewarp(HMD::hmd_info_t* hmdInfo){
 
@@ -426,8 +450,10 @@ public:
 		// TODO: Right now, this samples the latest pose published to the "pose" topic.
 		// However, this should really be polling the high-frequency pose prediction topic,
 		// given a specified timestamp!
+		switchboard::ptr<const imu_raw_type> imu_raw = _m_imu_raw.get();
 		const fast_pose_type latest_pose = pp->get_fast_pose();
 		viewMatrixBegin.block(0,0,3,3) = latest_pose.pose.orientation.toRotationMatrix();
+	
 
 		// TODO: We set the "end" pose to the same as the beginning pose, because panel refresh is so tiny
 		// and we don't need to visualize this right now (we also don't have prediction setup yet!)
@@ -533,6 +559,7 @@ public:
 
 		// The swap time needs to be obtained and published as soon as possible
 		lastSwapTime = std::chrono::high_resolution_clock::now();
+		time_type vsync = std::chrono::system_clock::now();
 
 		// Now that we have the most recent swap time, we can publish the new estimate.
 		_m_vsync_estimate.put(new (_m_vsync_estimate.allocate()) switchboard::event_wrapper<time_type>{GetNextSwapTimeEstimate()});
@@ -548,6 +575,23 @@ public:
 			{predict_to_display},
 			{render_to_display},
 		}});
+
+		latency_logger.log(record(latency_record, {
+												   {iteration_no},
+												   {vsync},
+												   {imu_via_integrator_directly},
+												   {imu_via_integrator_via_slam},
+												   {cam_via_integrator_via_slam},
+												   {imu_via_gldemo_integrator_directly},
+												   {imu_via_gldemo_integrator_via_slam},
+												   {cam_via_gldemo_integrator_via_slam},
+				}));
+		imu_via_integrator_directly = imu_raw->imu_directly_time;
+		imu_via_integrator_via_slam = imu_raw->imu_via_slam_time;
+		cam_via_integrator_via_slam = imu_raw->cam_via_slam_time;
+		imu_via_gldemo_integrator_directly = most_recent_frame->imu_via_integrator_time;
+		imu_via_gldemo_integrator_via_slam = most_recent_frame->imu_via_integrator_slam_time;
+		cam_via_gldemo_integrator_via_slam = most_recent_frame->cam_via_integrator_slam_time;
 
 #ifndef NDEBUG
 		auto afterSwap = glfwGetTime();
