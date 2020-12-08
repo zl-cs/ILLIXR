@@ -68,9 +68,6 @@ private:
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
 
-	static constexpr int   SCREEN_WIDTH    = ILLIXR::FB_WIDTH;
-	static constexpr int   SCREEN_HEIGHT   = ILLIXR::FB_HEIGHT;
-
 	static constexpr double FPS_WARNING_TOLERANCE = 0.5;
 
 	// Note: 0.9 works fine without hologram, but we need a larger safety net with hologram enabled
