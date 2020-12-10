@@ -13,15 +13,19 @@
 #include "common/math_util.hpp"
 #include "common/pose_prediction.hpp"
 #include "common/gl_util/obj.hpp"
+#include "common/global_module_defs.hpp"
 #include "shaders/demo_shader.hpp"
 #include "common/global_module_defs.hpp"
 
 using namespace ILLIXR;
 
-static constexpr int   EYE_TEXTURE_WIDTH   = ILLIXR::FB_WIDTH;
-static constexpr int   EYE_TEXTURE_HEIGHT  = ILLIXR::FB_HEIGHT;
+static const std::string OBJ_DIR { ILLIXR::DEMO_OBJ_PATH };
 
-static constexpr std::chrono::nanoseconds vsync_period {std::size_t(NANO_SEC/60)};
+static const int EYE_TEXTURE_WIDTH   { ILLIXR::FB_WIDTH  };
+static const int EYE_TEXTURE_HEIGHT  { ILLIXR::FB_HEIGHT };
+
+static const double DISPLAY_REFRESH_RATE { ILLIXR::REFRESH_RATE };
+static const std::chrono::nanoseconds VSYNC_PERIOD { static_cast<size_t>(NANO_SEC/DISPLAY_REFRESH_RATE) };
 static constexpr std::chrono::milliseconds VSYNC_DELAY_TIME {std::size_t{2}};
 
 // Monado-style eyebuffers:
@@ -59,7 +63,7 @@ public:
 		{
 			// If no vsync data available, just sleep for roughly a vsync period.
 			// We'll get synced back up later.
-			std::this_thread::sleep_for(vsync_period);
+			std::this_thread::sleep_for(VSYNC_PERIOD);
 			return;
 		}
 
@@ -68,7 +72,7 @@ public:
 		printf("\033[1;32m[GL DEMO APP]\033[0m First vsync is in %4fms\n", vsync_in.count());
 #endif
 		
-		bool hasRenderedThisInterval = (now - lastFrameTime) < vsync_period;
+		bool hasRenderedThisInterval = (now - lastFrameTime) < VSYNC_PERIOD;
 
 		// If less than one frame interval has passed since we last rendered...
 		if(hasRenderedThisInterval)
@@ -81,7 +85,7 @@ public:
 			// by a vsync period, so it's always in the future.
 			while(wait_time < now)
 			{
-				wait_time += vsync_period;
+				wait_time += VSYNC_PERIOD;
 			}
 #ifndef NDEBUG
 			std::chrono::duration<double, std::milli> wait_in = wait_time - now;
@@ -341,13 +345,7 @@ public:
 		colorUniform = glGetUniformLocation(demoShaderProgram, "u_color");
 
 		// Load/initialize the demo scene.
-
-		char* obj_dir = std::getenv("ILLIXR_DEMO_DATA");
-		if(obj_dir == NULL) {
-			std::cerr << "Please define ILLIXR_DEMO_DATA." << std::endl;
-			abort();
-		}
-		demoscene = ObjScene(std::string(obj_dir), "scene.obj");
+		demoscene = ObjScene(OBJ_DIR, "scene.obj");
 		
 		// Construct a basic perspective projection
 		math_util::projection_fov( &basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f );

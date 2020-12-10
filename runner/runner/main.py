@@ -9,17 +9,20 @@ from typing import Any, List, Mapping, Optional
 import click
 import jsonschema
 import yaml
+from yamlinclude import YamlIncludeConstructor
+
 from util import (
     fill_defaults,
     flatten1,
+    flatten_maps_list,
     pathify,
+    pathify_path_vars,
     relative_to,
     replace_all,
     subprocess_run,
     threading_map,
     unflatten,
 )
-from yamlinclude import YamlIncludeConstructor
 
 # isort main.py
 # black -l 90 main.py
@@ -81,9 +84,7 @@ def build_one_plugin(
     profile = config["profile"]
     path: Path = pathify(plugin_config["path"], root_dir, cache_path, True, True)
     if not (path / "common").exists():
-        common_path = pathify(
-            config["common"]["path"], root_dir, cache_path, True, True
-        )
+        common_path = pathify(config["common"]["path"], root_dir, cache_path, True, True)
         common_path = common_path.resolve()
         os.symlink(common_path, path / "common")
     plugin_so_name = f"plugin.{profile}.so"
@@ -104,9 +105,10 @@ def build_runtime(config: Mapping[str, Any], suffix: str, test: bool = False,) -
 
 
 def load_native(config: Mapping[str, Any]) -> None:
+    consts_map: Mapping[str, str] = flatten_maps_list(config["constants"])
+    consts_map_pathified = pathify_path_vars(consts_map, root_dir, cache_path, True, True)
+
     runtime_exe_path = build_runtime(config, "exe")
-    data_path = pathify(config["data"], root_dir, cache_path, True, True)
-    demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
         [
@@ -128,15 +130,18 @@ def load_native(config: Mapping[str, Any]) -> None:
     )
     subprocess_run(
         command_lst_sbst,
-        env_override=dict(ILLIXR_DATA=str(data_path), ILLIXR_DEMO_DATA=str(demo_data_path), KIMERA_ROOT=config["loader"]["kimera_path"]),
+        env_override=dict(
+            KIMERA_ROOT=config["loader"]["kimera_path"], **consts_map_pathified,
+        ),
         check=True,
     )
 
 
 def load_tests(config: Mapping[str, Any]) -> None:
+    consts_map: Mapping[str, str] = flatten_maps_list(config["constants"])
+    consts_map_pathified = pathify_path_vars(consts_map, root_dir, cache_path, True, True)
+
     runtime_exe_path = build_runtime(config, "exe", test=True)
-    data_path = pathify(config["data"], root_dir, cache_path, True, True)
-    demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     make(Path("common"), ["tests/run"])
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config, test=True),
@@ -149,12 +154,15 @@ def load_tests(config: Mapping[str, Any]) -> None:
     )
     subprocess_run(
         ["xvfb-run", str(runtime_exe_path), *map(str, plugin_paths)],
-        env_override=dict(ILLIXR_DATA=str(data_path), ILLIXR_DEMO_DATA=str(demo_data_path), ILLIXR_RUN_DURATION="10", KIMERA_ROOT=config["loader"]["kimera_path"]),
+        env_override=dict(KIMERA_ROOT=config["loader"]["kimera_path"], **consts_map_pathified),
         check=True,
     )
 
 
 def load_monado(config: Mapping[str, Any]) -> None:
+    consts_map = flatten_maps_list(config["constants"])
+    consts_map_pathified = pathify_path_vars(consts_map, root_dir, cache_path, True, True)
+
     profile = config["profile"]
     cmake_profile = "Debug" if profile == "dbg" else "Release"
     openxr_app_config = config["loader"]["openxr_app"].get("config", {})
@@ -167,8 +175,6 @@ def load_monado(config: Mapping[str, Any]) -> None:
     openxr_app_path = pathify(
         config["loader"]["openxr_app"]["path"], root_dir, cache_path, True, True
     )
-    data_path = pathify(config["data"], root_dir, cache_path, True, True)
-    demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
 
     cmake(
         monado_path,
@@ -209,8 +215,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
             XR_RUNTIME_JSON=str(monado_path / "build" / "openxr_monado-dev.json"),
             ILLIXR_PATH=str(runtime_path / f"plugin.{profile}.so"),
             ILLIXR_COMP=":".join(map(str, plugin_paths)),
-            ILLIXR_DATA=str(data_path),
-            ILLIXR_DEMO_DATA=str(demo_data_path),
+            **consts_map_pathified,
         ),
         check=True,
     )

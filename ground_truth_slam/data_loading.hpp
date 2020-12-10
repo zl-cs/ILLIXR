@@ -10,6 +10,7 @@
 #include <eigen3/Eigen/Dense>
 
 #include "csv_iterator.hpp"
+#include "common/global_module_defs.hpp"
 
 // timestamp
 // p_RS_R_x [m], p_RS_R_y [m], p_RS_R_z [m]
@@ -25,20 +26,16 @@ typedef pose_type sensor_types;
 static
 std::map<ullong, sensor_types>
 load_data() {
-	const char* illixr_data_c_str = std::getenv("ILLIXR_DATA");
-	if (!illixr_data_c_str) {
-		std::cerr << "Please define ILLIXR_DATA" << std::endl;
-		abort();
-	}
-	const std::string subpath = "/state_groundtruth_estimate0/data.csv";
-	std::string illixr_data = std::string{illixr_data_c_str};
+	const std::string subpath {"/state_groundtruth_estimate0/data.csv"};
+	std::string illixr_data {ILLIXR::DATA_PATH};
 
 	std::map<ullong, sensor_types> data;
 
 	std::ifstream gt_file {illixr_data + subpath};
 
 	if (!gt_file.good()) {
-		std::cerr << "${ILLIXR_DATA}" << subpath << " (" << illixr_data << subpath << ") is not a good path" << std::endl;
+		std::cerr << "'" << illixr_data << subpath << "' is not a good path"
+		          << std::endl;
 		abort();
 	}
 

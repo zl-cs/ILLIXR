@@ -22,7 +22,12 @@
 #include <opencv2/opencv.hpp>
 #include <cmath>
 
+#include "common/global_module_defs.hpp"
+
+
 using namespace ILLIXR;
+
+const std::string OBJ_DIR {ILLIXR::DEMO_OBJ_PATH};
 
 constexpr size_t TEST_PATTERN_WIDTH = 256;
 constexpr size_t TEST_PATTERN_HEIGHT = 256;
@@ -454,14 +459,8 @@ public:
 
 		// Load/initialize the demo scene.
 
-		char* obj_dir = std::getenv("ILLIXR_DEMO_DATA");
-		if(obj_dir == NULL) {
-			std::cerr << "Please define ILLIXR_DEMO_DATA." << std::endl;
-			abort();
-		}
-
-		demoscene = ObjScene(std::string(obj_dir), "scene.obj");
-		headset = ObjScene(std::string(obj_dir), "headset.obj");
+		demoscene = ObjScene(OBJ_DIR, "scene.obj");
+		headset = ObjScene(OBJ_DIR, "headset.obj");
 
 		// Generate fun test pattern for missing camera images.
 		for(unsigned x = 0; x < TEST_PATTERN_WIDTH; x++){

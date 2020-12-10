@@ -9,6 +9,7 @@
 #include "common/data_format.hpp"
 #include "common/extended_window.hpp"
 #include "common/shader_util.hpp"
+#include "common/global_module_defs.hpp"
 #include "utils/hmd.hpp"
 #include "common/math_util.hpp"
 #include "shaders/basic_shader.hpp"
@@ -17,6 +18,13 @@
 #include "common/global_module_defs.hpp"
 
 using namespace ILLIXR;
+
+static const int SCREEN_WIDTH  { ILLIXR::FB_WIDTH  };
+static const int SCREEN_HEIGHT { ILLIXR::FB_HEIGHT };
+
+static const double DISPLAY_REFRESH_RATE { ILLIXR::REFRESH_RATE };
+static const std::chrono::nanoseconds VSYNC_PERIOD { static_cast<size_t>(NANO_SEC/DISPLAY_REFRESH_RATE) };
+
 
 typedef void (*glXSwapIntervalEXTProc)(Display *dpy, GLXDrawable drawable, int interval);
 
@@ -60,18 +68,12 @@ private:
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
 
-	static constexpr int   SCREEN_WIDTH    = ILLIXR::FB_WIDTH;
-	static constexpr int   SCREEN_HEIGHT   = ILLIXR::FB_HEIGHT;
-
-	static constexpr double DISPLAY_REFRESH_RATE = 60.0;
 	static constexpr double FPS_WARNING_TOLERANCE = 0.5;
 
 	// Note: 0.9 works fine without hologram, but we need a larger safety net with hologram enabled
 	static constexpr double DELAY_FRACTION = 0.8;
 
 	static constexpr double RUNNING_AVG_ALPHA = 0.1;
-
-	static constexpr std::chrono::nanoseconds vsync_period {std::size_t(NANO_SEC/DISPLAY_REFRESH_RATE)};
 
 	const std::shared_ptr<xlib_gl_extended_window> xwin;
 	rendered_frame frame;
@@ -257,7 +259,7 @@ private:
 	// Get the estimated time of the next swap/next Vsync.
 	// This is an estimate, used to wait until *just* before vsync.
 	time_type GetNextSwapTimeEstimate() {
-		return lastSwapTime + vsync_period;
+		return lastSwapTime + VSYNC_PERIOD;
 	}
 
 	// Get the estimated amount of time to put the CPU thread to sleep,
@@ -519,7 +521,7 @@ public:
 #ifndef NDEBUG
 		auto delta = std::chrono::high_resolution_clock::now() - most_recent_frame->render_time;
 		printf("\033[1;36m[TIMEWARP]\033[0m Time since render: %3fms\n", (float)(delta.count() / 1000000.0));
-		if(delta > vsync_period)
+		if(delta > VSYNC_PERIOD)
 		{
 			printf("\033[0;31m[TIMEWARP: CRITICAL]\033[0m Stale frame!\n");
 		}
