@@ -108,4 +108,23 @@ namespace ILLIXR {
 				<= (atol + rtol * b.derived().array().abs())).all();
 	}
 
+	template<typename DerivedA, typename DerivedB>
+	bool all_close(const Eigen::QuaternionBase<DerivedA>& a,
+				   const Eigen::QuaternionBase<DerivedB>& b)
+	{
+		return is_close(a.angularDistance(b), 0);
+	}
+
+	template<typename DerivedA, typename DerivedB>
+	bool all_close(const Eigen::MatrixBase<DerivedA>& a,
+				   const Eigen::MatrixBase<DerivedB>& b,
+				   const typename DerivedA::RealScalar& rtol
+				   = Eigen::NumTraits<typename DerivedA::RealScalar>::dummy_precision(),
+				   const typename DerivedA::RealScalar& atol
+				   = Eigen::NumTraits<typename DerivedA::RealScalar>::epsilon())
+	{
+		return ((a.derived() - b.derived()).array().abs()
+				<= (atol + rtol * b.derived().array().abs())).all();
+	}
+
 }

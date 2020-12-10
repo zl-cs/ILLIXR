@@ -91,7 +91,7 @@ protected:
 			using namespace math_util;
 
 			// Assert that the orientation is getting the same rotational transformation that the position is.
-			assert(allclose(q_ESTtoGT.toRotationMatrix(), R_ESTtoGT));
+			// assert(all_close(q_ESTtoGT.toRotationMatrix(), R_ESTtoGT));
 
 			first_time_ov = false;
 		}

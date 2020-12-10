@@ -84,7 +84,6 @@ def load_native(config: Mapping[str, Any]) -> None:
             )
         )
     )
-    print(str(config["loader"].get("ILLIXR_RUN_DURATION", 60)))
     subprocess_run(
         command_lst_sbst,
         env_override=dict(

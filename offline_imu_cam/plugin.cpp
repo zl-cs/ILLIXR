@@ -6,14 +6,6 @@
 
 using namespace ILLIXR;
 
-const record_header imu_cam_record {
-	"imu_cam",
-	{
-		{"iteration_no", typeid(std::size_t)},
-		{"has_camera", typeid(bool)},
-	},
-};
-
 class offline_imu_cam : public ILLIXR::threadloop {
 public:
 	offline_imu_cam(std::string name_, phonebook* pb_)
@@ -24,8 +16,6 @@ public:
 		, _m_imu_cam{_m_sb->publish<imu_cam_type>("imu_cam")}
 		, _m_imu_integrator{_m_sb->publish<imu_integrator_seq>("imu_integrator_seq")}
 		, dataset_first_time{_m_sensor_data_it->first}
-		, imu_cam_log{record_logger_}
-		, camera_cvtfmt_log{record_logger_}
 	{ }
 
 protected:
@@ -54,31 +44,28 @@ protected:
 	virtual void _p_one_iteration() override {
 		assert(_m_sensor_data_it != _m_sensor_data.end());
 		//std::cerr << " IMU time: " << std::chrono::time_point<std::chrono::nanoseconds>(std::chrono::nanoseconds{dataset_now}).time_since_epoch().count() << std::endl;
-		time_type real_now = real_first_time + std::chrono::nanoseconds{dataset_now - dataset_first_time};
 		const sensor_types& sensor_datum = _m_sensor_data_it->second;
+
+		if (sensor_datum.cam0) {
+			CPU_TIMER3_TIME_BLOCK_("load_cam_imu", "");
+			std::optional<cv::Mat*> img0 = std::make_optional<cv::Mat*>(sensor_datum.cam0.value().load().release());
+			std::optional<cv::Mat*> img1 = std::make_optional<cv::Mat*>(sensor_datum.cam1.value().load().release());
+			_p_one_iteration_helper(sensor_datum, img0, img1);
+		} else {
+			CPU_TIMER3_TIME_BLOCK_("load_imu", "");
+			_p_one_iteration_helper(sensor_datum, std::nullopt, std::nullopt);
+		}
+	}
+
+	void _p_one_iteration_helper(const sensor_types& sensor_datum, std::optional<cv::Mat*> img0, std::optional<cv::Mat*> img1) {
+		time_type real_now = real_first_time + std::chrono::nanoseconds{dataset_now - dataset_first_time};
 		++_m_sensor_data_it;
-
-		imu_cam_log.log(record{imu_cam_record, {
-			{iteration_no},
-			{bool(sensor_datum.cam0)},
-		}});
-
-
-		std::optional<cv::Mat*> cam0 = sensor_datum.cam0
-			? std::make_optional<cv::Mat*>(sensor_datum.cam0.value().load().release())
-			: std::nullopt
-			;
-		std::optional<cv::Mat*> cam1 = sensor_datum.cam1
-			? std::make_optional<cv::Mat*>(sensor_datum.cam1.value().load().release())
-			: std::nullopt
-			;
-
 		auto datum = new imu_cam_type{
 			real_now,
 			(sensor_datum.imu0.value().angular_v).cast<float>(),
 			(sensor_datum.imu0.value().linear_a).cast<float>(),
-			cam0,
-			cam1,
+			img0,
+			img1,
 			dataset_now,
 		};
 		_m_imu_cam->put(datum);
@@ -111,8 +98,6 @@ private:
 	// Current IMU timestamp
 	ullong dataset_now;
 
-	record_coalescer imu_cam_log;
-	record_coalescer camera_cvtfmt_log;
 	long long _imu_integrator_seq{0};
 };
 
