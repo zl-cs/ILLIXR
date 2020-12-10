@@ -10,8 +10,6 @@
 
 using namespace ILLIXR;
 
-// Use env vars to add deviation
-
 std::string getenv_or(std::string var, std::string default_) {
 	if (std::getenv(var)) {
 		return {std::getenv(var)}
