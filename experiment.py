@@ -30,6 +30,7 @@ from visualize_pose import visualize_2d, visualize_ts
 from util import Subcommand
 from common import NoiseConfig, ApproxConfig, Config, Results
 from video_dist import compute_video_dists, video_dists
+from cpu_timer3_parser import parse_dir as cpu_timer3_parse_dir
 
 print("initialized")
 
@@ -147,6 +148,7 @@ def run_illixr(config: Config) -> Results:
     if config.noise_slam_config:
         env.update(env_sanitize(asdict(config.noise_slam_config)))
     env["ILLIXR_TIMEWARP_DISABLE"] = str(int(not config.use_timewarp))
+    env["CPU_TIMER3_ENABLE"] = str(int(config.cpu_timer3_enable))
 
     with write_yaml(config) as config_path:
         with ch_time_block.ctx("runner.sh"):
@@ -178,10 +180,15 @@ def run_illixr(config: Config) -> Results:
             frames["frame_path"] = sorted(frame_paths)[:len(frames)]
         assert list(frames.columns) == frame_columns
 
+    cpu_timer3 = pd.DataFrame
+    if common.cpu_timer3_enable:
+        cpu_timer3 = cpu_timer3_parse_dir(Path(".cpu_timer3"))
+
     return Results(
         config=config,
         poses=poses,
         frames=frames,
+        cpu_timer3=cpu_timer3,
     )
 
 
@@ -279,10 +286,21 @@ approx_results = dict(tqdm((
     for approx_config in approx_configs
 ), total=len(approx_configs), desc="trials"))
 
-str_approx_results = {
-    str(approx_config): result.poses
+approx_results_poses = pd.concat({
+    approx_config: result.poses
     for approx_config, result in approx_results.items()
-}
+})
+
+approx_results_frames = pd.concat({
+    approx_config: result.frames
+    for approx_config, result in approx_results.items()
+})
+
+approx_results_times = pd.concat({
+    approx_config: result.cpu_timer3
+    for approx_config, result in approx_results.items()
+})
+
 
 # fig, ax = visualize_2d(str_approx_results, gt_ori, "pos", ("x", "y"))
 # fig.show()
@@ -302,26 +320,46 @@ fig, ax = visualize_ts({
 }, "ssim")
 fig.show()
 
-def plot_bars() -> None:
-    labels = [str(approx_config).replace(",", "\n") for approx_config in approx_results.keys()]
-    width = 0.4
-    xs = np.arange(len(labels))
+fig, ax = visualize_ts({
+    str(approx_config): result.frames
+    for approx_config, result in approx_results.items()
+}, "ssim")
+fig.show()
 
-    fig, ax = plt.subplots()
-    bars: List[Tuple[str, Callable[[Results], pd.Series]]] = [
-        ("pos_err", lambda result: result.poses["pos_err"]),
-        ("ori_err", lambda result: result.poses["ori_err"]),
-        *[
-            (video_dist, lambda result: result.frames[video_dist])
+approx_df = pd.DataFrame.from_records(
+    dict(
+        approx_config=approx_config,
+        pos_err_mean=result.pose["pos_err"].mean(),
+        pos_err_std=result.poses["pos_err"].std(),
+        ori_err_mean=result.poses["ori_err"].mean(),
+        ori_err_std=result.poses["ori_err"].std(),
+        **dict(iterable.chain.from_iterables([
+            [
+                (f"{video_dist}_mean", result.frames[video_dist].mean())
+                (f"{video_dist}_std", result.frames[video_dist].std())
+            ]
             for video_dist in video_dists
-        ]
-    ]
-    for i, (name, series_fn) in enumerate(bars):
-        height = [series_fn(result).mean() for result in approx_results.values()]
-        yerr = [series_fn(result).std() for result in approx_results.values()]
-        ax.bar(xs + i*width, height, width=width, yerr=yerr, label=name)
+        ]))
+    )
+    for approx_config, result in approx_results.items()
+).set_index(approx_config, verify_integrity=True)
+
+columns = ["pos_err", "ori_err"] + video_dists
+
+def plot_bars() -> None:
+    fig, ax = plt.subplots()
+
+    for i, approx_config in enumerate(approx_df.index):
+        for j, column in enumerate(columns):
+            pos = i * len(columns) + j
+            height = approdx_df.loc[approx_config, f"{column}_mean"]
+            yerr = approdx_df.loc[approx_config, f"{column}_std"]
+            ax.bar(x, height, yerr=yerr, label=column)
     ax.set_xticks(xs + len(bars)*width / 2)
-    ax.set_xticklabels(labels)
+    ax.set_xticklabels([
+        str(approx_config).replace(",", "\n")
+        for approx_config in approx_df.index
+    ])
     ax.set_xlabel("Approximation Configuration")
     ax.legend()
     # fig.show()

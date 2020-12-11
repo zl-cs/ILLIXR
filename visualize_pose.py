@@ -44,20 +44,20 @@ def visualize_2d(
     return fig, ax
 
 def visualize_ts(
-        label_to_data: Mapping[str, pd.DataFrame],
+        data: pd.DataFrame
         column: str,
 ) -> Tuple[plt.Figure, plt.Axes]:
-    if not label_to_data:
-        initial_index = np.array([0.0])
+    if not data:
+        index = np.array([0.0])
     else:
-        initial_index = list(label_to_data.values())[0].index.to_numpy()
+        index = data.index.levels[1]
 
     fig = plt.figure()
     ax = fig.subplots(1, 1)
-    for label, datas in label_to_data.items():
+    for label in data.index.levels[0]:
         ax.plot(
-            (datas.index - initial_index[0]) / 1e9,
-            datas[column],
+            (datas.index[label] - initial_index[0]) / 1e9,
+            datas.loc[(label,), column],
             label=label,
             alpha=0.3,
         )

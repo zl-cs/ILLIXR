@@ -13,7 +13,7 @@ data:
       download_url: 'http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip'
 demo_data: demo_data/
 loader:
-  ILLIXR_RUN_DURATION: 10
+  ILLIXR_RUN_DURATION: 30
   name: native
   command: gdb -q --args %a
 profile: dbg

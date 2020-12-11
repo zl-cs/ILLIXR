@@ -44,12 +44,14 @@ class Config:
     approx_slam_config: Optional[ApproxConfig] = field(default_factory=lambda: None)
     gt_slam: bool = field(default=False)
     start_time: float = 5e9
+    cpu_timer3_enable: bool = field(default=True)
 
 
 @dataclass
 class Results:
     poses: pd.DataFrame # frame_no, time, orientation_err, position err
     frames: pd.DataFrame # frame_no, time, path, nearest_gt_time, gt_path, err
+    cpu_timer3: pd.DataFrame
     config: Config
 
     def __eq__(self, other: object) -> bool:
