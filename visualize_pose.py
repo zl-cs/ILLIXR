@@ -44,7 +44,7 @@ def visualize_2d(
     return fig, ax
 
 def visualize_ts(
-        data: pd.DataFrame
+        data: pd.Series,
         column: str,
 ) -> Tuple[plt.Figure, plt.Axes]:
     if not data:
@@ -56,11 +56,12 @@ def visualize_ts(
     ax = fig.subplots(1, 1)
     for label in data.index.levels[0]:
         ax.plot(
-            (datas.index[label] - initial_index[0]) / 1e9,
-            datas.loc[(label,), column],
+            (data.index[label] - index[0]) / 1e9,
+            data.loc[(label,)],
             label=label,
             alpha=0.3,
         )
+    ax.set_title(data.name)
     ax.legend()
     return fig, ax
 

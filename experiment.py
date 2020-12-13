@@ -30,7 +30,8 @@ from visualize_pose import visualize_2d, visualize_ts
 from util import Subcommand
 from common import NoiseConfig, ApproxConfig, Config, Results
 from video_dist import compute_video_dists, video_dists
-from cpu_timer3_parser import parse_dir as cpu_timer3_parse_dir
+import cpu_timer3_reader
+import sqlite_record_reader
 
 print("initialized")
 
@@ -40,7 +41,7 @@ cache_path.mkdir(parents=True, exist_ok=True)
 
 rest_of_yaml_config: Final[Mapping[str, Any]] = dict(
     plugin_groups=[dict(
-        plugin_group=[]
+        plugin_group=[],
     )],
     data=dict(
         subpath="mav0",
@@ -53,7 +54,7 @@ rest_of_yaml_config: Final[Mapping[str, Any]] = dict(
     demo_data="demo_data",
     loader=dict(
         name="native",
-        ILLIXR_RUN_DURATION=15,
+        ILLIXR_RUN_DURATION=30,
     ),
     profile="opt",
 )
@@ -76,9 +77,20 @@ def get_apitrace() -> Path:
     return (build_dir / "apitrace").resolve()
 
 
+def env_sanitize(env: Mapping[str, Any]) -> Mapping[str, str]:
+    def env_sanitize_val(val: Any) -> str:
+        if isinstance(val, bool):
+            return "1" if val else "0"
+        else:
+            return str(val)
+    return {
+        key: env_sanitize_val(val)
+        for key, val in env.items()
+    }
 
-@contextlib.contextmanager
-def write_yaml(config: Config) -> Iterator[Path]:
+@ch_cache.decor(ch_cache.FileStore.create(cache_path))
+@ch_time_block.decor()
+def run_illixr(config: Config) -> Results:
     apitrace = get_apitrace()
 
     yaml_config = copy.deepcopy(rest_of_yaml_config)
@@ -109,48 +121,17 @@ def write_yaml(config: Config) -> Iterator[Path]:
         config_path = Path(_tmpdir) / "config.yaml"
         with config_path.open("w") as f:
             yaml.dump(yaml_config, f)
-        yield config_path
 
-approx_configs = [
-    # ApproxConfig(downsample_cameras=True),
-    # ApproxConfig(try_zupt=False),
-    ApproxConfig(num_pts=200),
-    ApproxConfig(num_pts=50),
-    ApproxConfig(use_rk4_integration=False),
-    ApproxConfig(use_stereo=False),
-    ApproxConfig(use_klt=False),
+        env = copy.deepcopy(os.environ)
+        if config.approx_slam_config:
+            env.update(env_sanitize(asdict(config.approx_slam_config)))
+        if config.noise_slam_config:
+            env.update(env_sanitize(asdict(config.noise_slam_config)))
+        env["ILLIXR_TIMEWARP_DISABLE"] = str(int(
+            not (config.approx_slam_config is not None and config.approx_slam_config.use_tw)
+        ))
+        env["CPU_TIMER3_ENABLE"] = str(int(config.cpu_timer3_enable))
 
-    ApproxConfig(num_pts=200, disable_tw=True),
-    ApproxConfig(num_pts=50),
-    ApproxConfig(use_rk4_integration=False),
-    ApproxConfig(use_stereo=False),
-    ApproxConfig(use_klt=False),
-]
-
-
-def env_sanitize(env: Mapping[str, Any]) -> Mapping[str, str]:
-    def env_sanitize_val(val: Any) -> str:
-        if isinstance(val, bool):
-            return "1" if val else "0"
-        else:
-            return str(val)
-    return {
-        key: env_sanitize_val(val)
-        for key, val in env.items()
-    }
-
-@ch_cache.decor(ch_cache.FileStore.create(cache_path))
-@ch_time_block.decor()
-def run_illixr(config: Config) -> Results:
-    env = copy.deepcopy(os.environ)
-    if config.approx_slam_config:
-        env.update(env_sanitize(asdict(config.approx_slam_config)))
-    if config.noise_slam_config:
-        env.update(env_sanitize(asdict(config.noise_slam_config)))
-    env["ILLIXR_TIMEWARP_DISABLE"] = str(int(not config.use_timewarp))
-    env["CPU_TIMER3_ENABLE"] = str(int(config.cpu_timer3_enable))
-
-    with write_yaml(config) as config_path:
         with ch_time_block.ctx("runner.sh"):
             subprocess.run(
                 ["./runner.sh", Path("configs") / config_path],
@@ -158,32 +139,56 @@ def run_illixr(config: Config) -> Results:
                 env=env,
             )
 
-    pose_columns = ["position_x", "position_y", "position_z", "orientation_w", "orientation_x", "orientation_y", "orientation_z"]
-    poses = pd.DataFrame([], columns=pose_columns)
     if config.capture_poses:
-        poses_file = "data/poses.csv"
-        poses = pd.read_csv(poses_file, index_col=0)
-    assert list(poses.columns) == pose_columns
+        poses = (
+            pd.read_csv("data/poses.csv", index_col=0)
+            .rename(columns={
+                "position_x": "pos_x",
+                "position_y": "pos_y",
+                "position_z": "pos_z",
+                "orientation_w": "ori_w",
+                "orientation_x": "ori_x",
+                "orientation_y": "ori_y",
+                "orientation_z": "ori_z",
+            })
+        )
+    else:
+        poses = pd.DataFrame([])
 
-    with ch_time_block.ctx("apitrace dump"):
-        frame_columns = ["frame_path"]
-        frames = pd.DataFrame([], columns=frame_columns)
-        if config.capture_frames:
-            frames_file = "data/frames.csv"
-            frames = pd.read_csv(frames_file, index_col=0)
+    if config.capture_frames:
+        with ch_time_block.ctx("apitrace dump"):
+            # Run apitrace
             trace_path = cache_path / f"trace-{random.randint(0, 2**256):x}"
             trace_path.mkdir()
-            Path("trace").rename(trace_path / "trace")
-            apitrace = get_apitrace()
-            Subcommand(apitrace)("dump-images", (trace_path / "trace").resolve(), _subprocess_kwargs=dict(cwd=trace_path, capture_output=True))
-            frame_paths = list(trace_path.glob("*.png"))
-            frames["frame_path"] = sorted(frame_paths)[:len(frames)]
-        assert list(frames.columns) == frame_columns
+            Subcommand(get_apitrace())(
+                "dump-images",
+                Path("trace").resolve(),
+                _subprocess_kwargs=dict(cwd=trace_path, capture_output=True)
+            )
+            frames = pd.read_csv("data/frames.csv", index_col=0)
+            frames["path"] = sorted(list(trace_path.glob("*.png")))[:len(frames)]
+    else:
+        frames = pd.DataFrame([])
 
-    cpu_timer3 = pd.DataFrame
-    if common.cpu_timer3_enable:
-        cpu_timer3 = cpu_timer3_parse_dir(Path(".cpu_timer3"))
+    if config.cpu_timer3_enable:
+        plugin_names = sqlite_record_reader.read_table(Path("./metrics/"), "plugin_name", ["plugin_id"])
+        cpu_timer3 = cpu_timer3_reader.read_dir()
+        # comment should be interpreted as a plugin_name where plugin_comment_mask
+        plugin_comment_mask = (cpu_timer3["function_name"] == "_p_one_iteration") | (cpu_timer3["function_name"] == "invoke_callbacks")
+        # merge cpu_timer3 with plugin_names where it makes sense
+        # assign back into "comment"
+        cpu_timer3.loc[plugin_comment_mask, "comment"] = (
+            cpu_timer3
+            .loc[plugin_comment_mask, ["comment"]]
+            .assign(**{"plugin_id": lambda df: df["comment"].astype(int)})
+            .merge(plugin_names, how="left", validate="m:1", left_on="plugin_id", right_index=True)
+            ["plugin_name"]
+        )
+    else:
+        cpu_timer3 = pd.DataFrame()
 
+    if not poses.empty:
+        assert "pos_x" in poses.columns
     return Results(
         config=config,
         poses=poses,
@@ -192,6 +197,7 @@ def run_illixr(config: Config) -> Results:
     )
 
 
+gt_pos, gt_ori = get_gt_pose_fns()
 def compute_pose_error(
         poses: pd.DataFrame,
         gt_pos: Callable[[np.ndarray[np.float32]], np.ndarray[np.float32]],
@@ -237,42 +243,59 @@ def compute_gt_frame_no(frames: pd.DataFrame, gt_frames: pd.DataFrame, start_tim
     return frames
 
 
-gt_pos, gt_ori = get_gt_pose_fns()
+print("gt_results")
+gt_results = run_illixr(Config(capture_frames=True, gt_slam=True))
 
-gt_result = None
 
-
-def run_illixr_with_post(config: Config, is_gt: bool) -> Results:
+def run_illixr_with_post(config: Config) -> Results:
     results = cast(Results, run_illixr(config))
     if not results.poses.empty:
-        results.poses = results.poses.rename(columns={
-            "position_x": "pos_x",
-            "position_y": "pos_y",
-            "position_z": "pos_z",
-            "orientation_w": "ori_w",
-            "orientation_x": "ori_x",
-            "orientation_y": "ori_y",
-            "orientation_z": "ori_z",
-        })
         results.poses = gt_transform(results.poses)
-        if not is_gt:
-            results.poses = compute_pose_error(results.poses, gt_pos, gt_ori)
+        results.poses = compute_pose_error(results.poses, gt_pos, gt_ori)
     if not results.frames.empty:
-        results.frames = results.frames.rename(columns={
-            "frame_path": "path",
-        })
-        if not is_gt:
-            assert gt_result is not None
-            results.frames = compute_gt_frame_no(
-                results.frames,
-                gt_result.frames,
-                results.config.start_time,
-            )
-            results = compute_video_dists(results)
+        results.frames = compute_gt_frame_no(
+            results.frames,
+            gt_results.frames,
+            results.config.start_time,
+        )
+        results = compute_video_dists(results)
     return results
 
-print("gt_result")
-gt_result = run_illixr_with_post(Config(capture_frames=True, gt_slam=True), is_gt=True)
+def compute_ov_time_mask(cpu_timer3: pd.DataFrame) -> pd.DataFrame:
+    ov_function_names = {
+        # ov_core/src/track/Grider_FAST.h
+        "Grider_FAST::perform_griding_worker",
+
+        # ov_core/src/track/TrackKLT.cpp
+        "cv::equalizeHist", "cv::buildOpticalFlowPyramid", "perform_matching",
+
+        # ov_core/src/track/TrackDescriptor.cpp
+        "cv::ORB::compute", "robust_match", "Grider_FAST::perform_griding",
+    }
+    switchboard_function_names = {"_p_one_iteration", "invoke_callbacks"}
+    ov_plugins = {"timewarp_gl", "slam2"}
+    # Unfortunately, I don't know a pandas way of checking (df["function_name"] in set_of_things) as a bool mask
+    ov_time_mask = cpu_timer3.apply(lambda row: (
+        row["function_name"] in ov_function_names or (row["function_name"] in switchboard_function_names and row["comment"] in ov_plugins)
+    ), axis=1)
+    return ov_time_mask
+
+approx_configs = [
+    # ApproxConfig(downsample_cameras=True),
+    # ApproxConfig(try_zupt=False),
+    ApproxConfig(num_pts=200),
+    ApproxConfig(num_pts=50),
+    ApproxConfig(use_rk4_integration=False),
+    ApproxConfig(use_stereo=False),
+    ApproxConfig(use_klt=False),
+
+    ApproxConfig(num_pts=200, use_tw=False),
+    ApproxConfig(num_pts=50, use_tw=False),
+    ApproxConfig(use_rk4_integration=False, use_tw=False),
+    ApproxConfig(use_stereo=False, use_tw=False),
+    ApproxConfig(use_klt=False, use_tw=False),
+]
+
 
 approx_results = dict(tqdm((
     (
@@ -281,24 +304,25 @@ approx_results = dict(tqdm((
             capture_poses=True,
             capture_frames=True,
             approx_slam_config=approx_config,
-        ), is_gt=False),
+        )),
     )
     for approx_config in approx_configs
 ), total=len(approx_configs), desc="trials"))
 
 approx_results_poses = pd.concat({
-    approx_config: result.poses
-    for approx_config, result in approx_results.items()
+    approx_config: results.poses
+    for approx_config, results in approx_results.items()
 })
 
 approx_results_frames = pd.concat({
-    approx_config: result.frames
-    for approx_config, result in approx_results.items()
+    approx_config: results.frames
+    for approx_config, results in approx_results.items()
 })
 
+result_cpu_timer3s = cpu_timer3_reader.normalize_cats([results.cpu_timer3 for results in approx_results.values()])
 approx_results_times = pd.concat({
-    approx_config: result.cpu_timer3
-    for approx_config, result in approx_results.items()
+    approx_config: cpu_timer3
+    for approx_config, cpu_timer3 in zip(approx_results.keys(), result_cpu_timer3s)
 })
 
 
@@ -314,35 +338,36 @@ approx_results_times = pd.concat({
 # fig, ax = visualize_ts(str_approx_results, "ori_err")
 # fig.show()
 
-fig, ax = visualize_ts({
-    str(approx_config): result.frames
-    for approx_config, result in approx_results.items()
-}, "ssim")
-fig.show()
-
-fig, ax = visualize_ts({
-    str(approx_config): result.frames
-    for approx_config, result in approx_results.items()
-}, "ssim")
-fig.show()
-
 approx_df = pd.DataFrame.from_records(
     dict(
         approx_config=approx_config,
-        pos_err_mean=result.pose["pos_err"].mean(),
-        pos_err_std=result.poses["pos_err"].std(),
-        ori_err_mean=result.poses["ori_err"].mean(),
-        ori_err_std=result.poses["ori_err"].std(),
-        **dict(iterable.chain.from_iterables([
+        pos_err_mean=results.poses["pos_err"].mean(),
+        pos_err_std =results.poses["pos_err"].std (),
+        ori_err_mean=results.poses["ori_err"].mean(),
+        ori_err_std =results.poses["ori_err"].std (),
+        ov_time     =results.cpu_timer3[compute_ov_time_mask(results.cpu_timer3)]["cpu_time"] / results.cpu_timer3["cpu_time"].sum(),
+        **dict(itertools.chain.from_iterable([
             [
-                (f"{video_dist}_mean", result.frames[video_dist].mean())
-                (f"{video_dist}_std", result.frames[video_dist].std())
+                (f"{video_dist}_mean", results.frames[video_dist].mean()),
+                (f"{video_dist}_std" , results.frames[video_dist].std ()),
             ]
             for video_dist in video_dists
         ]))
     )
-    for approx_config, result in approx_results.items()
-).set_index(approx_config, verify_integrity=True)
+    for approx_config, results in approx_results.items()
+).set_index("approx_config", verify_integrity=True)
+
+fig, ax = visualize_ts(approx_results_frames.loc[:, "ssim"])
+fig.show()
+
+fig, ax = visualize_ts(approx_results_frames.loc[:, "mean_feature_dist"])
+fig.show()
+
+fig, ax = visualize_ts(approx_results_frames.loc[:, "max_feature_dist"])
+fig.show()
+
+fig, ax = visualize_ts(approx_results_poses.loc[:, "pos_err"])
+fig.show()
 
 columns = ["pos_err", "ori_err"] + video_dists
 
@@ -352,10 +377,10 @@ def plot_bars() -> None:
     for i, approx_config in enumerate(approx_df.index):
         for j, column in enumerate(columns):
             pos = i * len(columns) + j
-            height = approdx_df.loc[approx_config, f"{column}_mean"]
-            yerr = approdx_df.loc[approx_config, f"{column}_std"]
-            ax.bar(x, height, yerr=yerr, label=column)
-    ax.set_xticks(xs + len(bars)*width / 2)
+            height = approx_df.loc[approx_config, f"{column}_mean"]
+            yerr   = approx_df.loc[approx_config, f"{column}_std" ]
+            ax.bar(pos, height, yerr=yerr, label=column)
+    ax.set_xticks(np.arange(len(approx_df.index) * len(columns)))
     ax.set_xticklabels([
         str(approx_config).replace(",", "\n")
         for approx_config in approx_df.index

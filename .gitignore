@@ -14,3 +14,4 @@ install/
 output/
 apitrace_src/
 __pycache__
+.cpu_timer3

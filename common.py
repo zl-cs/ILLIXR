@@ -29,7 +29,7 @@ class ApproxConfig:
             ret.append("!stereo")
         if not self.use_klt:
             ret.append("!klt")
-        if not use_tw:
+        if not self.use_tw:
             ret.append("!tw")
         if not ret:
             return "exact"

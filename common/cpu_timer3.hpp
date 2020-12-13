@@ -37,6 +37,7 @@
  *
  * TODO:
  * - Add thread_main and thread_caller.
+ * - Remvoe the mutex in ThreadContext.
  */
 
 #ifdef CPU_TIMER3_DISABLE
@@ -71,7 +72,7 @@ namespace cpu_timer3 {
 
 #define bool_likely(x) x
 #define bool_unlikely(x) x
-#define FILESYSTEM_DEBUG
+// #define FILESYSTEM_DEBUG
 
 #define CPU_TIMER3_TIME_BLOCK() CPU_TIMER3_TIME_BLOCK_(__func__, "")
 #define CPU_TIMER3_TIME_BLOCK_(name, args) auto TOKENPASTE(__cpu_timer3_timer, __LINE__) = \
@@ -240,6 +241,12 @@ namespace cpu_timer3 {
 		std::deque<StackFrame> finished;
 		std::unordered_map<const char*, size_t> function_name_to_id;
 		std::vector<const char*> function_id_to_name;
+
+		// This should be only ever accessed by one thread.
+		// This lock is just to verify that.
+// #ifndef NDEBUG
+		std::mutex mutex;
+// #endif
 	public:
 		ThreadContext(size_t thread_id_, time_point global_start_time_)
 			: thread_id{thread_id_}
@@ -254,6 +261,9 @@ namespace cpu_timer3 {
 			lookup(function_name_to_id, function_id_to_name, "thread_main");
 		}
 		void enter_stack_frame(const char* function_name, std::string&& comment) {
+// #ifndef NDEBUG
+			std::lock_guard lock{mutex};
+// #endif
 			stack.emplace_back(
 				std::move(comment),
 				*this,
@@ -266,7 +276,11 @@ namespace cpu_timer3 {
 			stack.back().start_timer();
 		}
 		void exit_stack_frame([[maybe_unused]] const char* function_name) {
-			// very first!
+// #ifndef NDEBUG
+			std::lock_guard lock{mutex};
+// #endif
+			assert(!stack.empty());
+			// (almost) very first!
 			stack.back().stop_timer();
 
 			assert(function_name == function_id_to_name.at(stack.back().get_function_id()));
@@ -275,6 +289,9 @@ namespace cpu_timer3 {
 		}
 		time_point get_start_time() { return global_start_time; }
 		void serialize(std::ostream& os) {
+// #ifndef NDEBUG
+			std::lock_guard lock{mutex};
+// #endif
 			std::vector<bool> function_id_seen (function_id_to_name.size(), false);
 			for (const StackFrame& stack_frame : finished) {
 				assert(stack_frame.is_timed());
@@ -322,16 +339,19 @@ namespace cpu_timer3 {
 	private:
 		time_point start_time;
 		std::list<ThreadContext> threads;
+		std::mutex proc_mutex;
 	public:
 		ProcessContext(time_point start_time_)
 			: start_time{start_time_}
 		{ }
 		time_point get_start_time() { return start_time; }
 		ThreadContext* make_thread() {
+			std::lock_guard proc_lock {proc_mutex};
 			threads.emplace_back(threads.size(), start_time);
 			return &threads.back();
 		}
 		void serialize(std::ostream& os) {
+			std::lock_guard proc_lock {proc_mutex};
 			std::unordered_set<size_t> thread_ids;
 			for (const ThreadContext& thread : threads) {
 				assert(thread_ids.count(thread.get_thread_id()) == 0);
@@ -382,6 +402,11 @@ namespace cpu_timer3 {
 		class _zero_errno {
 		public:
 			_zero_errno() {
+				/*
+				  errno should really be zero on program startup, but for some reason, sometimes it's not.
+				  This may have to with our incomplete handling of X11 and OpenGL calls.
+				  In any case, errno has to be cleared at program startup, or else innocent calls that dilligently check errno think they caused an errno.
+				*/
 				if (errno != 0) {
 					std::cerr << "For an unknown reason, errno = " << errno << ", " << strerror(errno) << ". I'm clearing it now\n";
 					errno = 0;

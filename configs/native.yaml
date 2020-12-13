@@ -15,5 +15,5 @@ demo_data: demo_data/
 loader:
   ILLIXR_RUN_DURATION: 30
   name: native
-  command: gdb -q --args %a
-profile: dbg
+  # command: gdb -q --args %a
+profile: opt

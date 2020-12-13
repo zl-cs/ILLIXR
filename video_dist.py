@@ -2,7 +2,7 @@ from pathlib import Path
 import multiprocessing
 import random
 from tqdm import tqdm
-from typing import Tuple, cast, Mapping
+from typing import Tuple, cast, Mapping, Callable, TypeVar, Iterable
 import numpy as np
 import pandas as pd
 import cv2
@@ -14,11 +14,18 @@ from common import Results
 
 cache_path = Path() / ".cache" / "pathsv2"
 cache_path.mkdir(parents=True, exist_ok=True)
-# pool = multiprocessing.Pool()
-class NotParallelPool:
-    def imap(self, fn, args_list):
-        return (fn(args) for args in args_list)
-pool = NotParallelPool()
+parallel = False
+
+
+if parallel:
+    pool = multiprocessing.Pool()
+else:
+    T = TypeVar("T")
+    V = TypeVar("V")
+    class NotParallelPool:
+        def imap(self, fn: Callable[[T], V], args_it: Iterable[T]) -> Iterable[V]:
+            return (fn(arg) for arg in args_it)
+    pool = NotParallelPool()
 
 
 @ch_cache.decor(ch_cache.FileStore.create(cache_path))
