@@ -4,7 +4,13 @@ Our implementation is located at \href{https://github.com/ILLIXR/ILLIXR/tree/ill
 
 \subsection{R.Q. 1 Approximation Testing}
 
-With the following infrastructure, we can test out different approximations, quantify how much time they save, and manaully inspect the output for acceptance.
+With the following infrastructure, we can test out different approximations and manaully inspect the output for acceptance for \textbf{R.Q. 1}. We also need to know how much time the approximation saves, so we know if it is `worth it.' The data we collected on compute-times are shown in \cref{compute-times}.
+
+\begin{figure}
+  \label{compute-times}
+  \caption{Compute times for various approximation configs (lower is better).}
+  \todo{Insert graph}
+\end{figure}
 
 \subsubsection{Approximation Knobs}
 
@@ -13,29 +19,23 @@ ILLIXR uses state-of-the-art components such as OpenVINS \cite{Geneva2020ICRA} f
 % This doesn't work for some reason:
 %\href{https://github.com/ILLIXR/open\_vins/blob/illixr-testing/ov_msckf/src/slam2.cpp\#L30}{\verb+ILLIXR/open_vins/ov\_msckf/src/slam2.cpp:create_params()+}
 
-\todo{Move table to appendex, leave citation here}
-
-% \begin{table}
-%   \centering
-%   {
-%     \caption{OpenVINS approximation knobs. See OpenVINS documentation for more details\cite{Geneva2020ICRA}.}
-%     \begin{tabularx}{\linewidth}{r||lX}
-%       \textbf{Knob} & \textbf{Range} & \textbf{Meaning} \\
-%       & (approx. first) & \\
-%       \hline\hline
-%       \verb+num_pts+ & 50--300 & \\
-%       \verb+rk4_integ+ & [false, true] & \\
-%       \verb+stereo+ & [false, true] & \\
-%       \verb+klt+ & [false, true] & \\
-%       \verb+downsample+ & [true, false] & \\
-%       \verb+reproj+ & [false, true] & queries a current pose and reprojects the frame just before display, making up for some latency in SLAM \\
-%     \end{tabularx}
-%   }
-% \end{table}
-
-%We can also enable/disable asynchronous reprojection (elsewhere in ILLIXR; outside of OpenVINS).
-
-%The user's head pose can change appreciably between the time that rendering begins and the frame reaches display. Therefore, \underline{Asynchronous reprojection} shifts the frame within its bounding box after it has been rendered, but just before it is displayed. This takes more computational time but can render a more accurate frame.
+\begin{table*}
+  \centering
+  {
+    \caption{OpenVINS approximation knobs. See OpenVINS documentation for more details\cite{Geneva2020ICRA}.}
+    \begin{tabularx}{\linewidth}{r||l|X}
+      \textbf{Knob} & \textbf{Range} & \textbf{Meaning} \\
+      & {(approx. first)} & \\
+      \hline\hline
+      \verb+num_pts+ & 50--300 & \todo{fill these in} \\
+      \verb+use_rk4_integration+ & [false, true] & \\
+      \verb+use_stereo+ & [false, true] & \\
+      \verb+use_klt+ & [false, true] & \\
+      \verb+downsample_camera+ & [true, false] & \\
+      \verb+enable_async_reproject+ & [false, true] & (outside of OpenVINS, elsewhere in ILLIXR) queries a current pose and reprojects the frame just before display, making up for some latency in SLAM \\
+    \end{tabularx}
+  }
+\end{table*}
 
 The exact set of knobs is not so significant, as long as I have some useful ones, some useless ones, and they are orthogonal.
 
@@ -48,43 +48,49 @@ In order to test the approximations, I need to know how much time they are savin
 \item Language-level tools won't work because they are oblivious to threads launched and joined inside a function. Several functions in OpenVINS launch a short-running thread to parallelize the computation.
 \end{itemize}
 
-Since none of these off-the-shelf solutions will work, we created a lightweight framework for CPU time logging. At each function one wants to instrument, one can call a macro with a static label (such as a function name) and dynamic label (such as arguments that disambiguate the function-call). We use \verb+clock_gettime+ to measure the actual time the thread spends scheduled. We use resource-acquisition-in-initialization RAII to automatically time the enclosing scope. This pushes the current call onto a thread-local stack. These stack-frame times get pushed onto a global list and serialized only at the very end of the program, so as to not perturb performance during execution.
-
-\subsubsection{Experiments}
-
-We comapred the output by hand for \textbf{R.Q. 1}.
-
-\todo{Show times against per approx}
+Since none of these off-the-shelf solutions will work, we created a lightweight framework for CPU time logging. At each function one wants to instrument, one can call a macro with a static label (such as a function name) and dynamic label (such as arguments that disambiguate the function-call). We use \verb+clock_gettime+ to measure the actual time the thread spends scheduled. We use resource-acquisition-in-initialization RAII to automatically time the enclosing scope. This pushes the current call onto a thread-local stack. These stack-frame times get pushed onto a global list and serialized only at the very end of the program, so as to not perturb performance during execution. \todo{link to common/cpu timer3.hpp}
 
 \subsection{R.Q. 2 Automatic Approximation Testing}
 
-\subsubsection{Approximation COnfiguration Infrastructure}
+In order to automatically accept or reject approximations, we collect system-level error metrics. The data we collect is shown in \cref{system-level-error}. In a real system, we would determine a threshold of acceptability from user-studies, but that is outside the scope of this project; We will continue under the assumption that \textit{there is some} threshold.
 
-We created a script that runs ILLIXR over an arbitrary set of approximation configurations. The script configures ILLIXR by generating an ILLIXR config file and environment variables.
+\begin{figure}
+  \label{system-level-error}
+  \caption{System-level error for various approximation configs (lower is better).}
+  \todo{Insert graph}
+\end{figure}
 
-\subsubsection{Component-Level Metrics}
+\subsubsection{Approximation Configuration Infrastructure}
 
-In order to automatically evaluate the approximations, we collect SLAM-level.
-
-In the interest of repeatability, we switched to ILLIXR's offline-mode which uses a dataset on disk instead live sensor data. We used the EuRoC dataset, which has high-quality ground-truth pose data \cite{Burri25012016}.
-
-For SLAM-level metrics, we compare the poses SLAM returned to the ground-truth. However, since the ground-truth data was collected by different sensors, it is stored in a different frame-of-reference. We used the Umeyama's Method to register a correspondence from SLAM's poses to the ground-truth dataset for one for a non-approximate SLAM\cite{88573}. This provided the coordinate transformation we could use for the rest of the approximation-trials. We capture the error in position and orientation \textit{separately}, because they have a different impact on users. Rotations are the most important movement, because even if the user only moves a few degrees, everything in the world moves by an appreciable pixel-distance; However, with translation, distant objects stay in `basically' the same place. Only forefground items respond to head-translations.
+We created a script that runs ILLIXR over an arbitrary set of approximation configurations. The script configures ILLIXR by generating an ILLIXR config file and environment variables. \todo{link to experiment.py run illixr}
 
 \subsubsection{System-Level Metrics}
 
-The output of an XR system with pre-recorded sensor trace is essentially a video stream. Capturing the video-stream is non-trivial because dumping frames eagerly would perturb the computation, while deferring until the end of the computation involves buffering which has proven too memory intensive. Since ILLIXR uses OpenGL commands to draw frames, we can just capture every OpenGL command in a binary format and replay those commands offline. This is excatly what the \verb+apitrace+ tool does \cite{apitrace}.
+In the interest of repeatability, we switched to ILLIXR's offline-mode which uses a dataset on disk instead live sensor data. We used the EuRoC dataset, which has high-quality ground-truth pose data \cite{Burri25012016}.
 
-We generate that video-stream from the ground-truth data, and then compare the two frame-by-frame. First, we tried using Structural Similarity Index Metric (SSIM), which has been used to compare XR video streams before \todo{citation}. However, this may not be the best metric to compare video streams which have variation in their pose. Therefore, we also tried a hand-made metric: For each frame of the both videos, we use SIFT to identify comon features in both frames \todo{cite SIFT} and take the median difference in position (we also tried mean and max difference). Like a user, it emphasizes rotations (in which every pixel moves) over translations (in which only pixels on foreground objects move). Most of the errors in SIFT correspond to valid relaxations of user acceptance. For example, SIFT will be unable to detect many features if the background is uniform (say your looking at a blue sky), but a human user, unable to lock onto any feature, would also be less able to detect small movements and woul dbe more forgiving.
+The output of an XR system with pre-recorded sensor trace is essentially a video stream. Capturing the video-stream is non-trivial because dumping frames eagerly would perturb the computation, while deferring until the end of the computation involves buffering which has proven too memory intensive. Since ILLIXR uses OpenGL commands to draw frames, we can just capture every OpenGL command in a binary format and replay those commands offline. This is excatly what the \verb+apitrace+ tool does \cite{apitrace}. \todo{link to experiment.py line that computes results.frames}
 
-\todo{Show errors per approx}
+We generate that video-stream from the ground-truth data, and then compare the two frame-by-frame. First, we tried using Structural Similarity Index Metric (SSIM), which has been used to compare XR video streams before \todo{citation}. However, this may not be the best metric to compare video streams which have variation in their pose.
+
+With SSIM performing poorly, we also tried a hand-made metric called \ul{homography distance}: For each frame of the both videos, we use SIFT to identify comon features in both frames \todo{cite SIFT} and take the median difference in position (we also tried mean and max difference). \todo{link to video dist.py feature dist}
+Like a user, it emphasizes rotations (in which every pixel moves) over translations (in which only pixels on foreground objects move). Most of the errors in SIFT correspond to valid relaxations of user acceptance. For example, SIFT will be unable to detect many features if the background is uniform (say your looking at a blue sky), but a human user, unable to lock onto any feature, would also be less able to detect small movements and would be more forgiving.
 
 \subsection{R.Q. 3 Fast Automatic Approx Testing}
 
 The prior method involves running the whole system for one minute (enough time to collect a representative trace), about two minutes to replay the OpenGL trace, and ten minutes to compute the video distances. Ideally, we could use approximation auto-tuning such as ApproxHPVM \cite{approxhpvm}, but this goal is still quite far away. First, we need to evaluate system-level effects of approximations at a much faster rate.
 
-The component-level metrics are much easier to get than the system-level ones. Only a small set of components have to be run, and they can be run without realtime scheduling (no need to \verb+sleep+ to get the timing right). Determining the system-level error from the component-level error analytically is too difficult. AR/VR systems have multiple paths from SLAM to the output, which makes the error \textit{non-compositional}. For example, errors SLAM at time \(t\) in render can be corrected by SLAM at \(t+\delta\) through the timewarp.
+\subsubsection{Estimating System-Level Error by Component-Level Proxies}
+
+The component-level metrics are much easier to get than the system-level ones. Only a small set of components have to be run, and they can be run without realtime scheduling (no need to \verb+sleep+ to get the timing right). Determining the system-level error from the component-level error analytically is too difficult. AR/VR systems have multiple paths from SLAM to the output, which makes the error \textit{non-compositional}. For example, errors SLAM at time \(t\) in render can be corrected by SLAM at \(t+\delta\) through the timewarp (in \cref{dag}).
 
 \begin{figure}
 \caption{AR/VR DAG, showing how SLAM flows to the output over multiple paths.}
 \includegraphics[height=1.8cm]{dag.png}
+\label{dag}
 \end{figure}
+
+Instead of an analytical model, we might consider an empirical one, using machine learning techniques. We have both binary-valued knobs and continuous knobs. It is possible that the effect of each knob is also non-compositional; turning on two approximations simultaneously could have a different impact than turning them both on separately. Therefore, a two- or three-layer fully-connected neural network will probably be able to capture \todo{finish writing}
+
+\subsubsection{Component-Level Metrics}
+
+For SLAM-level metrics, we compare the poses SLAM returned to the ground-truth. However, since the ground-truth data was collected by different sensors, it is stored in a different frame-of-reference. We used the Umeyama's Method to register a correspondence from SLAM's poses to the ground-truth dataset for one for a non-approximate SLAM\cite{88573}. This provided the coordinate transformation we could use for the rest of the approximation-trials. We capture the error in position and orientation \textit{separately}, because they have a different impact on users. Rotations are the most important movement, because even if the user only moves a few degrees, everything in the world moves by an appreciable pixel-distance; However, with translation, distant objects stay in roughly the same place. Only foreground items respond to head-translations.

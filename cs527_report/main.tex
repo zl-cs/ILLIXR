@@ -1,13 +1,15 @@
-\documentclass[sigconf,review,screen]{acmart}
+\documentclass[sigconf,screen]{acmart}
 % For algorithms in ACM template
 \makeatletter
 \newif\if@restonecol
 \makeatother
 \let\algorithm\relax
 \let\endalgorithm\relax
+\usepackage[subtle]{savetrees}
 \usepackage[ruled,vlined]{algorithm2e}
 \usepackage{cleveref}
 \usepackage{makecell}
+\usepackage{soul}
 \usepackage{tabularx}
 \usepackage{enumitem}
 \providecommand\algorithmname{algorithm}
@@ -44,26 +46,24 @@ One way to bring this difficulty down is through the use of \textit{approximatio
 \end{abstract}
 
 % http://dl.acm.org/ccs.cfm
-\begin{CCSXML}
-<ccs2012>
-<concept>
-<concept_id>10011007.10010940.10010992.10010993.10010994</concept_id>
-<concept_desc>Software and its engineering~Functionality</concept_desc>
-<concept_significance>300</concept_significance>
-</concept>
-</ccs2012>
-\end{CCSXML}
+% \begin{CCSXML}
+% <ccs2012>
+% <concept>
+% <concept_id>10011007.10010940.10010992.10010993.10010994</concept_id>
+% <concept_desc>Software and its engineering~Functionality</concept_desc>
+% <concept_significance>300</concept_significance>
+% </concept>
+% </ccs2012>
+% \end{CCSXML}
 
-\ccsdesc[300]{Software and its engineering~Functionality}
+% \ccsdesc[300]{Software and its engineering~Functionality}
 
-\keywords{approximation tuning}
+% \keywords{approximation tuning}
 
 \maketitle
 
 \input{introduction}
-\input{problem}
 \input{implementation}
-\input{discussion}
 \input{conclusion}
 
 % \begin{acks}
@@ -78,14 +78,16 @@ One way to bring this difficulty down is through the use of \textit{approximatio
 
 \appendix
 \section{Pre-existing and Concurrent Work}
-We will distinguish our work from the pre-existing and concurrent work.
+This work was \textit{not} done for this project:
 
 \begin{itemize}
 \item OpenVINS already had tunable parameters.
 \item ILLIXR already had timing infrastructure, but it was insufficient for our purposes, because it could not be adapted to time \textit{inside} OpenVINS.
 \item The ILLIXR research group had already considered using SSIM, but their implementation was not ready at the time we needed one, so we implemented it ourselves. We could not upstream our implementation because theirs is able to handle a wider class of applications.
-\item The ILLIXR research group helped me find and use the Umayama's Method for aligning the pose.
+\item The ILLIXR research group helped me find and use Umayama's Method for aligning the pose.
 \end{itemize}
+
+This work was for this project:
 
 \begin{itemize}
 \item We designed and implemented a the infrastructure for configuring approximations across all of ILLIXR (not just OpenVINS).
@@ -94,7 +96,7 @@ We will distinguish our work from the pre-existing and concurrent work.
 \item We implemented the coordinate transformation code.
 \item We implemented our own version of system-level metric (apitrace, SSIM, homography-distance).
 \item We designed and implemented our own video metric (homography-distance).
-\item We explored the idea of a system-error-by-proxy system.
+\item We explored the idea of a estimating system-error by component-level proxy specifically for this projet.
 \end{itemize}
 
 \end{document}

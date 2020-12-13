@@ -1,17 +1,18 @@
 \section{Introduction}
 
 \begin{itemize}
-\item A \underline{virtual reality} system presents the user with an opaque visual display that consumes their entire {field-of-vision}. Within this field, what the user sees is determined by estimating the \underline{pose} (position and orientation) of the users head in the real-world and {rendering} a virtual world from that pose. This gives the user the illusion of being immersed in the virtual world.
+\item A \ul{virtual reality} system presents the user with an opaque visual display that consumes their entire {field-of-vision}. Within this field, what the user sees is determined by estimating the \ul{pose} (position and orientation) of the users head in the real-world and {rendering} a virtual world from that pose. This gives the user the illusion of being immersed in the virtual world.
 
-\item An \underline{augmented reality} system uses a transparent display, so virtual elements can be overlayed on the physical world. THe virtual objects should move synchronously with the physical objects they overlay, since they are rendered from the user's head-pose.
+\item An \ul{augmented reality} system uses a transparent display, so virtual elements can be overlayed on the physical world. THe virtual objects should move synchronously with the physical objects they overlay, since they are rendered from the user's head-pose.
 
-% \item A \underline{mixed reality} system uses an opaque display like virtual reality, but displays a background from the real world, emulating augmented reality.
+% \item A \ul{mixed reality} system uses an opaque display like virtual reality, but displays a background from the real world, emulating augmented reality.
 
 % \item eXtended Reality (XR) system is a catch-all term for virtual reality, augmented reality, or mixed reality. \todo{cite}
 
 \end{itemize}
 
-There are some commercially available AR and VR systems, such as HTC Vive Pro (example of VR) and Microsoft HoloLense 2 (example of AR). However, the {quality-of-experience} in these systems can stand to be improved. In order to fully immerse the user, more resolution and a faster latency are needed. Furthermore, AR/VR systems need to be mobile/tetherless to support the full breadth of AR/VR applications, and tetherless systems imply a strict power constraint on top of the existing performance constraints. There are multiple orders of magnitude between state-of-the-art AR/VR systems and ideal futuristic systems in performance, power, and area.
+There are some commercially available AR and VR systems, such as HTC Vive Pro (example of VR) and Microsoft HoloLense 2 (example of AR). However, the {quality-of-experience} in these systems can stand to be improved. In order to fully immerse the user, more resolution and a faster latency are needed. Furthermore, AR/VR systems need to be mobile/tetherless to support the full breadth of AR/VR applications, and tetherless systems imply a strict power constraint on top of the existing performance constraints. There are multiple orders of magnitude between state-of-the-art AR/VR systems and ideal futuristic systems in performance, power, and area. \todo{save space here}
+
 %(shown in \cref{requirements}).
 
 % \begin{table}
@@ -43,22 +44,19 @@ There are some commercially available AR and VR systems, such as HTC Vive Pro (e
 %   \label{requirements}
 % \end{table}
 
-AR/VR systems typically use an IMU sensor and a pair of stereo cameras to capture the environment. The system detects visual features in the physical environment, builds up a map of them over time, and uses this map to localize itself (\underline{simultaneous localization and mapping} or \underline{SLAM}). Prior work shows that XR systems without audio spend between 10 and 30\% in the SLAM computation, depending on the application, platform, physical environment, and user\cite{huzaifa2020exploring}. Existing SLAM algorithms \textit{already have} approximation knobs. In fact, they have `too many;' nobody knows which ones to turn. Therefore, automatically searching for feasible SLAM approximations could greatly improve system performance.
+AR/VR systems typically use an IMU sensor and a pair of stereo cameras to capture the environment. The system detects visual features in the physical environment, builds up a map of them over time, and uses this map to localize itself (\ul{simultaneous localization and mapping} or \ul{SLAM}). Prior work shows that XR systems without audio spend between 10 and 30\% in the SLAM computation, depending on the application, platform, physical environment, and user\cite{huzaifa2020exploring}. Existing SLAM algorithms \textit{already have} approximation knobs. In fact, they have `too many;' nobody knows which ones to turn. Therefore, automatically searching for feasible SLAM approximations could greatly improve system performance.
 
 % \section{Problem}
 
-We wanted to build out a system \textit{in practice} not just in theory. Therefore, we built off of Illinois eXtended Reality System (ILLIXR): an open-source runtime for AR/VR applications \todo{cite ILLIXR}.
+We wanted to build out a system \textit{in practice} not just in theory. Therefore, we built off of Illinois eXtended Reality System (ILLIXR): an open-source runtime for AR/VR applications \todo{cite ILLIXR}. \todo{Screenshot of ILLIXR}
 
 This project seeks to answer or partially answer three questions:
 
 \begin{enumerate}[label={\textbf{R.Q. {\theenumi}}}]
 \item How can we test SLAM approximations in ILIXR?
-  % time
-\item How can we test SLAM approximations in ILLIXR \textit{automatically}?
-  % time, runner, and tester
-\item How can we test SLAM approximations in ILLIXR \textit{automatically} and \textit{quickly}?
+\item How can we do so \textit{automatically}?
+\item How can we do so \textit{automatically} and \textit{quickly}?
   \begin{itemize}
   \item Due to time constriants, We only provide a partial implementation of this research question.
   \end{itemize}
-  % time, runner, tester, and learning
 \end{enumerate}
