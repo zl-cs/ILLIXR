@@ -38,11 +38,9 @@
 \newcommand{\todo}[1]{\textcolor{red}{#1}}
 
 \begin{abstract}
-There is a lot of commercial interest in the novel domain of augmented and virtual reality (AR/VR), but it has stringent realtime performance, power, and area constraints, which are difficult to simulatenously satisfy.
+AR/VR systems have stringent realtime performance, power, and area constraints, which are difficult to simulatenously satisfy.
 
-  One way to bring this difficulty down is through the use of \textit{approximation techniques}; In many cases, the output only has to fool a human, so the algorithms can be simplified or reduced. However, one does not know \textit{a priori} which approximations will `fool the human.'
-
-  This project seeks to satsify stringent constraints by automatically searching over the space of approximations.
+One way to bring this difficulty down is through the use of \textit{approximation techniques}; In many cases, the output only has to fool a human, so the algorithms can be simplified or reduced. However, one does not know \textit{a priori} which approximations will `fool the human.' This project seeks automataically determine the acceptability of approximations, so approximation-configurations can be rapidly searched.
 \end{abstract}
 
 % http://dl.acm.org/ccs.cfm
@@ -65,14 +63,12 @@ There is a lot of commercial interest in the novel domain of augmented and virtu
 \input{introduction}
 \input{problem}
 \input{implementation}
-% \input{methods}
-% \input{experimental_results}
-% \input{future_work}
-% \input{conclusion}
+\input{discussion}
+\input{conclusion}
 
-\begin{acks}
-We would like to acknowledge the ILLIXR group at the University of Illinois at Urbana-Champaign for the ILLIXR research platform itself and timely support. Specifically, we would like to thank Boyuan Tian and Yihan Pang for helping with the trajectory alignment and Muhammed Huzaifa for the coordinate transformation.
-\end{acks}
+% \begin{acks}
+% We would like to acknowledge the ILLIXR group at the University of Illinois at Urbana-Champaign for the ILLIXR research platform itself and timely support. Specifically, we would like to thank Boyuan Tian and Yihan Pang for helping with the trajectory alignment and Muhammed Huzaifa for the coordinate transformation.
+% \end{acks}
 
 %%
 %% The next two lines define the bibliography style to be used, and
@@ -80,9 +76,26 @@ We would like to acknowledge the ILLIXR group at the University of Illinois at U
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{main}
 
-% \appendix
-% \section{Research Methods}
-% \subsection{Part One}
+\appendix
+\section{Pre-existing and Concurrent Work}
+We will distinguish our work from the pre-existing and concurrent work.
+
+\begin{itemize}
+\item OpenVINS already had tunable parameters.
+\item ILLIXR already had timing infrastructure, but it was insufficient for our purposes, because it could not be adapted to time \textit{inside} OpenVINS.
+\item The ILLIXR research group had already considered using SSIM, but their implementation was not ready at the time we needed one, so we implemented it ourselves. We could not upstream our implementation because theirs is able to handle a wider class of applications.
+\item The ILLIXR research group helped me find and use the Umayama's Method for aligning the pose.
+\end{itemize}
+
+\begin{itemize}
+\item We designed and implemented a the infrastructure for configuring approximations across all of ILLIXR (not just OpenVINS).
+\item We rewrote the timing infrastructure (from scratch).
+\item We implemented component-level metrics.
+\item We implemented the coordinate transformation code.
+\item We implemented our own version of system-level metric (apitrace, SSIM, homography-distance).
+\item We designed and implemented our own video metric (homography-distance).
+\item We explored the idea of a system-error-by-proxy system.
+\end{itemize}
 
 \end{document}
 \endinput
