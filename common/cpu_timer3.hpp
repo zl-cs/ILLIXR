@@ -16,6 +16,7 @@
 #include <cerrno>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <fstream>
 #include <random>
 #include <chrono>
@@ -35,8 +36,7 @@
  * - Results in CSV get dumped at the program's shutdown time to the value of CPU_TIMER3_PATH env-var or `.cpu_timer3`.
  *
  * TODO:
- * - Remove stack_frames that I successfully dump in ThreadContext::serialize(). This way, ThreadContext::serialize() (also ProcessContext::serialize() and GlobalState::serialize()) can be called multiple times
- * - Number invocations of the same function in the stack_frames. This way, args can be a comment. If it is ommitted, analysis can still precisely recreate the trace. It also then does not have to be duplicated in the parent record.
+ * - Add thread_main and thread_caller.
  */
 
 #ifdef CPU_TIMER3_DISABLE
@@ -62,6 +62,7 @@ namespace cpu_timer3 {
 	};
 	static check_env_var check_env_var_instance;
 }
+#define CPU_TIMER3_INITIALIZE()
 
 #else // CPU_TIMER3_DISABLE
 
@@ -79,12 +80,13 @@ namespace cpu_timer3 {
 #define CPU_TIMER3_MAKE_THREAD_CONTEXT() (cpu_timer3::__state.should_profile() ? cpu_timer3::__state.make_thread_context() : nullptr)
 #define CPU_TIMER3_SET_THREAD_CONTEXT(thread_context) {if (cpu_timer3::__state.should_profile()) {cpu_timer3::__state.set_current_thread_context(*thread_context);}}
 #define CPU_TIMER3_SERIALIZE() (cpu_timer3::__state.should_profile() ? std::make_optional<cpu_timer3::filesystem::path>(cpu_timer3::__state.serialize()) : std::nullopt)
+#define CPU_TIMER3_INITIALIZE() {if (cpu_timer3::__state.should_profile()) {cpu_timer3::__state.initialize();}}
 
 namespace cpu_timer3 {
 
 	using time_point = std::chrono::steady_clock::time_point;
-	using seconds = std::chrono::seconds;
 	using nanoseconds = std::chrono::nanoseconds;
+	using seconds = std::chrono::seconds;
 
 	static time_point wall_now() {
 		return std::chrono::steady_clock::now();
@@ -99,9 +101,8 @@ namespace cpu_timer3 {
 	static nanoseconds
 	cpp_clock_gettime(clockid_t clock_id) {
 		struct timespec ts;
-		if (!clock_gettime(clock_id, &ts)) {
-			std::cerr << "clock_gettime failed\n";
-			abort();
+		if (clock_gettime(clock_id, &ts)) {
+			throw std::system_error(std::make_error_code(std::errc(errno)), "clock_gettime");
 		}
 		return seconds{ts.tv_sec} + nanoseconds{ts.tv_nsec};
 	}
@@ -128,7 +129,7 @@ namespace cpu_timer3 {
 
 	static std::string random_hex_string(size_t n = 16) {
 		std::mt19937 rng {std::random_device{}()};
-		std::uniform_int_distribution<unsigned int> dist {0, 16};
+		std::uniform_int_distribution<unsigned int> dist {0, 15};
 		std::string ret (n, ' ');
 		for (char& ch : ret) {
 			unsigned int r = dist(rng);
@@ -158,8 +159,8 @@ namespace cpu_timer3 {
 		return 0;
 	}
 
-	template <typename Map, typename Vector>
-	typename Map::mapped_type lookup(Map& map, Vector reverse_map, typename Map::key_type word) {
+	template <typename Map, typename RevMap>
+	typename Map::mapped_type lookup(Map& map, RevMap& reverse_map, typename Map::key_type word) {
 		auto it = map.find(word);
 		if (it != map.end()) {
 			assert(reverse_map[it->second] == it->first);
@@ -207,8 +208,8 @@ namespace cpu_timer3 {
 			assert(!_is_stopped);
 			_is_started = true;
 			fence1 = fence();
-			cpu_stop = cpu_now();
-			wall_stop = wall_now();
+			cpu_start = cpu_now();
+			wall_start = wall_now();
 			fence2 = fence();
 		}
 		void stop_timer() {
@@ -234,7 +235,7 @@ namespace cpu_timer3 {
 	private:
 		size_t thread_id;
 		time_point global_start_time;
-		size_t unused_frame_id;
+		size_t first_unused_frame_id;
 		std::deque<StackFrame> stack;
 		std::deque<StackFrame> finished;
 		std::unordered_map<const char*, size_t> function_name_to_id;
@@ -243,13 +244,20 @@ namespace cpu_timer3 {
 		ThreadContext(size_t thread_id_, time_point global_start_time_)
 			: thread_id{thread_id_}
 			, global_start_time{global_start_time_}
-			, unused_frame_id{1}
-		{ }
+			, first_unused_frame_id{0}
+		{
+			// Reserve frame_id and function_id for thread_caller
+			// first_unused_frame_id++;
+			// lookup(function_name_to_id, function_id_to_name, thread_caller);
+			// Reserve frame_id and function_id for thread_start
+			first_unused_frame_id++;
+			lookup(function_name_to_id, function_id_to_name, "thread_main");
+		}
 		void enter_stack_frame(const char* function_name, std::string&& comment) {
 			stack.emplace_back(
 				std::move(comment),
 				*this,
-				unused_frame_id++,
+				first_unused_frame_id++,
 				lookup(function_name_to_id, function_id_to_name, function_name),
 				(stack.empty() ? nullptr : &stack.back()
 			));
@@ -271,6 +279,7 @@ namespace cpu_timer3 {
 			for (const StackFrame& stack_frame : finished) {
 				assert(stack_frame.is_timed());
 				size_t function_id = stack_frame.get_function_id();
+				assert(function_id == function_name_to_id[function_id_to_name[function_id]]);
 				if (function_id_seen[function_id]) {
 					stack_frame.serialize(os, "");
 				} else {
@@ -323,9 +332,22 @@ namespace cpu_timer3 {
 			return &threads.back();
 		}
 		void serialize(std::ostream& os) {
+			std::unordered_set<size_t> thread_ids;
+			for (const ThreadContext& thread : threads) {
+				assert(thread_ids.count(thread.get_thread_id()) == 0);
+				thread_ids.insert(thread.get_thread_id());
+			}
 			for (ThreadContext& thread : threads) {
 				thread.serialize(os);
 			}
+			os << "# [";
+			for (const ThreadContext& thread : threads) {
+				os << thread.get_thread_id();
+				if (&thread != &threads.back()) {
+					os << ", ";
+				}
+			}
+			os << "]\n";
 		}
 	};
 
@@ -357,6 +379,17 @@ namespace cpu_timer3 {
 	 * I take no joy in supporting antiquated systems.
 	 */
 	namespace filesystem {
+		class _zero_errno {
+		public:
+			_zero_errno() {
+				if (errno != 0) {
+					std::cerr << "For an unknown reason, errno = " << errno << ", " << strerror(errno) << ". I'm clearing it now\n";
+					errno = 0;
+				}
+			}
+		};
+		static _zero_errno __zero_errno;
+
 		class path {
 		public:
 			typedef char value_type;
@@ -401,23 +434,26 @@ namespace cpu_timer3 {
 			void refresh(std::error_code& ec) {
 				assert(errno == 0);
 				struct stat buf;
+#ifdef FILESYSTEM_DEBUG
+				std::cerr << "stat " << this_path.string() << "\n";
+#endif
 				if (stat(this_path.c_str(), &buf)) {
 					ec = std::make_error_code(std::errc(errno));
 					errno = 0;
+					_is_directory = false;
+					_exists = false;
 				} else {
 					ec.clear();
 					_is_directory = S_ISDIR(buf.st_mode);
 					_exists = true;
 				}
+				assert(errno == 0);
 			}
 			void refresh() {
 				std::error_code ec;
 				refresh(ec);
 				if (ec) {
-					if (ec.value() == ENOENT) {
-						_is_directory = false;
-						_exists = false;
-					} else {
+					if (ec.value() != ENOENT) {
 						throw filesystem_error{std::string{"stat"}, this_path, ec};
 					}
 				}
@@ -445,7 +481,7 @@ namespace cpu_timer3 {
 						std::cerr << "ls " << dir_path.string() << " -> " << dir_entry->d_name << " skip=" << skip << "\n";
 #endif
 						if (!skip) {
-							dir_entries.emplace_back(path{dir_entry->d_name});
+							dir_entries.emplace_back(dir_path / std::string{dir_entry->d_name});
 						}
 						assert(errno == 0);
 						dir_entry = readdir(dir);
@@ -498,7 +534,7 @@ namespace cpu_timer3 {
 			}
 		};
 
-		static std::deque<directory_entry> post_order(const path& this_path) {
+		[[maybe_unused]] static std::deque<directory_entry> post_order(const path& this_path) {
 			std::deque<directory_entry> ret;
 			std::deque<directory_entry> stack;
 			directory_entry this_dir_ent {this_path};
@@ -525,6 +561,7 @@ namespace cpu_timer3 {
 #ifdef FILESYSTEM_DEBUG
 			std::cerr << "rm -rf " << this_path.string() << "\n";
 #endif
+			// I use a post-order traversal here, so that I am removing a dir AFTER removing its children.
 			for (const directory_entry& descendent : post_order(this_path)) {
 				++i;
 				if (descendent.is_directory()) {
@@ -556,6 +593,9 @@ namespace cpu_timer3 {
 			if (!this_dir_ent.exists()) {
 				mode_t umask_default = umask(0);
 				umask(umask_default);
+#ifdef FILESYSTEM_DEBUG
+				std::cerr << "mkdir " << this_path.string() << "\n";
+#endif
 				int ret = mkdir(this_path.c_str(), 0777 & ~umask_default);
 				if (ret == -1) {
 					int errno_ = errno;
@@ -584,42 +624,27 @@ namespace cpu_timer3 {
 		time_point start_time;
 		ProcessContext process;
 		static time_point set_or_lookup_start_time([[maybe_unused]] const filesystem::path& output_dir) {
-#ifdef OBVIOUSLY_FALSE
-			filesystem::path start_time_path = output_dir / std::string{"start_time"};
-			/*
-			  Multiple object-files could be racing here, but it's ok,
-			  because we round to the granularity of a second. If they
-			  were racing, they should be relatively close in time.
-			*/
-			{
-				std::ifstream start_time_ifile {start_time_path.string()};
-				if (start_time_ifile.good()) {
-					size_t start_time_int;
-					start_time_ifile >> start_time_int;
-					return time_point{seconds{start_time_int}};
-				}
-			} // close start_time_ifile here
-
-			std::ofstream start_time_ofile {start_time_path.string()};
-			size_t start_time_int = std::chrono::duration_cast<seconds>(wall_now().time_since_epoch()).count();
-			start_time_ofile << start_time_int;
-			return time_point{seconds{start_time_int}};
-#else
-			return time_point{seconds{0}};
-#endif
+			// std::ifstream start_time_ifile {start_time_path.string()};
+			// size_t start_time_int;
+			// start_time_ifile >> start_time_int;
+			// return time_point{seconds{start_time_int}};
+			return time_point{nanoseconds{0}};
 		}
 	public:
+		void initialize() {
+			filesystem::remove_all(output_dir);
+			filesystem::create_directory(output_dir);
+			// fence();
+			// std::ofstream start_time_ofile {start_time_path.string()};
+			// size_t start_time_int = std::chrono::duration_cast<std::chrono::seconds>(wall_now().time_since_epoch()).count();
+			// start_time_ofile << start_time_int;
+		}
 		GlobalState()
 			: should_profile_val{!!std::stoi(getenv_or("CPU_TIMER3_ENABLE", "0"))}
 			, output_dir{getenv_or("CPU_TIMER3_PATH", ".cpu_timer3")}
 			, start_time{set_or_lookup_start_time(output_dir)}
 			, process{start_time}
-		{
-			if (should_profile_val) {
-				filesystem::remove_all(output_dir);
-				filesystem::create_directory(output_dir);
-			}
-		}
+		{ }
 		~GlobalState() {
 			if (should_profile_val) {
 				serialize();
@@ -628,13 +653,15 @@ namespace cpu_timer3 {
 			}
 		}
 		filesystem::path serialize() {
-			filesystem::path output_file_path {output_dir / random_hex_string() + std::string{".csv"}};
+			filesystem::path output_file_path {output_dir / random_hex_string() + std::string{"_data.csv"}};
 			std::ofstream output_file {output_file_path.string()};
+			assert(output_file.good());
 			output_file
 				<< "#{\"version\": \"3.2\", \"pandas_kwargs\": {\"dtype\": {\"comment\": \"str\"}, \"keep_default_na\": false, \"index_col\": [0, 1], \"comment\": \"#\"}}\n"
 				<< "thread_id,frame_id,function_id,caller_frame_id,cpu_time_start,cpu_time,wall_time_start,wall_time,function_name,comment\n"
 				;
 			process.serialize(output_file);
+			std::cerr << "Serialized to " << output_file_path.c_str() << "\n";
 			return output_file_path;
 		}
 		ThreadContext& get_current_thread_context() {
