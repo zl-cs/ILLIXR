@@ -1,0 +1,41 @@
+\section{Implementation}
+
+Our implementation is located at \href{https://github.com/ILLIXR/ILLIXR/tree/illixr-testing}.
+
+\subsection{R.Q. 1 Testing Approximations}
+
+\subsubsection{Approximation Knobs}
+
+ILLIXR uses state-of-the-art components such as OpenVINS\cite{Geneva2020ICRA} for SLAM. We located approximation knobs in OpenVINS and consulted domain experts on which ones should be modified and tuned. These are given in
+\todo{href, see comment in LaTeX source}.
+% This doesn't work for some reason:
+%\href{https://github.com/ILLIXR/open\_vins/blob/illixr-testing/ov_msckf/src/slam2.cpp\#L30}{\verb+ILLIXR/open_vins/ov\_msckf/src/slam2.cpp:create_params()+}
+
+\todo{Debug why this table is not showing up}
+
+\begin{table}
+  % \centering
+  {
+    \caption{OpenVINS approximation knobs. See OpenVINS documentation for more details\cite{Geneva2020ICRA}.}
+    \begin{tabularx}{\linewidth}{r||lX}
+      \textbf{Knob} & \textbf{Range} (most approx. first) & \textbf{Meaning} \\
+      \hline\hline
+      \verb+num_pts+ & 50--300 & \\
+      \verb+use_rk4_integration+ & [false, true] & \\
+      \verb+use_stereo+ & [false, true] & \\
+      \verb+use_klt+ & [false, true] & \\
+      \verb+downsample_camera+ & [true, false] & \\
+      \verb+enable_async_reproj+ & [false, true] & queries a current pose and reprojects the frame just before display, making up for some latency in SLAM \\
+    \end{tabularx}
+  }
+\end{table}
+
+We can also enable/disable asynchronous reprojection (elsewhere in ILLIXR; outside of OpenVINS).
+
+%The user's head pose can change appreciably between the time that rendering begins and the frame reaches display. Therefore, \underline{Asynchronous reprojection} shifts the frame within its bounding box after it has been rendered, but just before it is displayed. This takes more computational time but can render a more accurate frame.
+
+The exact set of knobs is not so significant, as long as I have some useful ones, some useless ones, and they are orthogonal.
+
+\subsubsection{Timing Infrastructure}
+
+In order to test the approximations, I need to know how much time they are saving.

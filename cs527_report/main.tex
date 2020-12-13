@@ -1,0 +1,88 @@
+\documentclass[sigconf,review,screen]{acmart}
+% For algorithms in ACM template
+\makeatletter
+\newif\if@restonecol
+\makeatother
+\let\algorithm\relax
+\let\endalgorithm\relax
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{cleveref}
+\usepackage{makecell}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\providecommand\algorithmname{algorithm}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
+
+\begin{document}
+
+\title{Testing Approximations for Augmented and Virtual Reality}
+
+\author{Samuel Grayson}
+\email{grayson5@illinois.edu}
+\affiliation{%
+  \institution{University of Illinois at Urbana-Champaign}
+}
+
+\author{Navi Ning}
+\email{xning5@illinois.edu}
+\affiliation{%
+  \institution{University of Illinois at Urbana-Champaign}
+}
+
+\settopmatter{printacmref=false} % Removes citation information below abstract
+\renewcommand\footnotetextcopyrightpermission[1]{} % removes footnote with conference information in first column
+
+\newcommand{\todo}[1]{\textcolor{red}{#1}}
+
+\begin{abstract}
+There is a lot of commercial interest in the novel domain of augmented and virtual reality (AR/VR), but it has stringent realtime performance, power, and area constraints, which are difficult to simulatenously satisfy.
+
+  One way to bring this difficulty down is through the use of \textit{approximation techniques}; In many cases, the output only has to fool a human, so the algorithms can be simplified or reduced. However, one does not know \textit{a priori} which approximations will `fool the human.'
+
+  This project seeks to satsify stringent constraints by automatically searching over the space of approximations.
+\end{abstract}
+
+% http://dl.acm.org/ccs.cfm
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10011007.10010940.10010992.10010993.10010994</concept_id>
+<concept_desc>Software and its engineering~Functionality</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[300]{Software and its engineering~Functionality}
+
+\keywords{approximation tuning}
+
+\maketitle
+
+\input{introduction}
+\input{problem}
+\input{implementation}
+% \input{methods}
+% \input{experimental_results}
+% \input{future_work}
+% \input{conclusion}
+
+\begin{acks}
+We would like to acknowledge the ILLIXR group at the University of Illinois at Urbana-Champaign for the ILLIXR research platform itself and timely support. Specifically, we would like to thank Boyuan Tian and Yihan Pang for helping with the trajectory alignment and Muhammed Huzaifa for the coordinate transformation.
+\end{acks}
+
+%%
+%% The next two lines define the bibliography style to be used, and
+%% the bibliography file.
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{main}
+
+% \appendix
+% \section{Research Methods}
+% \subsection{Part One}
+
+\end{document}
+\endinput
