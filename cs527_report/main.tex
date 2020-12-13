@@ -5,6 +5,7 @@
 \makeatother
 \let\algorithm\relax
 \let\endalgorithm\relax
+\usepackage[T1]{fontenc} 
 \usepackage[subtle]{savetrees}
 \usepackage[ruled,vlined]{algorithm2e}
 \usepackage{cleveref}
@@ -41,8 +42,10 @@
 
 \begin{abstract}
 AR/VR systems have stringent realtime performance, power, and area constraints, which are difficult to simulatenously satisfy.
-
-One way to bring this difficulty down is through the use of \textit{approximation techniques}; In many cases, the output only has to fool a human, so the algorithms can be simplified or reduced. However, one does not know \textit{a priori} which approximations will `fool the human.' This project seeks automataically determine the acceptability of approximations, so approximation-configurations can be rapidly searched.
+One way to bring this difficulty down is through the use of \textit{approximation techniques};
+    in many cases, the output only has to fool a human, so the algorithms can be simplified or reduced.
+However, one does not know \textit{a priori} which approximations will `fool the human.'
+This project seeks automataically determine the acceptability of approximations, so approximation-configurations can be rapidly searched.
 \end{abstract}
 
 % http://dl.acm.org/ccs.cfm
@@ -97,6 +100,23 @@ This work was for this project:
 \item We implemented our own version of system-level metric (apitrace, SSIM, homography-distance).
 \item We designed and implemented our own video metric (homography-distance).
 \item We explored the idea of a estimating system-error by component-level proxy specifically for this projet.
+\end{itemize}
+
+See our changes in ILLIXR:
+\url{https://github.com/ILLIXR/ILLIXR/compare/illixr-testing?expand=1}.
+
+See our changes in OpenVINS:
+\url{https://github.com/ILLIXR/open\_vins/compare/realsense...ILLIXR:illixr-testing?expand=1}.
+(first few commits are not ours, since we merged with upsteram)
+
+\section{Progress 6 Report}
+
+Since progress report 5, we:
+
+\begin{itemize}
+\item Designed and implemented a homography-distance.
+\item Designed and implemented timing infrastructure.
+\item Analyzed and visualized the data collected from our experiments (timing, component-level distance).
 \end{itemize}
 
 \end{document}
