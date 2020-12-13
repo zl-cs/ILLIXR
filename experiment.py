@@ -312,18 +312,18 @@ approx_results = dict(tqdm((
 approx_results_poses = pd.concat({
     approx_config: results.poses
     for approx_config, results in approx_results.items()
-})
+}, names=["approx_config"])
 
 approx_results_frames = pd.concat({
     approx_config: results.frames
     for approx_config, results in approx_results.items()
-})
+}, names=["approx_config"])
 
 result_cpu_timer3s = cpu_timer3_reader.normalize_cats([results.cpu_timer3 for results in approx_results.values()])
 approx_results_times = pd.concat({
     approx_config: cpu_timer3
     for approx_config, cpu_timer3 in zip(approx_results.keys(), result_cpu_timer3s)
-})
+}, names=["approx_config"])
 
 
 # fig, ax = visualize_2d(str_approx_results, gt_ori, "pos", ("x", "y"))
@@ -380,7 +380,7 @@ def plot_bars() -> None:
             height = approx_df.loc[approx_config, f"{column}_mean"]
             yerr   = approx_df.loc[approx_config, f"{column}_std" ]
             ax.bar(pos, height, yerr=yerr, label=column)
-    ax.set_xticks(np.arange(len(approx_df.index) * len(columns)))
+    ax.set_xticks(np.arange(len(approx_df.index)))
     ax.set_xticklabels([
         str(approx_config).replace(",", "\n")
         for approx_config in approx_df.index
@@ -391,4 +391,3 @@ def plot_bars() -> None:
     plt.show()
 
 plot_bars()
-import IPython; IPython.embed()
