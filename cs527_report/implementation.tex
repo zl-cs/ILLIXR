@@ -32,11 +32,11 @@ We located approximation knobs in OpenVINS and consulted domain experts on which
       \textbf{Knob} & \textbf{Range} & \textbf{Meaning} \\
       & {(approx. first)} & \\
       \hline\hline
-      \verb+num_pts+ & 50--300 & \todo{fill these in} \\
-      \verb+use_rk4_integration+ & [false, true] & \\
-      \verb+use_stereo+ & [false, true] & \\
-      \verb+use_klt+ & [false, true] & \\
-      \verb+downsample_camera+ & [true, false] & \\
+      \verb+num_pts+ & 50--300 & The number of points extracted and tracked in each image frame \\
+      \verb+use_rk4_integration+ & [false, true] & If Rk4 imu integration is used\\
+      \verb+use_stereo+ & [false, true] & Whether cameras are stereo or binocular. If binocular, it does monocular feature tracking on each image \\
+      \verb+use_klt+ & [false, true] & Uses KLT tracking or descriptor matcher \\
+      \verb+downsample_camera+ & [true, false] & Halves the resolution all tracking image \\
       \verb+enable_async_reproject+ & [false, true] & (outside of OpenVINS, elsewhere in ILLIXR) queries a current pose and reprojects the frame just before display, making up for some latency in SLAM \\
     \end{tabularx}
   }
