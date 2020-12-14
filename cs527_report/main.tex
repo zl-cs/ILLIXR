@@ -1,4 +1,4 @@
-\documentclass[sigconf,screen]{acmart}
+\documentclass[screen,sigconf,nonacm]{acmart}
 % For algorithms in ACM template
 \makeatletter
 \newif\if@restonecol
@@ -6,7 +6,7 @@
 \let\algorithm\relax
 \let\endalgorithm\relax
 \usepackage[T1]{fontenc} 
-\usepackage[subtle]{savetrees}
+\usepackage[moderate]{savetrees}
 \usepackage[ruled,vlined]{algorithm2e}
 \usepackage{cleveref}
 \usepackage{makecell}
@@ -38,7 +38,8 @@
 \settopmatter{printacmref=false} % Removes citation information below abstract
 \renewcommand\footnotetextcopyrightpermission[1]{} % removes footnote with conference information in first column
 
-\newcommand{\todo}[1]{\textcolor{red}{#1}}
+%\newcommand{\todo}[1]{\textcolor{red}{#1}}
+\newcommand{\todo}[1]{}
 
 \begin{abstract}
 AR/VR systems have stringent realtime performance, power, and area constraints, which are difficult to simulatenously satisfy.
@@ -80,7 +81,9 @@ This project seeks automataically determine the acceptability of approximations,
 \bibliography{main}
 
 \appendix
-\section{Pre-existing and Concurrent Work}
+\section{Appendix}
+
+\subsection{Pre-existing and Concurrent Work}
 This work was \textit{not} done for this project:
 
 \begin{itemize}
@@ -102,7 +105,7 @@ This work was for this project:
 \item We explored the idea of a estimating system-error by component-level proxy specifically for this projet.
 \end{itemize}
 
-\section{Total Effort}
+\subsection{Total Effort}
 
 We spent about 150 hours on this project collectively.
 
@@ -114,7 +117,7 @@ See our changes in OpenVINS:
 
 Note that the first few commits in our OpenVINS branch are not ours, since we merged with upsteram.
 
-\section{Progress 6 Report}
+\subsection{Progress 6 Report}
 
 Since progress report 5, we:
 
@@ -123,6 +126,8 @@ Since progress report 5, we:
 \item designed and implemented timing infrastructure.
 \item analyzed and visualized the data collected from our experiments (timing, component-level distance).
 \end{itemize}
+
+\input{figures}
 
 \end{document}
 \endinput

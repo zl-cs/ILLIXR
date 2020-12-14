@@ -44,11 +44,11 @@ There are some commercially available AR and VR systems, such as HTC Vive Pro (e
 %   \label{requirements}
 % \end{table}
 
-AR/VR systems typically use an IMU sensor and a pair of stereo cameras to capture the environment. The system detects visual features in the physical environment, builds up a map of them over time, and uses this map to localize itself (\ul{simultaneous localization and mapping} or \ul{SLAM}). Prior work shows that XR systems spend a significant amount of CPU time in the SLAM computation, depending on the application, platform, physical environment, and user\cite{huzaifa2020exploring}. Existing SLAM algorithms \textit{already have} approximation knobs. In fact, they have `too many;' nobody knows which ones to turn. Therefore, automatically searching for feasible SLAM approximations could greatly improve system performance.
+AR/VR systems typically use an IMU sensor and a pair of stereo cameras to capture the environment. The system detects visual features in the physical environment, builds up a map of them over time, and uses this map to localize itself (\ul{simultaneous localization and mapping} or \ul{SLAM}). Prior work shows that XR systems spend a significant amount of compute resources in the SLAM computation, depending on the application, platform, physical environment, and user\cite{huzaifa2020exploring}. Existing SLAM algorithms \textit{already have} approximation knobs. In fact, they have `too many;' nobody knows which ones to turn. Therefore, automatically searching for feasible SLAM approximations could greatly improve system performance.
 
 % \section{Problem}
 
-We wanted to build out a system \textit{in practice} not just in theory. Therefore, we built off of Illinois eXtended Reality System (ILLIXR): an open-source runtime for AR/VR applications \todo{cite ILLIXR}. \todo{Screenshot of ILLIXR}
+We wanted to build out a system \textit{in practice} not just in theory. Therefore, we built off of Illinois eXtended Reality System (ILLIXR): an open-source runtime for AR/VR applications\cite{huzaifa2020exploring}. \todo{Screenshot of ILLIXR}
 
 This project seeks to answer or partially answer three questions:
 
