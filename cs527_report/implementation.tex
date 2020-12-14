@@ -31,8 +31,8 @@ In order to test the approximations, I need to know how much time they are savin
 Since none of these off-the-shelf solutions will work, we created a lightweight framework for CPU time logging.
 At each function one wants to instrument, one can call a macro with a static label (such as a function name) and dynamic label (such as arguments that disambiguate the function-call).
 We use \verb+clock_gettime+ to measure the actual time the thread spends scheduled.
-We use resource-acquisition-in-initialization RAII to automatically time the enclosing scope.
-Creating the RAII object pushes the current call onto a thread-local stack.
+We use resource-acquisition-in-initialization (RAII) to automatically time the enclosing scope.
+Creating the object pushes the current call onto a thread-local stack.
 These stack-frame times get pushed onto a global list and serialized only at the very end of the program, so as to not perturb performance during execution\footnote{\ILLIXRlink{common/cpu\_timer3.hpp}}.
 
 \subsection{R.Q. 2 Automatic Approximation Testing}
@@ -88,7 +88,9 @@ For example in \cref{dag}, errors \verb+SLAM+ at time \(t\) in \verb+render+ can
 
 Instead of an analytical model, we might consider an empirical one, using machine learning techniques.
 It is possible that the effect of different component-level errors is non-compositional;
-Therefore, a two- or three-layer fully-connected neural network will probably be able to capture the mapping from component-level error to system-level error.
+Therefore, a fully-connected neural network with one hidden layer will probably be able to capture the mapping from component-level error to system-level error.
+Unfortunately, the metrics were too unstable to train a network on; the loss did not converge.
+However, our system lays the groundwork for future experimentation.
 
 \subsubsection{Component-Level Metrics}
 

@@ -1,9 +1,15 @@
 \subsection{Figures and Tables}
 
 \begin{figure}[H]
-  \label{compute-times}
+  \caption{Headset-view (two eye buffers) of ILLIXR}
+  \includegraphics[width=\columnwidth]{illixr.png}
+  \label{illixr}
+\end{figure}
+
+\begin{figure}[H]
   \caption{Compute times for various approximation configurations.}
   \includegraphics[width=\columnwidth]{times.png}
+  \label{compute-times}
 \end{figure}
 
 \begin{table*}
@@ -25,27 +31,27 @@
 \end{table*}
 
 \begin{figure}[H]
-  \label{system-level-errors}
   \caption{System-level error for various approximation configurations.}
   \includegraphics[width=\columnwidth]{system_errors.png}
+  \label{system-level-errors}
 \end{figure}
 
 \begin{figure}[H]
-\caption{AR/VR DAG, showing how SLAM flows to the output over multiple paths.}
-\includegraphics[width=\columnwidth]{dag.png}
-\label{dag}
+  \caption{AR/VR DAG, showing how SLAM flows to the output over multiple paths.}
+  \includegraphics[width=\columnwidth]{dag.png}
+  \label{dag}
 \end{figure}
 
 \begin{figure}[H]
-  \label{SLAM-level-errors}
   \caption{SLAM-level error for various approximation configurations.}
   \includegraphics[width=\columnwidth]{slam_errors.png}
+  \label{SLAM-level-errors}
 \end{figure}
 
 \begin{figure}[H]
-  \label{transformation}
   \caption{Unaligned and aligned poses, with dotted arrows showing the transformation}
   \footnote{It only appears that the transformation `distorts' space because the transformation rotates `out of the plane'. This is a 2d projection of a 3d trajectory, so there is a part of the trajectory you can't see.}
   \includegraphics[width=\columnwidth]{unaligned.png}
   \includegraphics[width=\columnwidth]{aligned.png}
+  \label{transformation}
 \end{figure}

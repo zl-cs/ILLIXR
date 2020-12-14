@@ -152,6 +152,7 @@ def run_illixr(config: Config) -> Results:
                 "orientation_y": "ori_y",
                 "orientation_z": "ori_z",
             })
+            .sort_index()
         )
     else:
         poses = pd.DataFrame([])
@@ -166,7 +167,10 @@ def run_illixr(config: Config) -> Results:
                 Path("trace").resolve(),
                 _subprocess_kwargs=dict(cwd=trace_path, capture_output=True)
             )
-            frames = pd.read_csv("data/frames.csv", index_col=0)
+            frames = (
+                pd.read_csv("data/frames.csv", index_col=0)
+                .sort_index()
+            )
             frames["path"] = sorted(list(trace_path.glob("*.png")))[:len(frames)]
     else:
         frames = pd.DataFrame([])
@@ -366,7 +370,6 @@ approx_results_times = pd.concat({
     for approx_config, cpu_timer3 in zip(approx_results.keys(), result_cpu_timer3s)
 }, names=["approx_config"])
 
-
 # fig, ax = visualize_2d(str_approx_results, gt_ori, "pos", ("x", "y"))
 # fig.show()
 
@@ -501,3 +504,20 @@ if gen_graphs:
     # fig.savefig("cs527_report/system_errors.png", dpi=300)
 
 
+
+approx_results["pose_no"] = 0
+for config in approx_results_frames.index.levels[0]:
+    for time in approx_resuilts_frames.loc[(config,)].index.levels[0]:
+        pose_no = bisect.bisect_left(approx_results_poses.index, time)
+        if pose_no != len(approx_results_poses):
+            approx_results_frames.loc[(config, time), "pose_no"] = pose_no
+
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+model1 = keras.Input(shape=(8,))
+model1 = layers.Dense(4, activation="relu")(model1)
+
+import IPython; IPython.embed()
