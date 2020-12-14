@@ -10,6 +10,7 @@ import bisect
 import multiprocessing
 from dataclasses import dataclass, field, asdict
 import subprocess
+import operator
 import random
 import itertools
 import tempfile
@@ -197,12 +198,12 @@ def run_illixr(config: Config) -> Results:
     )
 
 
-gt_pos, gt_ori = get_gt_pose_fns()
 def compute_pose_error(
         poses: pd.DataFrame,
         gt_pos: Callable[[np.ndarray[np.float32]], np.ndarray[np.float32]],
         gt_ori: Callable[[np.ndarray[np.float32]], np.ndarray[np.float32]],
 ) -> pd.DataFrame:
+
 
     def vector_distance(X: np.ndarray[np.float64], Y: np.ndarray[np.float64]) -> np.ndarray[np.float64]:
         result = ((X - Y)**2).sum(axis=1)
@@ -243,16 +244,21 @@ def compute_gt_frame_no(frames: pd.DataFrame, gt_frames: pd.DataFrame, start_tim
     return frames
 
 
-print("gt_results")
-gt_results = run_illixr(Config(capture_frames=True, gt_slam=True))
-
+gt_results = None
+gt_pos, gt_ori = None, None
 
 def run_illixr_with_post(config: Config) -> Results:
     results = cast(Results, run_illixr(config))
     if not results.poses.empty:
         results.poses = gt_transform(results.poses)
+        global gt_pos, gt_ori
+        if gt_pos is None:
+            gt_pos, gt_ori = get_gt_pose_fns()
         results.poses = compute_pose_error(results.poses, gt_pos, gt_ori)
     if not results.frames.empty:
+        global gt_results
+        if gt_results is None:
+            gt_results = run_illixr(Config(capture_frames=True, gt_slam=True))
         results.frames = compute_gt_frame_no(
             results.frames,
             gt_results.frames,
@@ -261,6 +267,31 @@ def run_illixr_with_post(config: Config) -> Results:
         results = compute_video_dists(results)
     return results
 
+def pd_reduce(op: Union[str, Callable[[pd.Series, pd.Series], pd.Series]], masks: Iterable[pd.Series], dtype=None) -> pd.Series:
+    op_names = {
+        "or": operator.or_,
+        "and": operator.and_,
+    }
+    if isinstance(op, str):
+        try:
+            op2 = op_names[op]
+        except KeyError:
+            raise KeyError(f"Unknown operator: {op}")
+    else:
+        op2 = op
+
+    masks_it = iter(masks)
+    try:
+        mask = next(masks_it)
+    except StopIteration:
+        return pd.Series([], dtype=dtype)
+    else:
+        ret = mask
+    for mask in masks_it:
+        ret = op2(ret, mask)
+    return ret
+
+@ch_time_block.decor(print_start=False)
 def compute_ov_time_mask(cpu_timer3: pd.DataFrame) -> pd.DataFrame:
     ov_function_names = {
         # ov_core/src/track/Grider_FAST.h
@@ -278,9 +309,32 @@ def compute_ov_time_mask(cpu_timer3: pd.DataFrame) -> pd.DataFrame:
     ov_time_mask = cpu_timer3.apply(lambda row: (
         row["function_name"] in ov_function_names or (row["function_name"] in switchboard_function_names and row["comment"] in ov_plugins)
     ), axis=1)
+    # ov_time_mask = (
+    #     pd_reduce("or", [cpu_timer3["function_name"] == dict(cpu_timer3["function_name"].cat.codes).get(fn_name, 1000) for fn_name in ov_function_names])
+    #     | (
+    #         pd_reduce("or", [cpu_timer3["function_name"] == dict(cpu_timer3["function_name"].cat.codes).get(fn_name, 1000) for fn_name in switchboard_function_names])
+            # & pd_reduce("or", [row["comment"] == plugin for plugin in ov_plugins])
+    #     )
+    # )
     return ov_time_mask
 
-approx_configs = [
+
+@ch_cache.decor(ch_cache.FileStore.create(cache_path))
+def get_approx_results(approx_configs: List[ApproxConfig]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    approx_results = dict(tqdm((
+        (
+            approx_config,
+            run_illixr_with_post(Config(
+                capture_poses=True,
+                capture_frames=True,
+                approx_slam_config=approx_config,
+            )),
+        )
+        for approx_config in approx_configs
+    ), total=len(approx_configs), desc="trials"))
+    return approx_results
+
+approx_results = get_approx_results([
     # ApproxConfig(downsample_cameras=True),
     # ApproxConfig(try_zupt=False),
     ApproxConfig(num_pts=200),
@@ -294,20 +348,7 @@ approx_configs = [
     ApproxConfig(use_rk4_integration=False, use_tw=False),
     ApproxConfig(use_stereo=False, use_tw=False),
     ApproxConfig(use_klt=False, use_tw=False),
-]
-
-
-approx_results = dict(tqdm((
-    (
-        approx_config,
-        run_illixr_with_post(Config(
-            capture_poses=True,
-            capture_frames=True,
-            approx_slam_config=approx_config,
-        )),
-    )
-    for approx_config in approx_configs
-), total=len(approx_configs), desc="trials"))
+])
 
 approx_results_poses = pd.concat({
     approx_config: results.poses
@@ -338,6 +379,18 @@ approx_results_times = pd.concat({
 # fig, ax = visualize_ts(str_approx_results, "ori_err")
 # fig.show()
 
+def var_sum(df: pd.DataFrame, iid: List[str], columns: Optional[List[str]] = None) -> float:
+    """Returns the variance of the distribution of the sum, assuming each tuple of values of columns of iid is an i.i.d. observation"""
+    columns2 = columns if columns else [column for column in df.columns if column not in iid]
+    return df.groupby(iid).agg({
+        col_name: lambda col_data: col_data.var() * col_data.count()
+        for col_name in columns2
+    }).dropna().sum()
+
+def std_sum(df: pd.DataFrame, iid: List[str], columns: Optional[List[str]] = None) -> float:
+    """See var_sum"""
+    return np.sqrt(var_sum(df, iid, columns))
+
 approx_df = pd.DataFrame.from_records(
     dict(
         approx_config=approx_config,
@@ -345,7 +398,8 @@ approx_df = pd.DataFrame.from_records(
         pos_err_std =results.poses["pos_err"].std (),
         ori_err_mean=results.poses["ori_err"].mean(),
         ori_err_std =results.poses["ori_err"].std (),
-        ov_time     =results.cpu_timer3[compute_ov_time_mask(results.cpu_timer3)]["cpu_time"] / results.cpu_timer3["cpu_time"].sum(),
+        ov_time_mean=results.cpu_timer3[compute_ov_time_mask(results.cpu_timer3)]["cpu_time"].sum() / results.cpu_timer3["cpu_time"].sum(),
+        ov_time_std =std_sum(results.cpu_timer3.reset_index(), ["data_file", "thread_id", "function_name", "comment"], ["cpu_time"])["cpu_time"] / results.cpu_timer3["cpu_time"].sum(),
         **dict(itertools.chain.from_iterable([
             [
                 (f"{video_dist}_mean", results.frames[video_dist].mean()),
@@ -355,39 +409,95 @@ approx_df = pd.DataFrame.from_records(
         ]))
     )
     for approx_config, results in approx_results.items()
-).set_index("approx_config", verify_integrity=True)
+).set_index("approx_config", verify_integrity=True).rename(columns={
+    "mean_feature_dist_mean": "homography_dist_mean",
+    "mean_feature_dist_std": "homography_dist_std",
+})
 
-fig, ax = visualize_ts(approx_results_frames.loc[:, "ssim"])
-fig.show()
+# fig, ax = visualize_ts(approx_results_frames.loc[:, "ssim"])
+# fig.show()
 
-fig, ax = visualize_ts(approx_results_frames.loc[:, "mean_feature_dist"])
-fig.show()
+# fig, ax = visualize_ts(approx_results_frames.loc[:, "mean_feature_dist"])
+# fig.show()
 
-fig, ax = visualize_ts(approx_results_frames.loc[:, "max_feature_dist"])
-fig.show()
+# fig, ax = visualize_ts(approx_results_frames.loc[:, "max_feature_dist"])
+# fig.show()
 
-fig, ax = visualize_ts(approx_results_poses.loc[:, "pos_err"])
-fig.show()
+# fig, ax = visualize_ts(approx_results_poses.loc[:, "pos_err"])
+# fig.show()
 
-columns = ["pos_err", "ori_err"] + video_dists
+video_dists = ["ssim", "homography_dist"]
+all_columns = ["pos_err", "ori_err", "ov_time"] + video_dists
+import seaborn as sns
+columns_to_colors = lambda columns: [
+    sns.color_palette("hls", len(all_columns))[all_columns.index(column)]
+    for column in columns
+]
 
-def plot_bars() -> None:
+def plot_bars(approx_df, columns: List[str], colors: List[Any], normed: bool, std: bool =True) -> None:
     fig, ax = plt.subplots()
 
+    # intergroup_gap = 0.1
+    # intergroup_gap = 0.0
+    # width = 1.0
+
     for i, approx_config in enumerate(approx_df.index):
-        for j, column in enumerate(columns):
+        for j, (column, color) in enumerate(zip(columns, colors)):
             pos = i * len(columns) + j
-            height = approx_df.loc[approx_config, f"{column}_mean"]
-            yerr   = approx_df.loc[approx_config, f"{column}_std" ]
-            ax.bar(pos, height, yerr=yerr, label=column)
-    ax.set_xticks(np.arange(len(approx_df.index)))
+            scale = approx_df.loc[(), f"{column}_mean"].max() if normed else 1
+            height   = approx_df.loc[approx_config, f"{column}_mean"] / scale
+            yerr = approx_df.loc[approx_config, f"{column}_std" ] / scale if std else None
+            ax.bar(pos, height, yerr=yerr, color=color, label=(column if i == 0 else None))
+    ax.set_xticks(np.arange(len(approx_df.index)) * len(columns))
     ax.set_xticklabels([
         str(approx_config).replace(",", "\n")
         for approx_config in approx_df.index
     ])
     ax.set_xlabel("Approximation Configuration")
     ax.legend()
-    # fig.show()
-    plt.show()
+    fig.subplots_adjust(bottom=0.2)
+    width, height = fig.get_size_inches()
+    fig.set_size_inches(width + 2, height)
+    return fig, ax
 
-plot_bars()
+gen_graphs = False
+if gen_graphs:
+    fig, ax = plot_bars(
+        approx_df,
+        ["ov_time"],
+        columns_to_colors(["ov_time"]),
+        normed=False
+    )
+    ax.set_ylabel("CPU time (rel. to total, lower is better)\nError-bars show one std. dev.")
+    fig.savefig("cs527_report/times.png", dpi=300)
+
+    fig, ax = plot_bars(
+        approx_df,
+        ["pos_err", "ori_err"],
+        columns_to_colors(["pos_err", "ori_err"]),
+        normed=False,
+        std=False
+    )
+    ax.set_ylabel("Position and orientation error (cm and rad)")
+    fig.savefig("cs527_report/slam_errors.png", dpi=300)
+
+    fig, ax = plot_bars(
+        approx_df,
+        video_dists,
+        columns_to_colors(video_dists),
+        normed=True,
+    )
+    ax.set_ylabel("System-level errors (higher is better)\nError-bars show one std. dev.")
+    ax.set_ylim(0, 1.2)
+    fig.savefig("cs527_report/system_errors.png", dpi=300)
+
+    # fig, ax = plot_bars(
+    #     approx_df,
+    #     ["pos_err", "ori_err", *video_dists],
+    #     columns_to_colors(["pos_err", "ori_err", *video_dists]),
+    #     normed=True,
+    # )
+    # ax.set_ylim(0, 1.2)
+    # fig.savefig("cs527_report/system_errors.png", dpi=300)
+
+

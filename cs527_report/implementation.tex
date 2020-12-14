@@ -13,8 +13,8 @@ The data we collected on compute-times are shown in \cref{compute-times}.
 
 \begin{figure}
   \label{compute-times}
-  \caption{Compute times for various approximation configurations (lower is better).}
-  \todo{Insert graph}
+  \caption{Compute times for various approximation configurations.}
+  \includegraphics[width=\columnwidth]{times.png}
 \end{figure}
 
 \subsubsection{Approximation Knobs}
@@ -63,14 +63,19 @@ These stack-frame times get pushed onto a global list and serialized only at the
 \subsection{R.Q. 2 Automatic Approximation Testing}
 
 In order to automatically accept or reject approximations, we collect system-level error metrics.
-The data we collect is shown in \cref{errors}.
 In a real system, we would determine a threshold of acceptability from user-studies, but that is outside the scope of this project;
-  we will continue under the assumption that \textit{there is some} threshold.
+    we will continue under the assumption that \textit{there is some} threshold.
+
+The data we collect is shown in \cref{system-level-errors}.
+Unfortunately, there seems to be a large variance in the system-level errors across frames (their standard deviation is larger than their mean and median).
+This means some frames look basically the same, and some have huge differences.
+Future work could investigate why this is.
+Defining a video metric for AR/VR is still an open problem, and our \textbf{R.Q. 2} system enables research into that question.
 
 \begin{figure}
-  \label{errors}
-  \caption{System-level error for various approximation configurations (lower is better).}
-  \todo{Insert graph}
+  \label{system-level-errors}
+  \caption{System-level error for various approximation configurations.}
+  \includegraphics[width=\columnwidth]{system_errors.png}
 \end{figure}
 
 \subsubsection{Approximation Configuration Infrastructure}
@@ -114,15 +119,13 @@ For example, errors SLAM at time \(t\) in render can be corrected by SLAM at \(t
 
 \begin{figure}
 \caption{AR/VR DAG, showing how SLAM flows to the output over multiple paths.}
-\includegraphics[height=1.8cm]{dag.png}
+\includegraphics[width=\columnwidth]{dag.png}
 \label{dag}
 \end{figure}
 
 Instead of an analytical model, we might consider an empirical one, using machine learning techniques.
-We have both binary-valued knobs and continuous knobs.
-It is possible that the effect of each knob is also non-compositional;
-turning on two approximations simultaneously could have a different impact than turning them both on separately.
-Therefore, a two- or three-layer fully-connected neural network will probably be able to capture \todo{finish writingf}
+It is possible that the effect of different component-level errors is non-compositional;
+Therefore, a two- or three-layer fully-connected neural network will probably be able to capture the mapping from component-level error to system-level error.
 
 \subsubsection{Component-Level Metrics}
 
@@ -134,8 +137,10 @@ This transformation is shown in \cref{transformation}.
 
 \begin{figure}
   \label{transformation}
-  \caption{Unaligned and aligned poses, with dotted arrows showing the transformation. It only appears that the transformation `distorts' space because the transformation rotates `out of the plane'. This is a 2d projection of a 3d trajectory, so there is a part of the trajectory you can't see.}
-  \todo{Same figure from progress5.md}
+  \caption{Unaligned and aligned poses, with dotted arrows showing the transformation}
+  \footnote{It only appears that the transformation `distorts' space because the transformation rotates `out of the plane'. This is a 2d projection of a 3d trajectory, so there is a part of the trajectory you can't see.}
+  \includegraphics[width=\columnwidth]{unaligned.png}
+  \includegraphics[width=\columnwidth]{aligned.png}
 \end{figure}
 
 We compute the euclidean distance in position-displacement the angular distance of the orientation-displacement.
@@ -144,4 +149,10 @@ Rotations are the most important movement, because even if the user only moves a
 However, with translation, distant objects stay in roughly the same place. Only foreground items respond to head-translations.
 Notice that mean-homography-distance implicitly captures this too:
 if every object in the scene moves roughly the same amount due to rotation and a few objects in the foreground move due to translation, then the mean distance will be mostly influenced by the background but a little by the foreground too.
-The component-level error we collected is also shown in \cref{errors}.
+The component-level error we collected is also shown in \cref{SLAM-level-errors}.
+
+\begin{figure}
+  \label{SLAM-level-errors}
+  \caption{SLAM-level error for various approximation configurations.}
+  \includegraphics[width=\columnwidth]{slam_errors.png}
+\end{figure}

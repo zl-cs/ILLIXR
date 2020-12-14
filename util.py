@@ -9,6 +9,10 @@ T = TypeVar("T")
 def flatten(it: Iterable[Iterable[T]]) -> Iterable[T]:
     return itertools.chain.from_iterable(it)
 
+V = TypeVar("V")
+def invert_dict(dct: Mapping[T, V]) -> Mapping[V, T]:
+    return {value: key for key, value in dct.items()}
+
 class Subcommand:
     def __init__(
             self,
