@@ -14,17 +14,20 @@
 
 using namespace ILLIXR;
 
-static const int GLX_FB_WIDTH   { ILLIXR::FB_WIDTH  };
-static const int GLX_FB_HEIGHT  { ILLIXR::FB_HEIGHT };
-
 
 class runtime_impl : public runtime {
 public:
-	runtime_impl(GLXContext appGLCtx) {
+	runtime_impl(GLXContext appGLCtx)
+		: cr{std::make_shared<const_registry>()}
+		, _m_glx_fb_width{cr->FB_WIDTH.value()}
+		, _m_glx_fb_height{cr->FB_WIDTH.value()}
+		, _m_run_duration{cr->RUN_DURATION.value()}
+	{
+		pb.register_impl<const_registry>(cr);
 		pb.register_impl<record_logger>(std::make_shared<sqlite_record_logger>());
 		pb.register_impl<gen_guid>(std::make_shared<gen_guid>());
 		pb.register_impl<switchboard>(create_switchboard(&pb));
-		pb.register_impl<xlib_gl_extended_window>(std::make_shared<xlib_gl_extended_window>(GLX_FB_WIDTH, GLX_FB_HEIGHT, appGLCtx));
+		pb.register_impl<xlib_gl_extended_window>(std::make_shared<xlib_gl_extended_window>(_m_glx_fb_width, _m_glx_fb_height, appGLCtx));
 	}
 
 	virtual void load_so(const std::vector<std::string>& so_paths) override {
@@ -72,6 +75,10 @@ public:
 		terminate.store(true);
 	}
 
+	virtual long get_run_duration() const override {
+		return _m_run_duration;
+	}
+
 	virtual ~runtime_impl() override {
 		if (!terminate.load()) {
 			std::cerr << "You didn't call stop() before destructing this plugin." << std::endl;
@@ -85,6 +92,14 @@ private:
 	phonebook pb;
 	std::vector<std::unique_ptr<plugin>> plugins;
 	std::atomic<bool> terminate {false};
+
+	// Constants set at construction-time (lookup from const_registry)
+	const std::shared_ptr<const_registry> cr;
+
+	using CR = ILLIXR::const_registry;
+	const CR::DECL_FB_WIDTH::type     _m_glx_fb_width;
+	const CR::DECL_FB_HEIGHT::type    _m_glx_fb_height;
+	const CR::DECL_RUN_DURATION::type _m_run_duration;
 };
 
 extern "C" runtime* runtime_factory(GLXContext appGLCtx) {

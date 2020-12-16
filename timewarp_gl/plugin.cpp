@@ -19,12 +19,6 @@
 
 using namespace ILLIXR;
 
-static const int SCREEN_WIDTH  { ILLIXR::FB_WIDTH  };
-static const int SCREEN_HEIGHT { ILLIXR::FB_HEIGHT };
-
-static const double DISPLAY_REFRESH_RATE { ILLIXR::REFRESH_RATE };
-static const std::chrono::nanoseconds VSYNC_PERIOD { static_cast<size_t>(NANO_SEC/DISPLAY_REFRESH_RATE) };
-
 
 typedef void (*glXSwapIntervalEXTProc)(Display *dpy, GLXDrawable drawable, int interval);
 
@@ -52,6 +46,11 @@ public:
 	// data whenever it needs to.
 	timewarp_gl(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
+		, cr{pb->lookup_impl<const_registry>()}
+		, _m_screen_width{cr->FB_WIDTH.value()}
+		, _m_screen_height{cr->FB_HEIGHT.value()}
+		, _m_display_refresh_rate{cr->REFRESH_RATE.value()}
+		, _m_vsync_period{static_cast<std::size_t>(NANO_SEC/_m_display_refresh_rate)}
 		, sb{pb->lookup_impl<switchboard>()}
 		, pp{pb->lookup_impl<pose_prediction>()}
 		, xwin{pb->lookup_impl<xlib_gl_extended_window>()}
@@ -65,6 +64,16 @@ public:
 	{ }
 
 private:
+	const std::shared_ptr<const_registry> cr;
+
+	// Constants set at construction-time (lookup from const_registry)
+	using CR = ILLIXR::const_registry;
+	const CR::DECL_FB_WIDTH::type     _m_screen_width;
+	const CR::DECL_FB_HEIGHT::type    _m_screen_height;
+	const CR::DECL_REFRESH_RATE::type _m_display_refresh_rate;
+
+	const std::chrono::nanoseconds _m_vsync_period;
+
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
 
@@ -259,7 +268,7 @@ private:
 	// Get the estimated time of the next swap/next Vsync.
 	// This is an estimate, used to wait until *just* before vsync.
 	time_type GetNextSwapTimeEstimate() {
-		return lastSwapTime + VSYNC_PERIOD;
+		return lastSwapTime + _m_vsync_period;
 	}
 
 	// Get the estimated amount of time to put the CPU thread to sleep,
@@ -297,7 +306,7 @@ public:
 		lastSwapTime = std::chrono::high_resolution_clock::now();
 
 		// Generate reference HMD and physical body dimensions
-    	HMD::GetDefaultHmdInfo(SCREEN_WIDTH, SCREEN_HEIGHT, &hmd_info);
+		HMD::GetDefaultHmdInfo(_m_screen_width, _m_screen_height, &hmd_info);
 		HMD::GetDefaultBodyInfo(&body_info);
 
 		// Initialize the GLFW library, still need it to get time
@@ -397,7 +406,7 @@ public:
 		glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc);
 
 		glBindFramebuffer(GL_FRAMEBUFFER,0);
-		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+		glViewport(0, 0, _m_screen_width, _m_screen_height);
 		glClearColor(0, 0, 0, 0);
     	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 		glDepthFunc(GL_LEQUAL);
@@ -521,7 +530,7 @@ public:
 #ifndef NDEBUG
 		auto delta = std::chrono::high_resolution_clock::now() - most_recent_frame->render_time;
 		printf("\033[1;36m[TIMEWARP]\033[0m Time since render: %3fms\n", (float)(delta.count() / 1000000.0));
-		if(delta > VSYNC_PERIOD)
+		if(delta > _m_vsync_period)
 		{
 			printf("\033[0;31m[TIMEWARP: CRITICAL]\033[0m Stale frame!\n");
 		}

@@ -17,6 +17,7 @@ namespace ILLIXR {
 		virtual void load_plugin_factory(plugin_factory plugin) = 0;
 		virtual void wait() = 0;
 		virtual void stop() = 0;
+		virtual long get_run_duration() const = 0;
 		virtual ~runtime() {}
 	};
 

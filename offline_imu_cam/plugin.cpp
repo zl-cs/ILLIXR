@@ -18,7 +18,8 @@ class offline_imu_cam : public ILLIXR::threadloop {
 public:
 	offline_imu_cam(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
-		, _m_sensor_data{load_data()}
+		, cr{pb->lookup_impl<const_registry>()}
+		, _m_sensor_data{load_data(cr->DATA_PATH.value())}
 		, _m_sensor_data_it{_m_sensor_data.cbegin()}
 		, _m_sb{pb->lookup_impl<switchboard>()}
 		, _m_imu_cam{_m_sb->publish<imu_cam_type>("imu_cam")}
@@ -103,6 +104,8 @@ public:
 	}
 
 private:
+	const std::shared_ptr<const_registry> cr;
+
 	const std::map<ullong, sensor_types> _m_sensor_data;
 	std::map<ullong, sensor_types>::const_iterator _m_sensor_data_it;
 	const std::shared_ptr<switchboard> _m_sb;

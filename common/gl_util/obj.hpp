@@ -61,7 +61,6 @@ namespace ILLIXR {
 		//
 		// obj_filename is the actual .obj file to be loaded.
 		ObjScene(std::string obj_dir, std::string obj_filename) {
-
 			// If any of the following procedures fail to correctly load,
 			// we'll set this flag false (for the relevant operation)
 			successfully_loaded_model = true;
@@ -69,11 +68,8 @@ namespace ILLIXR {
 
 			std::string warn, err;
 
-			if(obj_dir.back() != '/') {
-				obj_dir += '/';
-			}
-
-			std::string obj_file = obj_dir + obj_filename;
+			std::string obj_file_sep {(obj_dir.back() == '/') ? "" : "/"};
+			std::string obj_file {obj_dir + obj_file_sep + obj_filename};
 
 			// We pass obj_dir as the last argument to LoadObj to let us load
 			// any material (.mtl) files associated with the .obj in the same directory.

@@ -2,8 +2,6 @@
 #include "runtime_impl.hpp"
 #include "common/global_module_defs.hpp"
 
-const std::chrono::seconds ILLIXR_RUN_DURATION { ILLIXR::RUN_DURATION };
-
 ILLIXR::runtime* r;
 
 static void signal_handler(int) {
@@ -43,7 +41,7 @@ int main(int argc, char* const* argv) {
 	signal(SIGINT, signal_handler);
 
 	// And timer
-    std::chrono::seconds run_duration = ILLIXR_RUN_DURATION;
+    std::chrono::seconds run_duration { r->get_run_duration() } ;
 
 	cancellable_sleep cs;
 	std::thread th{[&]{

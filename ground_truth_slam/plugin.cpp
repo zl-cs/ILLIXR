@@ -13,9 +13,10 @@ class ground_truth_slam : public plugin {
 public:
 	ground_truth_slam(std::string name_, phonebook* pb_)
 		: plugin{name_, pb_}
+		, cr{pb->lookup_impl<const_registry>()}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_true_pose{sb->publish<pose_type>("true_pose")}
-		, _m_sensor_data{load_data()}
+		, _m_sensor_data{load_data(cr->DATA_PATH.value())}
 	{ }
 
 	virtual void start() override {
@@ -44,6 +45,7 @@ public:
 	}
 
 private:
+	const std::shared_ptr<const_registry> cr;
 	const std::shared_ptr<switchboard> sb;
 	std::unique_ptr<writer<pose_type>> _m_true_pose;
 
