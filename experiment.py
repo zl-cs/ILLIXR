@@ -425,6 +425,7 @@ approx_df = pd.DataFrame.from_records(
 
 # fig, ax = visualize_ts(approx_results_frames.loc[:, "max_feature_dist"])
 # fig.show()
+# plt.show()
 
 # fig, ax = visualize_ts(approx_results_poses.loc[:, "pos_err"])
 # fig.show()
@@ -505,19 +506,19 @@ if gen_graphs:
 
 
 
-approx_results["pose_no"] = 0
-for config in approx_results_frames.index.levels[0]:
-    for time in approx_resuilts_frames.loc[(config,)].index.levels[0]:
-        pose_no = bisect.bisect_left(approx_results_poses.index, time)
-        if pose_no != len(approx_results_poses):
-            approx_results_frames.loc[(config, time), "pose_no"] = pose_no
+# approx_results["pose_no"] = 0
+# for config in approx_results_frames.index.levels[0]:
+#     for time in approx_results_frames.loc[(config,)].index.levels[0]:
+#         pose_no = bisect.bisect_left(approx_results_poses.index, time)
+#         if pose_no != len(approx_results_poses):
+#             approx_results_frames.loc[(config, time), "pose_no"] = pose_no
 
-import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+# import numpy as np
+# import tensorflow as tf
+# from tensorflow import keras
+# from tensorflow.keras import layers
 
-model1 = keras.Input(shape=(8,))
-model1 = layers.Dense(4, activation="relu")(model1)
+# model1 = keras.Input(shape=(8,))
+# model1 = layers.Dense(4, activation="relu")(model1)
 
-import IPython; IPython.embed()
+# import IPython; IPython.embed()
