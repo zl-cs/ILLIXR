@@ -81,7 +81,7 @@ def build_one_plugin(
 ) -> Path:
     profile = config["profile"]
     path: Path = pathify(plugin_config["path"], root_dir, cache_path, True, True)
-    if not (path / "common").exists():
+    if not (path / "common").is_symlink():
         common_path = pathify(
             config["common"]["path"], root_dir, cache_path, True, True
         )

@@ -16,7 +16,7 @@ loader:
   name: native
 
   # run in GDB:
-  command: gdb -q --args $cmd
+  # command: gdb -q --args $cmd
 
   # Print cmd for external use:
   #command: printf %s\n $env_cmd
@@ -24,4 +24,4 @@ loader:
   # command: env ILLIXR_STDOUT_METRICS=y $cmd
   log_stdout: metrics/output.log
 
-profile: dbg
+profile: opt

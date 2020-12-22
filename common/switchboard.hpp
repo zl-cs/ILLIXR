@@ -14,8 +14,8 @@
 #include "cpu_timer.hpp"
 #include "record_logger.hpp"
 #include "managed_thread.hpp"
-// #include "../runtime/concurrentqueue/blockingconcurrentqueue.hpp"
-#include "../runtime/concurrentqueue/queue.hpp"
+#include "../runtime/concurrentqueue/blockingconcurrentqueue.hpp"
+// #include "../runtime/concurrentqueue/queue.hpp"
 
 namespace ILLIXR {
 
@@ -145,8 +145,8 @@ private:
 		std::function<void(ptr<const event>&&, std::size_t)> _m_callback;
 		const std::shared_ptr<record_logger> _m_record_logger;
 		record_coalescer _m_cb_log;
-		moodycamel::LockQueue<ptr<const event>> _m_queue {8 /*max size estimate*/};
-		// moodycamel::ConsumerToken _m_ctok {_m_queue};
+		moodycamel::BlockingConcurrentQueue<ptr<const event>> _m_queue {8 /*max size estimate*/};
+		moodycamel::ConsumerToken _m_ctok {_m_queue};
 		static constexpr std::chrono::milliseconds _m_queue_timeout {100};
 		std::size_t _m_enqueued {0};
 		std::size_t _m_dequeued {0};
