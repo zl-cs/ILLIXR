@@ -126,6 +126,7 @@ private:
     std::unique_ptr<reader_latest<imu_raw_type>> _m_imu_raw;
 	std::unique_ptr<reader_latest<pose_type>> _m_true_pose;
     std::unique_ptr<reader_latest<time_type>> _m_vsync_estimate;
+    
 
     // Slightly modified copy of OpenVINS method found in propagator.cpp
     // Returns a pair of the predictor state_plus and the time associated with the

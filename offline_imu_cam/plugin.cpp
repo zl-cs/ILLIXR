@@ -60,6 +60,11 @@ protected:
 	void _p_one_iteration_helper(const sensor_types& sensor_datum, std::optional<cv::Mat*> img0, std::optional<cv::Mat*> img1) {
 		time_type real_now = real_first_time + std::chrono::nanoseconds{dataset_now - dataset_first_time};
 		++_m_sensor_data_it;
+		if (cam0 && cam1) {
+			cv::cvtColor(*cam0.value(), *cam0.value(), cv::COLOR_BGR2GRAY);
+			cv::cvtColor(*cam1.value(), *cam1.value(), cv::COLOR_BGR2GRAY);
+		}
+
 		auto datum = new imu_cam_type{
 			real_now,
 			(sensor_datum.imu0.value().angular_v).cast<float>(),

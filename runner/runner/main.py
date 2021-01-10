@@ -90,7 +90,9 @@ def load_native(config: Mapping[str, Any]) -> None:
             ILLIXR_DATA=str(data_path),
             ILLIXR_DEMO_DATA=str(demo_data_path),
             ILLIXR_RUN_DURATION=str(config["loader"].get("ILLIXR_RUN_DURATION", 60)),
+            KIMERA_ROOT=config["loader"]["kimera_path"],
         ),
+        check=True,
     )
 
 
@@ -114,7 +116,9 @@ def load_tests(config: Mapping[str, Any]) -> None:
             ILLIXR_DATA=str(data_path),
             ILLIXR_DEMO_DATA=str(demo_data_path),
             ILLIXR_RUN_DURATION=str(config["loader"].get("ILLIXR_RUN_DURATION", 10)),
+            KIMERA_ROOT=config["loader"]["kimera_path"],
         ),
+        check=True,
     )
 
 
@@ -156,6 +160,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
         openxr_app_path / "build",
         dict(CMAKE_BUILD_TYPE=cmake_profile, **openxr_app_config),
     )
+    build_runtime(config, "so")
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
         [
@@ -175,6 +180,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
             ILLIXR_DATA=str(data_path),
             ILLIXR_DEMO_DATA=str(demo_data_path),
         ),
+        check=True,
     )
 
 
