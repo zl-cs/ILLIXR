@@ -7,6 +7,7 @@
 #include "common/plugin.hpp"
 #include "common/gen_guid.hpp"
 #include "common/switchboard.hpp"
+#include "sqlite_logger.hpp"
 
 using namespace ILLIXR;
 
