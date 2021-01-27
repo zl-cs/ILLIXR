@@ -204,12 +204,10 @@ namespace ILLIXR {
 					rc = sqlite3_bind_double(_m_stmt, var.get_id() + 1, data);
 				} else if (&var.get_type() == &type::TEXT) {
 					const auto& data = std::get<std::string>(var.get_data());
-					// TODO(grayson5): avoid this copy by using SQLITE_STATIC
-					// The data, held in a val_map, should be valid until the end of the sqlite_step
-					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_TRANSIENT);
+					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_STATIC);
 				} else if (&var.get_type() == &type::BLOB) {
 					const auto& data = std::get<std::vector<char>>(var.get_data());
-					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_TRANSIENT);
+					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_STATIC);
 				} else if (&var.get_type() == &type::NULL_) {
 					rc = sqlite3_bind_null(_m_stmt, var.get_id() + 1);
 				} else {
@@ -260,18 +258,30 @@ namespace ILLIXR {
 			friend class statement;
 			friend class statement_builder;
 			std::string _m_url;
-			sqlite3* _m_db;
+			std::unique_ptr<sqlite3, void(*)(sqlite3*)> _m_db;
 			bool in_transaction;
 			statement begin_transaction_statement;
 			statement end_transaction_statement;
 
-			std::string path_to_string(boost::filesystem::path&& path, bool truncate) {
+			static std::string path_to_string(boost::filesystem::path&& path, bool truncate) {
 				if (truncate) {
 					if (boost::filesystem::exists(path)) {
 						boost::filesystem::remove(path);
 					}
 				}
 				return path.string();
+			}
+
+			static std::unique_ptr<sqlite3, void(*)(sqlite3*)> open_db(const char* str) {
+				sqlite3* db;
+				int rc = sqlite3_open(str, &db);
+				sqlite_error_to_exception(rc, "open database");
+				return std::unique_ptr<sqlite3, void(*)(sqlite3*)>{db, &close_db};
+			}
+
+			static void close_db(sqlite3* db) {
+				int rc = sqlite3_close(db);
+				sqlite_error_to_exception(rc, "close");
 			}
 
 		public:
@@ -284,15 +294,6 @@ namespace ILLIXR {
 			std::string get_url() const { return _m_url; }
 
 			table create_table(std::string&& name, schema&& schema);
-
-			~database() {
-				int rc = sqlite3_close(_m_db);
-				sqlite_error_to_exception(rc, "close");
-			}
-
-			// db will close the underlying db, so no copying (else it is closed twice).
-			database(database& other) = delete;
-			database& operator=(database& other) = delete;
 
 			void begin_transaction();
 			void end_transaction();
@@ -363,7 +364,7 @@ namespace ILLIXR {
 			statement_builder(database& db)
 				: _m_db{db}
 				, _m_first_unused_id{0}
-				, _m_id_limit{static_cast<size_t>(sqlite3_limit(_m_db._m_db, SQLITE_LIMIT_VARIABLE_NUMBER, -1))}
+				, _m_id_limit{static_cast<size_t>(sqlite3_limit(_m_db._m_db.get(), SQLITE_LIMIT_VARIABLE_NUMBER, -1))}
 			{ }
 
 			statement_builder& operator<<(const std::string& literal) {
@@ -451,7 +452,7 @@ namespace ILLIXR {
 			void bulk_insert(std::vector<std::vector<value>>&& rows) {
 				// https://stackoverflow.com/questions/1711631/improve-insert-per-second-performance-of-sqlite
 
-				// _m_db.get().begin_transaction();
+				_m_db.get().begin_transaction();
 				for (std::vector<value>& row : rows) {
 					for (size_t i = 0; i < row.size(); ++i) {
 						row.at(i).set_id(i);
@@ -461,7 +462,7 @@ namespace ILLIXR {
 					_m_insert_statement.step();
 					_m_insert_statement.reset();
 				}
-				// _m_db.get().end_transaction();
+				_m_db.get().end_transaction();
 			}
 
 			void insert(std::vector<value>&& row) {
@@ -520,7 +521,7 @@ namespace ILLIXR {
 				: _m_val_map{std::move(val_map)}
 				, _m_stmt{nullptr}
 			{
-				int rc = sqlite3_prepare_v2(db._m_db, cmd.c_str(), cmd.size(), &_m_stmt, nullptr);
+				int rc = sqlite3_prepare_v2(db._m_db.get(), cmd.c_str(), cmd.size(), &_m_stmt, nullptr);
 				sqlite_error_to_exception(rc, "prepare stmt", cmd);
 
 				for (auto& value : _m_val_map) {
@@ -532,11 +533,8 @@ namespace ILLIXR {
 
 		inline database::database(std::string&& url)
 				: _m_url{std::move(url)}
-				, in_transaction{({
-					int rc = sqlite3_open(url.c_str(), &_m_db);
-					sqlite_error_to_exception(rc, "open database");
-					false;
-				})}
+				, _m_db{open_db(_m_url.c_str())}
+				, in_transaction{false}
 				, begin_transaction_statement{std::move(statement_builder{*this} << keyword::BEGIN_TRANSACTION).compile()}
 				, end_transaction_statement{std::move(statement_builder{*this} << keyword::END_TRANSACTION).compile()}
 			{ }
