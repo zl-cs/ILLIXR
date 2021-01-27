@@ -204,10 +204,10 @@ namespace ILLIXR {
 					rc = sqlite3_bind_double(_m_stmt, var.get_id() + 1, data);
 				} else if (&var.get_type() == &type::TEXT) {
 					const auto& data = std::get<std::string>(var.get_data());
-					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_STATIC);
+					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_TRANSIENT);
 				} else if (&var.get_type() == &type::BLOB) {
 					const auto& data = std::get<std::vector<char>>(var.get_data());
-					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_STATIC);
+					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_TRANSIENT);
 				} else if (&var.get_type() == &type::NULL_) {
 					rc = sqlite3_bind_null(_m_stmt, var.get_id() + 1);
 				} else {
