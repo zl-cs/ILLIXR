@@ -1,4 +1,5 @@
 #include <signal.h>
+#include <pthread.h>
 #include "runtime_impl.hpp"
 #include "common/cpu_timer/cpu_timer.hpp"
 
@@ -30,7 +31,10 @@ private:
 };
 
 int main(int argc, char* const* argv) {
+	setup_frame_logger();
 	CPU_TIMER_TIME_FUNCTION();
+
+	pthread_setname_np(pthread_self(),"main");
 
 	r = ILLIXR::runtime_factory(nullptr);
 
@@ -53,6 +57,7 @@ int main(int argc, char* const* argv) {
 
 	cancellable_sleep cs;
 	std::thread th{[&]{
+		pthread_setname_np(pthread_self(), "sleeper");
 		cs.sleep(run_duration);
 		r->stop();
 	}};

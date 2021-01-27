@@ -16,19 +16,19 @@ namespace ILLIXR {
 		class statement_builder;
 		class statement;
 
-		void sqlite_error_to_exception(int rc, const char* activity) {
+		void sqlite_error_to_exception(int rc, const char* activity, std::string info = std::string{}) {
 			if (rc != SQLITE_OK && rc != SQLITE_ROW && rc != SQLITE_DONE) {
-				std::cerr << activity << ": " << sqlite3_errstr(rc);
+				std::cerr << activity << ": " << sqlite3_errstr(rc) << ": " << info << std::endl;
 				assert(0);
 			}
 		}
 
 		class type {
 		private:
-			const char* name;
+			const std::string_view name;
 			std::string cpp_name;
 		public:
-			type(const char* name_, std::string&& cpp_name_)
+			type(const std::string_view name_, std::string&& cpp_name_)
 				: name{name_}
 				, cpp_name{cpp_name_}
 			{ }
@@ -37,7 +37,7 @@ namespace ILLIXR {
 				: type{name_, name_}
 			{ }
 
-			const char* get_name() const { return name; }
+			const std::string_view get_name() const { return name; }
 			const std::string& get_cpp_name() const { return cpp_name; }
 
 			bool operator==(const type& other) const {
@@ -112,22 +112,40 @@ namespace ILLIXR {
 			std::reference_wrapper<const type> _m_type;
 			value_variant _m_data;
 			size_t _m_id;
+			static constexpr const size_t no_id = 1 << 31;
 		public:
-			value(const type& type_, value_variant&& data, size_t id = 0)
-				: _m_type{std::cref(type_)}
+			value(value_variant&& data, size_t id = no_id)
+				: _m_type{
+					std::holds_alternative<uint64_t>(data) ? std::cref(type::INTEGER) :
+					std::holds_alternative<double>(data) ? std::cref(type::REAL) :
+					std::holds_alternative<std::string>(data) ? std::cref(type::TEXT) :
+					std::holds_alternative<std::vector<char>>(data) ? std::cref(type::BLOB) :
+					std::holds_alternative<std::nullptr_t>(data) ? std::cref(type::NULL_) :
+					({assert(0 && "Unknown type"); std::cref(type::NULL_);})
+				}
+				, _m_data{false}
 				, _m_id{id}
 			{
 				set_data(std::move(data));
 			}
-				  
-			static value placeholder(const type& type_, size_t id = 0) {
+			value(const type& type_, value_variant&& data, size_t id = no_id)
+				: _m_type{std::cref(type_)}
+				, _m_data{false}
+				, _m_id{id}
+			{
+				if (!std::holds_alternative<bool>(data) || std::get<bool>(data)) {
+					set_data(std::move(data));
+				}
+			}
+
+			static value placeholder(const type& type_, size_t id = no_id) {
 				return value{type_, false, id};
 			}
 
 			const type& get_type() const { return _m_type; }
 
 			void set_id(size_t id) { assert(!has_id()); _m_id = id; }
-			bool has_id() const { return _m_id == 0; }
+			bool has_id() const { return _m_id != no_id; }
 			size_t get_id() const { assert(has_id()); return _m_id; }
 
 			void set_data(value_variant&& data) {
@@ -170,11 +188,10 @@ namespace ILLIXR {
 		class statement {
 		private:
 			friend class statement_builder;
-			std::reference_wrapper<database> _m_db;
 			std::vector<value> _m_val_map;
 			sqlite3_stmt* _m_stmt;
 
-			statement(database& db, std::string cmd, std::vector<value> val_map);
+			statement(database& db, std::string&& cmd, std::vector<value>&& val_map);
 
 			void bind(value var) {
 				int rc = 0;
@@ -186,11 +203,13 @@ namespace ILLIXR {
 					auto data = std::get<double>(var.get_data());
 					rc = sqlite3_bind_double(_m_stmt, var.get_id() + 1, data);
 				} else if (&var.get_type() == &type::TEXT) {
-					auto data = std::get<std::string>(var.get_data());
-					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_STATIC);
+					const auto& data = std::get<std::string>(var.get_data());
+					// TODO(grayson5): avoid this copy by using SQLITE_STATIC
+					// The data, held in a val_map, should be valid until the end of the sqlite_step
+					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_TRANSIENT);
 				} else if (&var.get_type() == &type::BLOB) {
-					auto data = std::get<std::vector<char>>(var.get_data());
-					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_STATIC);
+					const auto& data = std::get<std::vector<char>>(var.get_data());
+					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_TRANSIENT);
 				} else if (&var.get_type() == &type::NULL_) {
 					rc = sqlite3_bind_null(_m_stmt, var.get_id() + 1);
 				} else {
@@ -202,17 +221,18 @@ namespace ILLIXR {
 		public:
 			void set(value&& var) {
 				size_t id = var.get_id();
-				assert(id < _m_val_map.size() + 1 && "Variable's integer ID out of range");
-				value& target = _m_val_map.at(id);
+				assert(id < _m_val_map.size() && "Variable's integer ID out of range");
+				[[maybe_unused]] value& target = _m_val_map.at(id);
 				assert(!target.slot_filled() && "Variable's slot is already filled");
 				assert(&target.get_type() == &var.get_type() && "Wrong type for variable");
 				assert(var.has_data() && "Var must has value to use");
+				// TODO(grayson5): avoid this copy
 				_m_val_map.at(id) = std::move(var);
 				bind(_m_val_map.at(id));
 			}
 
-			void execute() {
-				for (const auto& pair : _m_val_map) {
+			void step() {
+				for ([[maybe_unused]] const auto& pair : _m_val_map) {
 					assert(pair.slot_filled());
 				}
 				int rc = sqlite3_step(_m_stmt);
@@ -242,10 +262,10 @@ namespace ILLIXR {
 			std::string _m_url;
 			sqlite3* _m_db;
 			bool in_transaction;
-			std::optional<statement> begin_transaction_statement;
-			std::optional<statement> end_transaction_statement;
+			statement begin_transaction_statement;
+			statement end_transaction_statement;
 
-			static std::string path_to_string(boost::filesystem::path&& path, bool truncate) {
+			std::string path_to_string(boost::filesystem::path&& path, bool truncate) {
 				if (truncate) {
 					if (boost::filesystem::exists(path)) {
 						boost::filesystem::remove(path);
@@ -255,13 +275,7 @@ namespace ILLIXR {
 			}
 
 		public:
-			database(std::string&& url)
-				: _m_url{std::move(url)}
-				, in_transaction{false}
-			{
-				int rc = sqlite3_open(url.c_str(), &_m_db);
-				sqlite_error_to_exception(rc, "open database");
-			}
+			database(std::string&& url);
 
 			database(boost::filesystem::path&& path, bool truncate)
 				: database{path_to_string(std::move(path), truncate)}
@@ -280,10 +294,6 @@ namespace ILLIXR {
 			database(database& other) = delete;
 			database& operator=(database& other) = delete;
 
-			// table holds a ref to this, so no moving (else dangling ref).
-			database(database&& other) = delete;
-			database& operator=(database&& other) = delete;
-
 			void begin_transaction();
 			void end_transaction();
 		};
@@ -298,6 +308,26 @@ namespace ILLIXR {
 			RIGHT_PARENS
 		};
 
+		class keyword {
+			const std::string_view sql;
+		public:
+			keyword(const std::string_view sql_)
+				: sql{sql_}
+			{ }
+			const std::string_view get_sql() const { return sql; }
+
+			static keyword CREATE_TABLE;
+			static keyword INSERT_INTO;
+			static keyword VALUES;
+			static keyword BEGIN_TRANSACTION;
+			static keyword END_TRANSACTION;
+		};
+		keyword keyword::CREATE_TABLE {"CREATE TABLE"};
+		keyword keyword::INSERT_INTO {"INSERT INTO"};
+		keyword keyword::VALUES {"VALUES"};
+		keyword keyword::BEGIN_TRANSACTION {"BEGIN TRANSACTION"};
+		keyword keyword::END_TRANSACTION {"END TRANSACTION"};
+
 		class statement_builder {
 		private:
 			database& _m_db;
@@ -305,37 +335,59 @@ namespace ILLIXR {
 			size_t _m_first_unused_id;
 			std::vector<std::optional<value>> _m_val_map;
 			std::deque<bool> _m_comma_waiting;
-			bool _m_valid;
+			size_t _m_id_limit;
 
-		public:
-			statement_builder(database& db, size_t num_vars)
-				: _m_db{db}
-				, _m_first_unused_id{0}
-				, _m_val_map{num_vars}
-				, _m_valid{false}
-			{ }
+			void validate_literal(const std::string_view literal) {
+				assert(!sqlite3_keyword_check(literal.data(), literal.size()) && "Can't use a SQLite keyword as a literal");
+				bool first = true;
+				for (const char letter : literal) {
+					[[maybe_unused]] bool valid_id = literal.size() > 0 && (false
+						|| (!first && '0' <= letter && letter <= '9')
+						|| ('a' <= letter && letter <= 'z')
+						|| ('A' <= letter && letter <= 'Z')
+						|| letter == '_'
+					);
+					assert(valid_id && "Must use a [a-zA-Z][a-zA-Z0-9]* as a literal");
+					first = false;
+				}
+			}
 
-			statement_builder& operator<<(const char* literal) {
-				assert(_m_valid);
+			void place_comma() {
 				if (!_m_comma_waiting.empty() && _m_comma_waiting.back()) {
 					_m_cmd_stream << ", ";
+					_m_comma_waiting.back() = false;
 				}
-				_m_cmd_stream << literal << " ";
+			}
+
+		public:
+			statement_builder(database& db)
+				: _m_db{db}
+				, _m_first_unused_id{0}
+				, _m_id_limit{static_cast<size_t>(sqlite3_limit(_m_db._m_db, SQLITE_LIMIT_VARIABLE_NUMBER, -1))}
+			{ }
+
+			statement_builder& operator<<(const std::string& literal) {
+				place_comma();
+				validate_literal(literal);
+				_m_cmd_stream << literal << ' ';
+				return *this;
+			}
+			statement_builder& operator<<(const keyword& keyword_) {
+				place_comma();
+				_m_cmd_stream << keyword_.get_sql() << ' ';
 				return *this;
 			}
 			statement_builder& operator<<(value&& variable) {
-				assert(_m_valid);
-				if (!_m_comma_waiting.empty() && _m_comma_waiting.back()) {
-					_m_cmd_stream << ", ";
+				place_comma();
+				if (variable.has_id()) {
+					assert(variable.get_id() + 1 < _m_id_limit && "Integer ID too high");
+				} else {
+					variable.set_id(_m_first_unused_id++);
 				}
-				assert(variable.get_id() + 1 < static_cast<size_t>(sqlite3_limit(_m_db._m_db, SQLITE_LIMIT_VARIABLE_NUMBER, -1)) && "Integer ID too high");
 				if (variable.get_id() >= _m_val_map.size()) {
 					_m_val_map.resize(variable.get_id() + 1);
 				}
-				if (!variable.has_id()) {
-					variable.set_id(_m_first_unused_id++);
-				}
-				_m_cmd_stream << "?" << (variable.get_id() + 1) << " ";
+				_m_cmd_stream << '?' << (variable.get_id() + 1) << ' ';
 				assert(!_m_val_map.at(variable.get_id()).has_value() || _m_val_map.at(variable.get_id())->get_type() == variable.get_type() &&
 					   "Type mismatch with prior use of variable");
 				assert(!_m_val_map.at(variable.get_id()).has_value() || _m_val_map.at(variable.get_id())->has_data() &&
@@ -344,18 +396,17 @@ namespace ILLIXR {
 				return *this;
 			}
 			statement_builder& operator<<(sentinel sentinel) {
-				assert(_m_valid);
 				switch (sentinel) {
-				case sentinel::COMMA:
+				case sentinel::LEFT_PARENS:
 					_m_comma_waiting.push_back(false);
 					_m_cmd_stream << "( ";
 					break;
-				case sentinel::LEFT_PARENS:
+				case sentinel::RIGHT_PARENS:
 					assert(!_m_comma_waiting.empty() && "More right than left parens");
 					_m_comma_waiting.pop_back();
 					_m_cmd_stream << ") ";
 					break;
-				case sentinel::RIGHT_PARENS:
+				case sentinel::COMMA:
 					assert(!_m_comma_waiting.empty() && "comma only allowed inside parens");
 					_m_comma_waiting.pop_back();
 					_m_comma_waiting.push_back(true);
@@ -363,7 +414,7 @@ namespace ILLIXR {
 				}
 				return *this;
 			}
-			statement compile();
+			statement compile() &&;
 		};
 
 		class table {
@@ -372,13 +423,23 @@ namespace ILLIXR {
 			std::reference_wrapper<database> _m_db;
 			std::string _m_name;
 			schema _m_schema;
-			std::optional<statement> _m_insert_statement;
+			statement _m_insert_statement;
+
+			statement create_insert_statement() {
+				statement_builder builder {_m_db.get()};
+				builder << keyword::INSERT_INTO << _m_name << keyword::VALUES << sentinel::LEFT_PARENS;
+				for (const field& field : _m_schema.get_fields()) {
+					builder << value::placeholder(field.get_type()) << sentinel::COMMA;
+				}
+				builder << sentinel::RIGHT_PARENS;
+				return std::move(builder).compile();
+			}
 
 			table(database& db_, std::string&& name_, schema&& schema_)
 				: _m_db{std::ref(db_)}
 				, _m_name{std::move(name_)}
 				, _m_schema{std::move(schema_)}
-				, _m_insert_statement{std::nullopt}
+				, _m_insert_statement{create_insert_statement()}
 			{ }
 
 		public:
@@ -390,27 +451,27 @@ namespace ILLIXR {
 			void bulk_insert(std::vector<std::vector<value>>&& rows) {
 				// https://stackoverflow.com/questions/1711631/improve-insert-per-second-performance-of-sqlite
 
-				if (!_m_insert_statement) {
-					statement_builder sb {_m_db.get(), _m_schema.get_fields().size() + 1};
-					sb << "INSERT INTO" << value{type::TEXT, _m_name} << "VALUES" << sentinel::LEFT_PARENS;
-					for (const field& field_ : _m_schema.get_fields()) {
-						sb << value::placeholder(field_.get_type()) << sentinel::COMMA;
-					}
-					sb << sentinel::RIGHT_PARENS;
-					_m_insert_statement = sb.compile();
-				}
-
-				_m_db.get().begin_transaction();
+				// _m_db.get().begin_transaction();
 				for (std::vector<value>& row : rows) {
 					for (size_t i = 0; i < row.size(); ++i) {
 						row.at(i).set_id(i);
 						assert(row.at(i).get_type() == _m_schema.get_fields().at(i).get_type());
-						_m_insert_statement->set(std::move(row.at(i)));
-						_m_insert_statement->execute();
-						_m_insert_statement->reset();
+						_m_insert_statement.set(std::move(row.at(i)));
 					}
+					_m_insert_statement.step();
+					_m_insert_statement.reset();
 				}
-				_m_db.get().end_transaction();
+				// _m_db.get().end_transaction();
+			}
+
+			void insert(std::vector<value>&& row) {
+				for (size_t i = 0; i < row.size(); ++i) {
+					row.at(i).set_id(i);
+					assert(row.at(i).get_type() == _m_schema.get_fields().at(i).get_type());
+					_m_insert_statement.set(std::move(row.at(i)));
+				}
+				_m_insert_statement.step();
+				_m_insert_statement.reset();
 			}
 
 		};
@@ -420,60 +481,64 @@ namespace ILLIXR {
 		}
 
 		inline table database::create_table(std::string&& name, schema&& schema) {
-				statement_builder statement_builder {*this, schema.get_fields().size() + 1};
-				statement_builder << "CREATE TABLE" << value{type::TEXT, name} << sentinel::LEFT_PARENS;
+				statement_builder statement_builder {*this};
+				statement_builder << keyword::CREATE_TABLE << name << sentinel::LEFT_PARENS;
 				for (const field& field : schema.get_fields()) {
-					statement_builder << value{type::TEXT, field.get_name()} << field.get_type().get_name() << sentinel::COMMA;
+					statement_builder << field.get_name() << field.get_type().get_name() << sentinel::COMMA;
 				}
 				statement_builder << sentinel::RIGHT_PARENS;
-				statement_builder.compile().execute();
+				std::move(statement_builder).compile().step();
 				return table{*this, std::move(name), std::move(schema)};
 			}
 
-		inline statement statement_builder::compile() {
+		inline statement statement_builder::compile() && {
 				assert(_m_comma_waiting.empty() && "More left parens than right parens");
-				for (size_t i = 1; i < _m_val_map.size() + 1; ++i) {
+				for (size_t i = 0; i < _m_val_map.size(); ++i) {
 					assert(_m_val_map.at(i).has_value() && "Not all integer IDs are used.");
 				}
 				_m_cmd_stream << ";";
 				std::vector<value> val_map;
 				val_map.reserve(_m_val_map.size());
 				for (size_t i = 0; i < _m_val_map.size(); ++i) {
-					val_map.push_back(std::move(*_m_val_map.at(i)));
+					val_map.emplace_back(std::move(*_m_val_map.at(i)));
 				}
-				_m_valid = false;
-				return statement{_m_db, _m_cmd_stream.str(), val_map};
+				return statement{_m_db, _m_cmd_stream.str(), std::move(val_map)};
 			}
 
 		inline void database::begin_transaction() {
 			assert(!in_transaction);
 			in_transaction = true;
-			if (!begin_transaction_statement) {
-				begin_transaction_statement = (statement_builder{*this, 0} << "BEGIN TRANSACTION").compile();
-			}
-			begin_transaction_statement->execute();
+			begin_transaction_statement.step();
 		}
 		inline void database::end_transaction() {
 			assert(in_transaction);
 			in_transaction = false;
-			if (!end_transaction_statement) {
-				end_transaction_statement = (statement_builder{*this, 0} << "END TRANSACTION").compile();
-			}
-			end_transaction_statement->execute();
+			end_transaction_statement.step();
 		}
 
-		inline statement::statement(database& db, std::string cmd, std::vector<value> val_map)
-				: _m_db{std::ref(db)}
-				, _m_val_map{val_map}
+		inline statement::statement(database& db, std::string&& cmd, std::vector<value>&& val_map)
+				: _m_val_map{std::move(val_map)}
 				, _m_stmt{nullptr}
 			{
-				int rc = sqlite3_prepare_v2(_m_db.get()._m_db, cmd.c_str(), cmd.size(), &_m_stmt, nullptr);
-				sqlite_error_to_exception(rc, "prepare stmt");
+				int rc = sqlite3_prepare_v2(db._m_db, cmd.c_str(), cmd.size(), &_m_stmt, nullptr);
+				sqlite_error_to_exception(rc, "prepare stmt", cmd);
+
 				for (auto& value : _m_val_map) {
 					if (value.has_data()) {
 						set(std::move(value));
 					}
 				}
 			}
+
+		inline database::database(std::string&& url)
+				: _m_url{std::move(url)}
+				, in_transaction{({
+					int rc = sqlite3_open(url.c_str(), &_m_db);
+					sqlite_error_to_exception(rc, "open database");
+					false;
+				})}
+				, begin_transaction_statement{std::move(statement_builder{*this} << keyword::BEGIN_TRANSACTION).compile()}
+				, end_transaction_statement{std::move(statement_builder{*this} << keyword::END_TRANSACTION).compile()}
+			{ }
 	}
 }

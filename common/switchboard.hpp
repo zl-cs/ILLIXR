@@ -11,6 +11,7 @@
 #include <functional>
 #include <chrono>
 #include <exception>
+#include <pthread.h>
 #include "plugin.hpp"
 #include "phonebook.hpp"
 #include "cpu_timer/cpu_timer.hpp"
@@ -154,7 +155,10 @@ private:
         // so it is destructed before the data it uses.
         managed_thread _m_thread;
 
-        void thread_on_start() { }
+        void thread_on_start() {
+			std::string name = "s" + std::to_string(_m_plugin_id) + _m_topic_name.substr(0, 12);
+			pthread_setname_np(pthread_self(), name.c_str());
+		}
 
         void thread_body() {
             // Try to pull event off of queue
@@ -163,6 +167,7 @@ private:
             // Note the use of timed blocking wait
             if (_m_queue.wait_dequeue_timed(_m_ctok, this_event, timeout_usecs)) {
 				CPU_TIMER_TIME_BLOCK("callback");
+				assert(this_event && "somehow, null data on switchboard");
                 // Process event
 				_m_dequeued++;
                 // std::cerr << "deq " << ptr_to_str(reinterpret_cast<const void*>(this_event.get())) << " " << this_event.use_count() << " v\n";
@@ -177,7 +182,7 @@ private:
                 ptr<const event> this_event;
                 for (std::size_t i = 0; i < unprocessed; ++i) {
                     [[maybe_unused]] bool ret = _m_queue.try_dequeue(_m_ctok, this_event);
-                    assert(ret);
+                    assert(ret && "try_dequeue failed");
                     // std::cerr << "deq (stopping) " << ptr_to_str(reinterpret_cast<const void*>(this_event.get())) << " " << this_event.use_count() << " v\n";
                     this_event.reset();
                 }
@@ -206,9 +211,9 @@ private:
          */
         void enqueue(ptr<const event>&& this_event) {
 			CPU_TIMER_TIME_FUNCTION();
-            assert (_m_thread.get_state() == managed_thread::state::running);
+            assert (_m_thread.get_state() == managed_thread::state::running && "Subscriber thread must be already running");
 			[[maybe_unused]] bool ret = _m_queue.enqueue(std::move(this_event));
-			assert(ret);
+			assert(ret && "enqueue failed");
 			_m_enqueued++;
         }
     };
@@ -269,8 +274,7 @@ private:
          * Thread-safe
          */
         void put(ptr<const event>&& this_event) {
-			assert(this_event);
-			assert(this_event.unique());
+			assert(this_event && "Can't push null data to a topic.");
 
 			// In alternative implementations of Switchboard,
 			// serial_no may be associated with the data, perhaps set by allocate(...)
@@ -331,15 +335,15 @@ public:
     class reader {
     private:
         /// Reference to the underlying topic
-        topic& _m_topic;
+        std::reference_wrapper<topic> _m_topic;
 
     public:
         reader(topic& topic_)
             : _m_topic{topic_}
         {
 #ifndef NDEBUG
-            if (typeid(specific_event) != _m_topic.ty()) {
-                std::cerr << "topic '" << _m_topic.name() << "' holds type " << _m_topic.ty().name() << ", but caller used type" << typeid(specific_event).name() << std::endl;
+            if (typeid(specific_event) != _m_topic.get().ty()) {
+                std::cerr << "topic '" << _m_topic.get().name() << "' holds type " << _m_topic.get().ty().name() << ", but caller used type" << typeid(specific_event).name() << std::endl;
                 abort();
             }
 #endif
@@ -351,11 +355,11 @@ public:
         * This will return null if no event is on the topic yet.
         */
        ptr<const specific_event> get_ro_nullable() const noexcept {
-          ptr<const event> this_event = _m_topic.get();
+          ptr<const event> this_event = _m_topic.get().get();
           ptr<const specific_event> this_specific_event = std::dynamic_pointer_cast<const specific_event>(this_event);
 
            if (this_event != nullptr) {
-			   assert(this_specific_event /* Otherwise, dynamic cast failed; dynamic type information could be wrong*/);
+			   assert(this_specific_event && "dynamic cast failed; dynamic type information could be wrong");
                return this_specific_event;
            } else {
                return ptr<const specific_event>{nullptr};
@@ -364,23 +368,15 @@ public:
 
        /**
         * @brief Gets a non-null "read-only" copy of the latest value.
-        *
-        * @throws `runtime_error` If no event is on the topic yet.
         */
         ptr<const specific_event> get_ro() const {
            ptr<const specific_event> this_specific_event = get_ro_nullable();
-           if (this_specific_event != nullptr) {
-               return this_specific_event;
-           } else {
-               /// Otherwise, no event on the topic yet
-               throw std::runtime_error("No event on topic");
-           }
+		   assert(this_specific_event && "No event on topic yet");
+		   return this_specific_event;
         }
 
        /**
         * @brief Gets a non-null mutable copy of the latest value.
-        *
-        * @throws `runtime_error` If no event is on the topic yet.
         */
         ptr<specific_event> get_rw() const {
            /*
@@ -402,22 +398,26 @@ public:
     class writer {
     private:
         // Reference to the underlying topic
-        topic& _m_topic;
+        std::reference_wrapper<topic> _m_topic;
 
     public:
         writer(topic& topic_)
             : _m_topic{topic_}
-        { }
+        {
+#ifndef NDEBUG
+            if (typeid(specific_event) != _m_topic.get().ty()) {
+                std::cerr << "topic '" << _m_topic.get().name() << "' holds type " << _m_topic.get().ty().name() << ", but caller used type" << typeid(specific_event).name() << std::endl;
+                abort();
+            }
+#endif
+		}
 
         /**
          * @brief Publish @p ev to this topic.
          */
          void put(const specific_event* this_specific_event) {
-			assert(typeid(specific_event) == _m_topic.ty());
-			assert(this_specific_event);
 			ptr<const event> this_event {static_cast<const event*>(this_specific_event)};
-			assert(this_event.unique());
-			_m_topic.put(std::move(this_event));
+			_m_topic.get().put(std::move(this_event));
         }
 
         /**
@@ -440,12 +440,8 @@ public:
          * @brief Publish @p ev to this topic.
          */
 		void put(ptr<specific_event>&& this_specific_event) {
-			assert(typeid(specific_event) == _m_topic.ty());
-			assert(this_specific_event);
-			assert(this_specific_event.unique());
-			ptr<event> this_event = std::const_pointer_cast<const event>(std::static_pointer_cast<specific_event>(std::move(this_specific_event)));
-			assert(this_event.unique());
-			_m_topic.put(std::move(this_event));
+			ptr<const event> this_event = std::const_pointer_cast<const event>(std::static_pointer_cast<event>(std::move(this_specific_event)));
+			_m_topic.get().put(std::move(this_event));
         }
 
         /**
@@ -506,15 +502,12 @@ public:
      * Switchboard maintains a threadpool to call @p fn.
      *
      * This is safe to be called from any thread.
-     *
-     * @throws if topic already exists and its type does not match the @p event.
      */
     template <typename specific_event>
     void schedule(plugin_id_t plugin_id, std::string topic_name, std::function<void(ptr<const specific_event>&&, std::size_t)> fn) {
         try_register_topic<specific_event>(topic_name).schedule(plugin_id, [=](ptr<const event>&& this_event, std::size_t it_no) {
-            assert(this_event);
             ptr<const specific_event> this_specific_event = std::dynamic_pointer_cast<const specific_event>(std::move(this_event));
-            assert(this_specific_event);
+            assert(this_specific_event && "dynamically downcasting event -> specific_event failed");
             fn(std::move(this_specific_event), it_no);
         });
     }
@@ -523,8 +516,6 @@ public:
      * @brief Gets a handle to publish to the topic @p topic_name.
      *
      * This is safe to be called from any thread.
-     *
-     * @throws If topic already exists, and its type does not match the @p event.
      */
     template <typename specific_event>
     writer<specific_event> get_writer(const std::string& topic_name) {
@@ -535,8 +526,6 @@ public:
      * @brief Gets a handle to read to the latest value from the topic @p topic_name.
      *
      * This is safe to be called from any thread.
-     *
-     * @throws If topic already exists, and its type does not match the @p event.
      */
     template <typename specific_event>
     reader<specific_event> get_reader(const std::string& topic_name) {

@@ -50,7 +50,7 @@
 #include "global_state.hpp"
 namespace cpu_timer {
 
-	using Frames = std::deque<detail::Frame>;
+	using Frames = detail::Frames;
 	using Frame = detail::Frame;
 	using CpuNs = detail::CpuTime;
 	using WallNs = detail::WallTime;

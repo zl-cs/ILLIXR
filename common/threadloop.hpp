@@ -60,6 +60,8 @@ protected:
 private:
 
 	void thread_setup() {
+		std::string threadname = "t_" + name.substr(0, 13);
+		pthread_setname_np(pthread_self(), threadname.c_str());
 		_p_thread_setup();
 	}
 
