@@ -70,6 +70,7 @@ public:
 	}
 
 	void draw_GUI() {
+		CPU_TIMER_TIME_FUNCTION();
 		// Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -193,6 +194,7 @@ public:
 	}
 
 	bool load_camera_images(){
+		CPU_TIMER_TIME_FUNCTION();
 		if(last_datum_with_images == NULL){
 			return false;
 		}
@@ -268,6 +270,8 @@ public:
 			} else {
 				beingDragged = false;
 			}
+
+			CPU_TIMER_TIME_BLOCK("draw_scene");
 
 			view_euler.y() += mouse_velocity.x() * 0.002f;
 			view_euler.x() += mouse_velocity.y() * 0.002f;

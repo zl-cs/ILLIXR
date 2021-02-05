@@ -23,9 +23,12 @@ public:
 		: _m_path(path)
 	{ }
 	cv::Mat load() const {
-		cv::Mat img{cv::imread(_m_path, cv::IMREAD_GRAYSCALE)};
-		assert(!img.empty());
-		return img;
+		{
+			CPU_TIMER_TIME_BLOCK("cv::imread");
+			cv::Mat img{cv::imread(_m_path, cv::IMREAD_GRAYSCALE)};
+			assert(!img.empty());
+			return img;
+		}
 	}
 
 private:

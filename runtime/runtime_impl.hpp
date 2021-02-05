@@ -1,6 +1,7 @@
 #include <chrono>
 #include <deque>
 #include <thread>
+#include <opencv2/core/utility.hpp>
 #include "common/runtime.hpp"
 #include "common/extended_window.hpp"
 #include "common/dynamic_lib.hpp"
@@ -15,6 +16,7 @@ using namespace ILLIXR;
 class runtime_impl : public runtime {
 public:
 	runtime_impl(GLXContext appGLCtx) {
+		cv::setNumThreads(4);
 		pb.register_impl<gen_guid>(std::make_shared<gen_guid>());
 		pb.register_impl<switchboard>(std::make_shared<switchboard>(&pb));
 		pb.register_impl<xlib_gl_extended_window>(std::make_shared<xlib_gl_extended_window>(448*2, 320*2, appGLCtx));
