@@ -17,33 +17,9 @@
 #include "cpu_timer/cpu_timer.hpp"
 #include "managed_thread.hpp"
 #include "../runtime/concurrentqueue/blockingconcurrentqueue.hpp"
+#include "frame_info.hpp"
 
 namespace ILLIXR {
-
-
-
-	class switchboard_subscriber_marker {
-	public:
-		size_t plugin_id;
-		std::string topic_name;
-
-		switchboard_subscriber_marker(size_t plugin_id_, std::string topic_name_)
-			: plugin_id{plugin_id_}
-			, topic_name{std::move(topic_name_)}
-		{ }
-	};
-
-	class switchboard_data_marker {
-	public:
-		size_t serial_no;
-		std::string topic_name;
-
-		switchboard_data_marker(size_t serial_no_, std::string topic_name_)
-			: serial_no{serial_no_}
-			, topic_name{std::move(topic_name_)}
-		{ }
-	};
-
 /**
  * @brief A manager for typesafe, threadsafe, named event-streams (called
  * topics).
@@ -198,7 +174,7 @@ private:
 				[this]{this->thread_body();},
 				[this]{this->thread_on_start();},
 				[this]{this->thread_on_stop();},
-				cpu_timer::make_type_eraser<switchboard_subscriber_marker>(_m_plugin_id, _m_topic_name)
+				cpu_timer::make_type_eraser<FrameInfo>(_m_plugin_id, _m_topic_name, 0)
 			}
         {
             _m_thread.start();
@@ -260,7 +236,7 @@ private:
          */
         ptr<const event> get() const {
 			size_t serial_no = _m_latest_index.load();
-			CPU_TIMER_TIME_EVENT_INFO(false, false, "get", cpu_timer::make_type_eraser<switchboard_data_marker>(serial_no, _m_name));
+			CPU_TIMER_TIME_EVENT_INFO(false, false, "get", cpu_timer::make_type_eraser<FrameInfo>(0, _m_name, serial_no));
 			ptr<const event> this_event = _m_latest_buffer[serial_no % _m_latest_buffer_size];
 			// if (this_event) {
 			// 	std::cerr << "get " << ptr_to_str(reinterpret_cast<const void*>(this_event.get())) << " " << this_event.use_count() << "v \n";
@@ -285,7 +261,7 @@ private:
 			// Otherwise, readers (looking at _m_latest_index) would race with this write.
 			// I will assume one writer, so no two writers get the same serial_no.
 			_m_latest_index++;
-			CPU_TIMER_TIME_EVENT_INFO(false, false, "put", cpu_timer::make_type_eraser<switchboard_data_marker>(serial_no, _m_name));
+			CPU_TIMER_TIME_EVENT_INFO(false, false, "put", cpu_timer::make_type_eraser<FrameInfo>(0, _m_name, serial_no));
 
             // Read/write on _m_subscriptions.
             // Must acquire shared state on _m_subscriptions_lock

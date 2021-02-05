@@ -6,17 +6,10 @@
 #include <algorithm>
 #include "plugin.hpp"
 #include "managed_thread.hpp"
+#include "frame_info.hpp"
 #include "cpu_timer/cpu_timer.hpp"
 
 namespace ILLIXR {
-
-	class threadloop_marker {
-	public:
-		plugin_id_t plugin_id;
-		threadloop_marker(plugin_id_t plugin_id_)
-			: plugin_id{plugin_id_}
-		{ }
-	};
 
 /**
  * @brief A reusable threadloop for plugins.
@@ -33,7 +26,7 @@ public:
 			[this]{this->thread_main();},
 			[this]{this->thread_setup();},
 			nullptr,
-			cpu_timer::make_type_eraser<threadloop_marker>(id)
+			cpu_timer::make_type_eraser<FrameInfo>(id, "", 0)
 		}
 	{ }
 

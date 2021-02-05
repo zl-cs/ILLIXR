@@ -1,13 +1,13 @@
+#pragma once
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <sstream>
 #include <variant>
 #include <vector>
 
 #include <boost/filesystem.hpp>
 #include <sqlite3.h>
-
-#include "common/switchboard.hpp"
 
 namespace ILLIXR {
 
@@ -16,7 +16,7 @@ namespace ILLIXR {
 		class statement_builder;
 		class statement;
 
-		void sqlite_error_to_exception(int rc, const char* activity, std::string info = std::string{}) {
+		static void sqlite_error_to_exception(int rc, const char* activity, std::string info = std::string{}) {
 			if (rc != SQLITE_OK && rc != SQLITE_ROW && rc != SQLITE_DONE) {
 				std::cerr << activity << ": " << sqlite3_errstr(rc) << ": " << info << std::endl;
 				assert(0);
@@ -43,39 +43,33 @@ namespace ILLIXR {
 			bool operator==(const type& other) const {
 				return this == &other;
 			}
-
-			static type NULL_;
-			static type INTEGER;
-			static type REAL;
-			static type TEXT;
-			static type BLOB;
 		};
-		type type::NULL_ = {"NULL", "NULL_"};
-		type type::INTEGER = {"INTEGER"};
-		type type::REAL = {"REAL"};
-		type type::TEXT = {"TEXT"};
-		type type::BLOB = {"BLOB"};
+		static const type type_NULL {"NULL", "NULL"};
+		static const type type_INTEGER {"INTEGER"};
+		static const type type_REAL {"REAL"};
+		static const type type_TEXT {"TEXT"};
+		static const type type_BLOB {"BLOB"};
 
-		std::ostream& operator<<(std::ostream& os, const type& type_) {
-			return os << "type::" << type_.get_cpp_name();
+		static std::ostream& operator<<(std::ostream& os, const type& type_) {
+			return os << "type_" << type_.get_cpp_name();
 		}
 
 		class field {
 		private:
 			std::string _m_name;
-			const type& _m_type;
+			const type* _m_type;
 
 		public:
 			field(std::string&& name, const type& type)
 				: _m_name{name}
-				, _m_type{type}
+				, _m_type{&type}
 			{ }
 
 			const std::string& get_name() const { return _m_name; }
-			const type& get_type() const { return _m_type; }
+			const type& get_type() const { return *_m_type; }
 		};
 
-		std::ostream& operator<<(std::ostream& os, const field& field_) {
+		static std::ostream& operator<<(std::ostream& os, const field& field_) {
 			return os << "field{" << field_.get_name() << ", " << field_.get_type() << "}";
 		}
 
@@ -89,10 +83,16 @@ namespace ILLIXR {
 				: _m_fields{std::move(fields)}
 			{ }
 
+			schema operator+(const schema& other) const {
+				std::vector<field> resulting_fields {_m_fields.cbegin(), _m_fields.cend()};
+				resulting_fields.insert(resulting_fields.end(), other._m_fields.cbegin(), other._m_fields.cend());
+				return schema{std::move(resulting_fields)};
+			}
+
 			const std::vector<field>& get_fields() const { return _m_fields; }
 		};
 
-		std::ostream& operator<<(std::ostream& os, const schema& schema_) {
+		static std::ostream& operator<<(std::ostream& os, const schema& schema_) {
 			os << "schema{{";
 			bool first = true;
 			for (const field& field : schema_.get_fields()) {
@@ -107,7 +107,7 @@ namespace ILLIXR {
 
 		class value {
 		public:
-			using value_variant = std::variant<uint64_t, double, std::string, std::vector<char>, std::nullptr_t, bool>;
+			using value_variant = std::variant<uint64_t, double, std::string_view, std::vector<char>, std::nullptr_t, bool>;
 		private:
 			std::reference_wrapper<const type> _m_type;
 			value_variant _m_data;
@@ -116,12 +116,12 @@ namespace ILLIXR {
 		public:
 			value(value_variant&& data, size_t id = no_id)
 				: _m_type{
-					std::holds_alternative<uint64_t>(data) ? std::cref(type::INTEGER) :
-					std::holds_alternative<double>(data) ? std::cref(type::REAL) :
-					std::holds_alternative<std::string>(data) ? std::cref(type::TEXT) :
-					std::holds_alternative<std::vector<char>>(data) ? std::cref(type::BLOB) :
-					std::holds_alternative<std::nullptr_t>(data) ? std::cref(type::NULL_) :
-					({assert(0 && "Unknown type"); std::cref(type::NULL_);})
+					std::holds_alternative<uint64_t>(data) ? std::cref(type_INTEGER) :
+					std::holds_alternative<double>(data) ? std::cref(type_REAL) :
+					std::holds_alternative<std::string_view>(data) ? std::cref(type_TEXT) :
+					std::holds_alternative<std::vector<char>>(data) ? std::cref(type_BLOB) :
+					std::holds_alternative<std::nullptr_t>(data) ? std::cref(type_NULL) :
+					({assert(0 && "Unknown type"); std::cref(type_NULL);})
 				}
 				, _m_data{false}
 				, _m_id{id}
@@ -151,15 +151,15 @@ namespace ILLIXR {
 			void set_data(value_variant&& data) {
 				assert(!slot_filled());
 				if (false) {
-				} else if (_m_type.get() == type::INTEGER) {
+				} else if (_m_type.get() == type_INTEGER) {
 					assert(std::holds_alternative<uint64_t>(data));
-				} else if (_m_type.get() == type::REAL) {
+				} else if (_m_type.get() == type_REAL) {
 					assert(std::holds_alternative<double>(data));
-				} else if (_m_type.get() == type::TEXT) {
-					assert(std::holds_alternative<std::string>(data));
-				} else if (_m_type.get() == type::BLOB) {
+				} else if (_m_type.get() == type_TEXT) {
+					assert(std::holds_alternative<std::string_view>(data));
+				} else if (_m_type.get() == type_BLOB) {
 					assert(std::holds_alternative<std::vector<char>>(data));
-				} else if (_m_type.get() == type::NULL_) {
+				} else if (_m_type.get() == type_NULL) {
 					assert(std::holds_alternative<std::nullptr_t>(data));
 				} else {
 					assert(0 && "Unkown type");
@@ -196,19 +196,19 @@ namespace ILLIXR {
 			void bind(value var) {
 				int rc = 0;
 				if (false) {
-				} else if (&var.get_type() == &type::INTEGER) {
+				} else if (&var.get_type() == &type_INTEGER) {
 					auto data = std::get<uint64_t>(var.get_data());
 					rc = sqlite3_bind_int64(_m_stmt, var.get_id() + 1, data);
-				} else if (&var.get_type() == &type::REAL) {
+				} else if (&var.get_type() == &type_REAL) {
 					auto data = std::get<double>(var.get_data());
 					rc = sqlite3_bind_double(_m_stmt, var.get_id() + 1, data);
-				} else if (&var.get_type() == &type::TEXT) {
-					const auto& data = std::get<std::string>(var.get_data());
-					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.c_str(), data.size(), SQLITE_TRANSIENT);
-				} else if (&var.get_type() == &type::BLOB) {
+				} else if (&var.get_type() == &type_TEXT) {
+					const auto& data = std::get<std::string_view>(var.get_data());
+					rc = sqlite3_bind_text(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_STATIC);
+				} else if (&var.get_type() == &type_BLOB) {
 					const auto& data = std::get<std::vector<char>>(var.get_data());
 					rc = sqlite3_bind_blob(_m_stmt, var.get_id() + 1, data.data(), data.size(), SQLITE_TRANSIENT);
-				} else if (&var.get_type() == &type::NULL_) {
+				} else if (&var.get_type() == &type_NULL) {
 					rc = sqlite3_bind_null(_m_stmt, var.get_id() + 1);
 				} else {
 					assert(0 && "Unkown type");
@@ -299,7 +299,7 @@ namespace ILLIXR {
 			void end_transaction();
 		};
 
-		std::ostream& operator<<(std::ostream& os, const database& db) {
+		static std::ostream& operator<<(std::ostream& os, const database& db) {
 			return os << "database{\"" << db.get_url() << "\"}";
 		}
 
@@ -316,18 +316,12 @@ namespace ILLIXR {
 				: sql{sql_}
 			{ }
 			const std::string_view get_sql() const { return sql; }
-
-			static keyword CREATE_TABLE;
-			static keyword INSERT_INTO;
-			static keyword VALUES;
-			static keyword BEGIN_TRANSACTION;
-			static keyword END_TRANSACTION;
 		};
-		keyword keyword::CREATE_TABLE {"CREATE TABLE"};
-		keyword keyword::INSERT_INTO {"INSERT INTO"};
-		keyword keyword::VALUES {"VALUES"};
-		keyword keyword::BEGIN_TRANSACTION {"BEGIN TRANSACTION"};
-		keyword keyword::END_TRANSACTION {"END TRANSACTION"};
+		static const keyword keyword_CREATE_TABLE {"CREATE TABLE"};
+		static const keyword keyword_INSERT_INTO {"INSERT INTO"};
+		static const keyword keyword_VALUES {"VALUES"};
+		static const keyword keyword_BEGIN_TRANSACTION {"BEGIN TRANSACTION"};
+		static const keyword keyword_END_TRANSACTION {"END TRANSACTION"};
 
 		class statement_builder {
 		private:
@@ -428,7 +422,7 @@ namespace ILLIXR {
 
 			statement create_insert_statement() {
 				statement_builder builder {_m_db.get()};
-				builder << keyword::INSERT_INTO << _m_name << keyword::VALUES << sentinel::LEFT_PARENS;
+				builder << keyword_INSERT_INTO << _m_name << keyword_VALUES << sentinel::LEFT_PARENS;
 				for (const field& field : _m_schema.get_fields()) {
 					builder << value::placeholder(field.get_type()) << sentinel::COMMA;
 				}
@@ -477,13 +471,13 @@ namespace ILLIXR {
 
 		};
 
-		std::ostream& operator<<(std::ostream& os, const table& table) {
+		[[maybe_unused]] static std::ostream& operator<<(std::ostream& os, const table& table) {
 			return os << "table{" << table.get_db() << ", " << table.get_schema() << "}";
 		}
 
 		inline table database::create_table(std::string&& name, schema&& schema) {
 				statement_builder statement_builder {*this};
-				statement_builder << keyword::CREATE_TABLE << name << sentinel::LEFT_PARENS;
+				statement_builder << keyword_CREATE_TABLE << name << sentinel::LEFT_PARENS;
 				for (const field& field : schema.get_fields()) {
 					statement_builder << field.get_name() << field.get_type().get_name() << sentinel::COMMA;
 				}
@@ -535,8 +529,8 @@ namespace ILLIXR {
 				: _m_url{std::move(url)}
 				, _m_db{open_db(_m_url.c_str())}
 				, in_transaction{false}
-				, begin_transaction_statement{std::move(statement_builder{*this} << keyword::BEGIN_TRANSACTION).compile()}
-				, end_transaction_statement{std::move(statement_builder{*this} << keyword::END_TRANSACTION).compile()}
+				, begin_transaction_statement{std::move(statement_builder{*this} << keyword_BEGIN_TRANSACTION).compile()}
+				, end_transaction_statement{std::move(statement_builder{*this} << keyword_END_TRANSACTION).compile()}
 			{ }
 	}
 }

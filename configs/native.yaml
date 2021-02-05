@@ -14,5 +14,4 @@ demo_data: demo_data/
 loader:
   kimera_path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO/
   name: native
-  command: gdb -q --args env ILLIXR_RUN_DURATION=5 %a
-profile: dbg
+profile: opt
