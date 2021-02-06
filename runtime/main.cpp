@@ -29,7 +29,7 @@ private:
 };
 
 int main(int argc, char* const* argv) {
-	r = ILLIXR::runtime_factory(nullptr);
+	r = ILLIXR::runtime_factory();
 
 	std::vector<std::string> lib_paths;
 	std::transform(argv + 1, argv + argc, std::back_inserter(lib_paths), [](const char* arg) {
