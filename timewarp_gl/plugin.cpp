@@ -364,19 +364,14 @@ public:
 	}
 
 	virtual void warp([[maybe_unused]] float time) {
+		{
+			CPU_TIMER_TIME_BLOCK("glxMakeCurrent");
 		glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc);
-
-		glBindFramebuffer(GL_FRAMEBUFFER,0);
-		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-		glClearColor(0, 0, 0, 0);
-    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-		glDepthFunc(GL_LEQUAL);
+		}
 
 		auto most_recent_frame = _m_eyebuffer.get();
-
-		// Use the timewarp program
-		glUseProgram(timewarpShaderProgram);
-
+		{
+			CPU_TIMER_TIME_BLOCK("matrix math");
 		//double cursor_x, cursor_y;
 		//glfwGetCursorPos(window, &cursor_x, &cursor_y);
 
@@ -418,6 +413,18 @@ public:
 
 		glUniformMatrix4fv(tw_start_transform_unif, 1, GL_FALSE, (GLfloat*)(timeWarpStartTransform4x4.data()));
 		glUniformMatrix4fv(tw_end_transform_unif, 1, GL_FALSE,  (GLfloat*)(timeWarpEndTransform4x4.data()));
+		}
+
+		{
+		CPU_TIMER_TIME_BLOCK("FBO");
+		glBindFramebuffer(GL_FRAMEBUFFER,0);
+		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+		glClearColor(0, 0, 0, 0);
+    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glDepthFunc(GL_LEQUAL);
+
+		// Use the timewarp program
+		glUseProgram(timewarpShaderProgram);
 
 		// Debugging aid, toggle switch for rendering in the fragment shader
 		glUniform1i(glGetUniformLocation(timewarpShaderProgram, "ArrayIndex"), 0);
@@ -430,9 +437,12 @@ public:
 		#endif
 
 		glBindVertexArray(tw_vao);
+		}
 
 		GLuint query;
 		GLuint64 elapsed_time = 0;
+		{
+			CPU_TIMER_TIME_BLOCK("OpenGL query");
 		glGenQueries(1, &query);
 		glBeginQuery(GL_TIME_ELAPSED, query);
 
@@ -483,6 +493,7 @@ public:
 		}
 
 		glEndQuery(GL_TIME_ELAPSED);
+	}
 
 #ifndef NDEBUG
 		auto delta = std::chrono::high_resolution_clock::now() - most_recent_frame->render_time;
@@ -518,9 +529,12 @@ public:
 		// wait until the query result is available
 		int done = 0;
 		glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
+		{
+		CPU_TIMER_TIME_BLOCK("glGetQueryObjectiv spin loop");
 		while (!done) {
 			std::this_thread::yield();
 			glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
+		}
 		}
 
 		// get the query result
