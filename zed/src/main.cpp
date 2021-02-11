@@ -24,6 +24,7 @@ typedef struct {
     cv::Mat* rgb;
     cv::Mat* depth;
     std::size_t serial_no;
+	ullong timestamp;
 } cam_type;
 
 std::shared_ptr<Camera> start_camera() {
@@ -117,6 +118,7 @@ protected:
             new cv::Mat{rgb_ocv},
             new cv::Mat{depth_ocv},
             iteration_no,
+			zedm->getTimestamp(sl::TIME_REFERENCE::IMAGE),
         });
     }
 };
@@ -139,7 +141,9 @@ public:
         , _m_cam_type{sb->subscribe_latest<cam_type>("cam_type")}
         , _m_imu_integrator{sb->publish<imu_integrator_seq>("imu_integrator_seq")}
         , it_log{record_logger_}
+		, output{"imu_cam.csv"}
     {
+		output << "rt,imu_t,cam_t\n";
         camera_thread_.start();
     }
 
@@ -178,6 +182,10 @@ protected:
         cv::Mat* depth = nullptr;
         cv::Mat* rgb = nullptr;
 
+		output
+			<< std::chrono::nanoseconds{std::chrono::system_clock::now()}.count() << ','
+			<< imu_time << ',';
+
         const cam_type* c = _m_cam_type->get_latest_ro();
         if (c && c->serial_no != last_serial_no) {
             last_serial_no = c->serial_no;
@@ -185,6 +193,7 @@ protected:
             img1 = c->img1;
             depth = c->depth;
             rgb = c->rgb;
+			output << c->timestamp;
         }
 
         it_log.log(record{__imu_cam_record, {
