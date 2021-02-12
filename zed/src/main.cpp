@@ -3,6 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <cmath>
 #include <zed_opencv.hpp>
+#include <chrono>
 
 //ILLIXR includes
 #include "common/threadloop.hpp"
@@ -98,7 +99,7 @@ protected:
             return skip_option::run;
         } else {
             return skip_option::skip_and_spin;
-        }
+        }		
     }
 
     virtual void _p_one_iteration() override {
@@ -183,7 +184,7 @@ protected:
         cv::Mat* rgb = nullptr;
 
 		output
-			<< std::chrono::nanoseconds{std::chrono::system_clock::now()}.count() << ','
+			<< std::chrono::nanoseconds{std::chrono::system_clock::now().time_since_epoch()}.count() << ','
 			<< imu_time << ',';
 
         const cam_type* c = _m_cam_type->get_latest_ro();
@@ -250,6 +251,7 @@ private:
 
     // Logger
     record_coalescer it_log;
+	std::ofstream output;
 };
 
 // This line makes the plugin importable by Spindle
