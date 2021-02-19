@@ -24,6 +24,8 @@ script_path="runner/runner/main.py"
 script_args="${@}"
 venv_name="illixr-runner"
 
+export ILLIXR_INTEGRATION=yes
+
 
 ### Launch application
 
