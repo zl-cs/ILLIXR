@@ -532,7 +532,7 @@ public:
 		{
 		CPU_TIMER_TIME_BLOCK("glGetQueryObjectiv spin loop");
 		while (!done) {
-			std::this_thread::yield();
+			std::this_thread::sleep_for(std::chrono::milliseconds{1});
 			glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &done);
 		}
 		}

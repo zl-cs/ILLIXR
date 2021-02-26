@@ -20,7 +20,7 @@ public:
 
 	virtual void start() override {
 		plugin::start();
-		sb->schedule<imu_cam_type>(id, "imu_cam", [this](switchboard::ptr<const imu_cam_type> datum, std::size_t) {
+		sb->schedule<imu_cam_type>(get_name(), "imu_cam", [this](switchboard::ptr<const imu_cam_type> datum, std::size_t) {
 			this->feed_ground_truth(datum);
 		});
 	}

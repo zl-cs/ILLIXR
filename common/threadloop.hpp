@@ -26,7 +26,7 @@ public:
 			[this]{this->thread_main();},
 			[this]{this->thread_setup();},
 			nullptr,
-			cpu_timer::make_type_eraser<FrameInfo>(id, "", 0)
+			cpu_timer::make_type_eraser<FrameInfo>(get_name(), "", 0)
 		}
 	{ }
 

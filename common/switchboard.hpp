@@ -57,7 +57,7 @@ namespace ILLIXR {
  * }
  * 
  * // Read topic 3 synchronously
- * switchboard.schedule<topic3_type>(plugin_id, "topic3", [&](switchboard::ptr<topic3_type> event3, std::size_t it) {
+ * switchboard.schedule<topic3_type>("name for report", "topic3", [&](switchboard::ptr<topic3_type> event3, std::size_t it) {
  *     // This is a lambda expression
  *     // https://en.cppreference.com/w/cpp/language/lambda
  *     std::cout << "Got a new event on topic3: " << event3->foo << " for iteration " << it << std::endl;
@@ -118,7 +118,7 @@ private:
     class topic_subscription {
     private:
         const std::string& _m_topic_name;
-        plugin_id_t _m_plugin_id;
+        std::string _m_account_name;
         std::function<void(ptr<const event>&&, std::size_t)> _m_callback;
         moodycamel::BlockingConcurrentQueue<ptr<const event>> _m_queue {8 /*max size estimate*/};
         moodycamel::ConsumerToken _m_ctok {_m_queue};
@@ -132,7 +132,7 @@ private:
         managed_thread _m_thread;
 
         void thread_on_start() {
-			std::string name = "s" + std::to_string(_m_plugin_id) + _m_topic_name.substr(0, 12);
+			std::string name = "s" + _m_account_name + _m_topic_name.substr(0, 12);
 			pthread_setname_np(pthread_self(), name.c_str());
 		}
 
@@ -166,15 +166,15 @@ private:
         }
 
     public:
-        topic_subscription(const std::string& topic_name, plugin_id_t plugin_id, std::function<void(ptr<const event>&&, std::size_t)> callback)
+        topic_subscription(const std::string& topic_name, std::string account_name, std::function<void(ptr<const event>&&, std::size_t)> callback)
             : _m_topic_name{topic_name}
-            , _m_plugin_id{plugin_id}
+            , _m_account_name{account_name}
             , _m_callback{callback}
             , _m_thread{
 				[this]{this->thread_body();},
 				[this]{this->thread_on_start();},
 				[this]{this->thread_on_stop();},
-				cpu_timer::make_type_eraser<FrameInfo>(_m_plugin_id, _m_topic_name, 0)
+				cpu_timer::make_type_eraser<FrameInfo>(_m_account_name, _m_topic_name, 0)
 			}
         {
             _m_thread.start();
@@ -236,7 +236,7 @@ private:
          */
         ptr<const event> get() const {
 			size_t serial_no = _m_latest_index.load();
-			CPU_TIMER_TIME_EVENT_INFO(false, false, "get", cpu_timer::make_type_eraser<FrameInfo>(0, _m_name, serial_no));
+			CPU_TIMER_TIME_EVENT_INFO(false, false, "get", cpu_timer::make_type_eraser<FrameInfo>("", _m_name, serial_no));
 			ptr<const event> this_event = _m_latest_buffer[serial_no % _m_latest_buffer_size];
 			// if (this_event) {
 			// 	std::cerr << "get " << ptr_to_str(reinterpret_cast<const void*>(this_event.get())) << " " << this_event.use_count() << "v \n";
@@ -261,7 +261,7 @@ private:
 			// Otherwise, readers (looking at _m_latest_index) would race with this write.
 			// I will assume one writer, so no two writers get the same serial_no.
 			_m_latest_index++;
-			CPU_TIMER_TIME_EVENT_INFO(false, false, "put", cpu_timer::make_type_eraser<FrameInfo>(0, _m_name, serial_no));
+			CPU_TIMER_TIME_EVENT_INFO(false, false, "put", cpu_timer::make_type_eraser<FrameInfo>("", _m_name, serial_no));
 
             // Read/write on _m_subscriptions.
             // Must acquire shared state on _m_subscriptions_lock
@@ -275,18 +275,18 @@ private:
         }
 
         /**
-         * @brief Schedules @p callback on the topic (@p plugin_id is for accounting)
+         * @brief Schedules @p callback on the topic (@p account_name is for accounting)
          *
          * Thread-safe
          */
         void schedule(
-            plugin_id_t plugin_id,
+            std::string account_name,
             std::function<void(ptr<const event>&&, std::size_t)> callback)
         {
             // Write on _m_subscriptions.
             // Must acquire unique state on _m_subscriptions_lock
             const std::unique_lock lock{_m_subscriptions_lock};
-            _m_subscriptions.emplace_back(_m_name, plugin_id, callback);
+            _m_subscriptions.emplace_back(_m_name, account_name, callback);
         }
 
         /**
@@ -480,8 +480,8 @@ public:
      * This is safe to be called from any thread.
      */
     template <typename specific_event>
-    void schedule(plugin_id_t plugin_id, std::string topic_name, std::function<void(ptr<const specific_event>&&, std::size_t)> fn) {
-        try_register_topic<specific_event>(topic_name).schedule(plugin_id, [=](ptr<const event>&& this_event, std::size_t it_no) {
+    void schedule(std::string account_name, std::string topic_name, std::function<void(ptr<const specific_event>&&, std::size_t)> fn) {
+        try_register_topic<specific_event>(topic_name).schedule(account_name, [=](ptr<const event>&& this_event, std::size_t it_no) {
             ptr<const specific_event> this_specific_event = std::dynamic_pointer_cast<const specific_event>(std::move(this_event));
             assert(this_specific_event && "dynamically downcasting event -> specific_event failed");
             fn(std::move(this_specific_event), it_no);

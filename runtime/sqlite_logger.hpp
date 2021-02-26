@@ -37,7 +37,7 @@ namespace ILLIXR {
 			, database{(boost::filesystem::path{"common"} / topic_name).replace_extension(".sqlite"), true}
 			, table{database.create_table(topic_name, schema)}
 		{
-			sb->schedule<Event>(0, topic_name, [&](ptr<const Event>&& event, size_t) {
+			sb->schedule<Event>("0", topic_name, [&](ptr<const Event>&& event, size_t) {
 				database.begin_transaction();
 				table.bulk_insert(logger.to_records(event));
 				database.end_transaction();

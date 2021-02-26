@@ -65,7 +65,7 @@ TEST_F(SwitchboardTest, TestSyncAsync) {
 		std::atomic<uint64_t> last_it_0 = 0;
 		std::thread::id callbk_0;
 
-		sb.schedule<uint64_wrapper>(0, "multiples_of_six", [&](switchboard::ptr<const uint64_wrapper>&& datum, std::size_t it) {
+		sb.schedule<uint64_wrapper>("0", "multiples_of_six", [&](switchboard::ptr<const uint64_wrapper>&& datum, std::size_t it) {
 			// std::cerr << "callbk-0: " << *datum << std::endl;
 			// Assert we are on our own thread
 			if (last_it_0 == 0) {
@@ -89,7 +89,7 @@ TEST_F(SwitchboardTest, TestSyncAsync) {
 		std::atomic<uint64_t> last_it_1 = 0;
 		std::thread::id callbk_1;
 
-		sb.schedule<uint64_wrapper>(1, "multiples_of_six", [&](switchboard::ptr<const uint64_wrapper>&& datum, std::size_t it) {
+		sb.schedule<uint64_wrapper>("1", "multiples_of_six", [&](switchboard::ptr<const uint64_wrapper>&& datum, std::size_t it) {
 			// std::cerr << "callbk-1: " << *datum << std::endl;
 			// Assert we are on our own thread
 			if (last_it_1 == 0) {

@@ -5,18 +5,18 @@
 namespace ILLIXR {
 
 	static const sqlite::schema site_info_schema {{
-		{"plugin_id", sqlite::type_INTEGER},
+		{"plugin", sqlite::type_TEXT},
 		{"topic_name", sqlite::type_INTEGER},
 		{"serial_no", sqlite::type_INTEGER},
 	}};
 
 	class FrameInfo {
 	private:
-		size_t plugin;
+		std::string plugin;
 		std::string topic;
 		size_t serial_no;
 	public:
-		FrameInfo(size_t plugin_ = 0, std::string topic_ = std::string{}, size_t serial_no_ = 0)
+		FrameInfo(std::string plugin_ = std::string{}, std::string topic_ = std::string{}, size_t serial_no_ = 0)
 			: plugin{plugin_}
 			, topic{std::move(topic_)}
 			, serial_no{serial_no_}
