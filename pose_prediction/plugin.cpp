@@ -21,6 +21,7 @@ public:
     // However, we don't have vsync estimation yet.
     // So we will predict to `now()`, as a temporary approximation
     virtual fast_pose_type get_fast_pose() const override {
+		CPU_TIMER_TIME_FUNCTION();
         switchboard::ptr<const switchboard::event_wrapper<time_type>> vsync_estimate = _m_vsync_estimate.get_ro_nullable();
 
         if(vsync_estimate == nullptr) {
@@ -43,7 +44,11 @@ public:
 
     // future_time: An absolute timepoint in the future
     virtual fast_pose_type get_fast_pose(time_type future_timestamp) const override {
-        switchboard::ptr<const pose_type> slow_pose = _m_slow_pose.get_ro_nullable();
+        switchboard::ptr<const pose_type> slow_pose;
+		{
+			CPU_TIMER_TIME_BLOCK("get slow pose");
+			slow_pose = _m_slow_pose.get_ro_nullable();
+		}
         if (!slow_pose) {
             // No slow pose, return 0
             return fast_pose_type{
@@ -53,14 +58,16 @@ public:
             };
         }
 
-        switchboard::ptr<const imu_raw_type> imu_raw = _m_imu_raw.get_ro_nullable();
+        switchboard::ptr<const imu_raw_type> imu_raw;
+		{
+			CPU_TIMER_TIME_BLOCK("get imu raw");
+			imu_raw = _m_imu_raw.get_ro_nullable();
+		}
         if (!imu_raw) {
-#ifndef NDEBUG
-            printf("FAST POSE IS SLOW POSE!");
-#endif
+            printf("FAST POSE IS NULL!");
             // No imu_raw, return slow_pose
             return fast_pose_type{
-                .pose = correct_pose(*slow_pose),
+                .pose = correct_pose(pose_type{}),
                 .predict_computed_time = std::chrono::system_clock::now(),
                 .predict_target_time = future_timestamp,
             };
@@ -69,7 +76,7 @@ public:
         // slow_pose and imu_raw, do pose prediction
 
         double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(future_timestamp - std::chrono::system_clock::now()).count();
-        std::pair<Eigen::Matrix<double,13,1>, time_type> predictor_result = predict_mean_rk4(dt/NANO_SEC);
+        std::pair<Eigen::Matrix<double,13,1>, time_type> predictor_result = predict_mean_rk4(dt/NANO_SEC, imu_raw);
 
         auto state_plus = predictor_result.first;
 
@@ -123,7 +130,8 @@ public:
 
 
     virtual bool fast_pose_reliable() const override {
-        return _m_slow_pose.get_ro_nullable() && _m_imu_raw.get_ro_nullable();
+		return true;
+        // return _m_slow_pose.get_ro_nullable() && _m_imu_raw.get_ro_nullable();
         /*
           SLAM takes some time to initialize, so initially fast_pose
           is unreliable.
@@ -189,11 +197,8 @@ private:
     // Slightly modified copy of OpenVINS method found in propagator.cpp
     // Returns a pair of the predictor state_plus and the time associated with the
     // most recent imu reading used to perform this prediction.
-    std::pair<Eigen::Matrix<double,13,1>,time_type> predict_mean_rk4(double dt) const {
-
+    std::pair<Eigen::Matrix<double,13,1>,time_type> predict_mean_rk4(double dt, switchboard::ptr<const imu_raw_type> imu_raw) const {
         // Pre-compute things
-        switchboard::ptr<const imu_raw_type> imu_raw = _m_imu_raw.get();
-
         Eigen::Vector3d w_hat =imu_raw->w_hat;
         Eigen::Vector3d a_hat = imu_raw->a_hat;
         Eigen::Vector3d w_alpha = (imu_raw->w_hat2-imu_raw->w_hat)/dt;

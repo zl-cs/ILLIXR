@@ -236,7 +236,7 @@ private:
          */
         ptr<const event> get() const {
 			size_t serial_no = _m_latest_index.load();
-			CPU_TIMER_TIME_EVENT_INFO(false, false, "get", cpu_timer::make_type_eraser<FrameInfo>("", _m_name, serial_no));
+			CPU_TIMER_TIME_EVENT_INFO(true, false, "get", cpu_timer::make_type_eraser<FrameInfo>("", _m_name, serial_no));
 			ptr<const event> this_event = _m_latest_buffer[serial_no % _m_latest_buffer_size];
 			// if (this_event) {
 			// 	std::cerr << "get " << ptr_to_str(reinterpret_cast<const void*>(this_event.get())) << " " << this_event.use_count() << "v \n";
@@ -254,14 +254,14 @@ private:
 
 			// In alternative implementations of Switchboard,
 			// serial_no may be associated with the data, perhaps set by allocate(...)
-			size_t serial_no = _m_latest_index.load();
-			size_t index = (serial_no + 1) % _m_latest_buffer_size;
+			size_t serial_no = _m_latest_index.load() + 1;
+			size_t index = (serial_no) % _m_latest_buffer_size;
 			_m_latest_buffer[index] = this_event;
 			// Can't increment _m_latest_index until the data is actually written
 			// Otherwise, readers (looking at _m_latest_index) would race with this write.
 			// I will assume one writer, so no two writers get the same serial_no.
 			_m_latest_index++;
-			CPU_TIMER_TIME_EVENT_INFO(false, false, "put", cpu_timer::make_type_eraser<FrameInfo>("", _m_name, serial_no));
+			CPU_TIMER_TIME_EVENT_INFO(true, false, "put", cpu_timer::make_type_eraser<FrameInfo>("", _m_name, serial_no));
 
             // Read/write on _m_subscriptions.
             // Must acquire shared state on _m_subscriptions_lock

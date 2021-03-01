@@ -113,7 +113,7 @@ private:
 	Eigen::Matrix4f basicProjection;
 
 	// Hologram call data
-	std::size_t _hologram_seq{0};
+	[[maybe_unused]] std::size_t _hologram_seq{0};
 
 	void BuildTimewarp(HMD::hmd_info_t* hmdInfo){
 
@@ -250,14 +250,17 @@ public:
 
 		// TODO: poll GLX window events
 		std::this_thread::sleep_for(std::chrono::duration<double>(EstimateTimeToSleep(DELAY_FRACTION)));
-		if(_m_eyebuffer.get_ro_nullable()) {
+		most_recent_frame = _m_eyebuffer.get_ro_nullable();
+		if (most_recent_frame) {
 			return skip_option::run;
 		} else {
 			// Null means system is nothing has been pushed yet
 			// because not all components are initialized yet
+			std::this_thread::sleep_for(std::chrono::milliseconds{5});
 			return skip_option::skip_and_yield;
 		}
 	}
+	switchboard::ptr<const rendered_frame> most_recent_frame;
 
 	virtual void _p_one_iteration() override {
 		warp(glfwGetTime());
@@ -369,7 +372,6 @@ public:
 		glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc);
 		}
 
-		auto most_recent_frame = _m_eyebuffer.get();
 		{
 			CPU_TIMER_TIME_BLOCK("matrix math");
 		//double cursor_x, cursor_y;
