@@ -380,4 +380,4 @@ public:
 	}
 };
 
-PLUGIN_MAIN(gldemo)
+PLUGIN_MAIN(gldemo);

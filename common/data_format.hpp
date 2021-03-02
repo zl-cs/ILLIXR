@@ -11,138 +11,154 @@
 #include <GL/gl.h>
 #include <GLFW/glfw3.h>
 //#undef Complex // For 'Complex' conflict
-#include "phonebook.hpp" 
+#include "phonebook.hpp"
 #include "switchboard.hpp"
 
 // Tell gldemo and timewarp_gl to use two texture handle for left and right eye
 #define USE_ALT_EYE_FORMAT
 #define NANO_SEC 1000000000.0
 
-namespace ILLIXR {
+namespace ILLIXR
+{
 
-	typedef std::chrono::time_point<std::chrono::system_clock> time_type;
-	typedef unsigned long long ullong;
+typedef std::chrono::time_point<std::chrono::system_clock> time_type;
+using ullong = unsigned long long;
 
-	// Data type that combines the IMU and camera data at a certain timestamp.
-	// If there is only IMU data for a certain timestamp, img0 and img1 will be null
-	// time is the current UNIX time where dataset_time is the time read from the csv
-	typedef struct {
-		time_type time;
-		Eigen::Vector3f angular_v;
-		Eigen::Vector3f linear_a;
-		std::optional<cv::Mat*> img0;
-		std::optional<cv::Mat*> img1;
-		ullong dataset_time;
-	} imu_cam_type;
+// Data type that combines the IMU and camera data at a certain timestamp.
+// If there is only IMU data for a certain timestamp, img0 and img1 will be null
+// time is the current UNIX time where dataset_time is the time read from the csv
+using imu_cam_type = struct
+{
+    time_type               time;
+    Eigen::Vector3f         angular_v;
+    Eigen::Vector3f         linear_a;
+    std::optional<cv::Mat*> img0;
+    std::optional<cv::Mat*> img1;
+    ullong                  dataset_time;
+};
 
-    typedef struct {
-        std::optional<cv::Mat*> rgb;
-        std::optional<cv::Mat*> depth;
-        ullong timestamp;
-    } rgb_depth_type;
+using rgb_depth_type = struct
+{
+    std::optional<cv::Mat*> rgb;
+    std::optional<cv::Mat*> depth;
+    ullong                  timestamp;
+};
 
-	// Values needed to initialize the IMU integrator
-	typedef struct {
-		double gyro_noise;
-		double acc_noise;
-		double gyro_walk;
-		double acc_walk;
-		Eigen::Matrix<double,3,1> n_gravity;
-		double imu_integration_sigma;
-		double nominal_rate;
-	} imu_params;
+// Values needed to initialize the IMU integrator
+using imu_params = struct
+{
+    double                      gyro_noise;
+    double                      acc_noise;
+    double                      gyro_walk;
+    double                      acc_walk;
+    Eigen::Matrix<double, 3, 1> n_gravity;
+    double                      imu_integration_sigma;
+    double                      nominal_rate;
+};
 
-	// IMU biases, initialization params, and slow pose needed by the IMU integrator
-	typedef struct {
-		double last_cam_integration_time;
-		double t_offset;
-		imu_params params;
-		
-		Eigen::Vector3d biasAcc;
-		Eigen::Vector3d biasGyro;
-		Eigen::Matrix<double,3,1> position;
-		Eigen::Matrix<double,3,1> velocity;
-		Eigen::Quaterniond quat;
-	} imu_integrator_input;
+// IMU biases, initialization params, and slow pose needed by the IMU integrator
+using imu_integrator_input = struct
+{
+    double     last_cam_integration_time;
+    double     t_offset;
+    imu_params params;
 
-	// Output of the IMU integrator to be used by pose prediction
-	typedef struct {
-		// Biases from the last two IMU integration iterations used by RK4 for pose predict
-		Eigen::Matrix<double,3,1> w_hat;
-		Eigen::Matrix<double,3,1> a_hat;
-		Eigen::Matrix<double,3,1> w_hat2;
-		Eigen::Matrix<double,3,1> a_hat2;
+    Eigen::Vector3d             biasAcc;
+    Eigen::Vector3d             biasGyro;
+    Eigen::Matrix<double, 3, 1> position;
+    Eigen::Matrix<double, 3, 1> velocity;
+    Eigen::Quaterniond          quat;
+};
 
-		// Faster pose propagated forwards by the IMU integrator
-		Eigen::Matrix<double,3,1> pos;
-		Eigen::Matrix<double,3,1> vel;
-		Eigen::Quaterniond quat;
-		time_type imu_time;
-	} imu_raw_type;
+// Output of the IMU integrator to be used by pose prediction
+using imu_raw_type = struct
+{
+    // Biases from the last two IMU integration iterations used by RK4 for pose predict
+    Eigen::Matrix<double, 3, 1> w_hat;
+    Eigen::Matrix<double, 3, 1> a_hat;
+    Eigen::Matrix<double, 3, 1> w_hat2;
+    Eigen::Matrix<double, 3, 1> a_hat2;
 
-	typedef struct {
-		time_type sensor_time; // Recorded time of sensor data ingestion
-		Eigen::Vector3f position;
-		Eigen::Quaternionf orientation;
-	} pose_type;
+    // Faster pose propagated forwards by the IMU integrator
+    Eigen::Matrix<double, 3, 1> pos;
+    Eigen::Matrix<double, 3, 1> vel;
+    Eigen::Quaterniond          quat;
+    time_type                   imu_time;
+};
 
-	typedef struct {
-		pose_type pose;
-		time_type predict_computed_time; // Time at which the prediction was computed
-		time_type predict_target_time; // Time that prediction targeted.
-	} fast_pose_type;
+using pose_type = struct
+{
+    time_type          sensor_time; // Recorded time of sensor data ingestion
+    Eigen::Vector3f    position;
+    Eigen::Quaternionf orientation;
+};
 
-	// Using arrays as a swapchain
-	// Array of left eyes, array of right eyes
-	// This more closely matches the format used by Monado
-	struct rendered_frame {
-		GLuint texture_handles[2]; // Does not change between swaps in swapchain
-		GLuint swap_indices[2]; // Which element of the swapchain
-		fast_pose_type render_pose; // The pose used when rendering this frame.
-		std::chrono::time_point<std::chrono::system_clock> sample_time;
-		std::chrono::time_point<std::chrono::system_clock> render_time;
-	};
+using fast_pose_type = struct
+{
+    pose_type pose;
+    time_type predict_computed_time; // Time at which the prediction was computed
+    time_type predict_target_time; // Time that prediction targeted.
+};
 
-	typedef struct {
-		int seq;
-	} hologram_input;
+// Using arrays as a swapchain
+// Array of left eyes, array of right eyes
+// This more closely matches the format used by Monado
+struct rendered_frame
+{
+    GLuint                                             texture_handles[2]; // Does not change between swaps in swapchain
+    GLuint                                             swap_indices[2]; // Which element of the swapchain
+    fast_pose_type                                     render_pose; // The pose used when rendering this frame.
+    std::chrono::time_point<std::chrono::system_clock> sample_time;
+    std::chrono::time_point<std::chrono::system_clock> render_time;
+};
 
-	typedef struct {
-		int dummy;
-	} hologram_output;
+using hologram_input = struct
+{
+    int seq;
+};
 
-	typedef struct {
-		int seq;		
-	} imu_integrator_seq;
+using hologram_output = struct
+{
+    int dummy;
+};
 
-	/* I use "accel" instead of "3-vector" as a datatype, because
-	this checks that you meant to use an acceleration in a certain
-	place. */
-	struct accel { };
+using imu_integrator_seq = struct
+{
+    int seq;
+};
 
-	// High-level HMD specification, timewarp plugin
-	// may/will calculate additional HMD info based on these specifications
-	struct hmd_physical_info {
-		float   ipd;
-		int		displayPixelsWide;
-		int		displayPixelsHigh;
-		float	chromaticAberration[4];
-		float	K[11];
-		int		visiblePixelsWide;
-		int		visiblePixelsHigh;
-		float	visibleMetersWide;
-		float	visibleMetersHigh;
-		float	lensSeparationInMeters;
-		float	metersPerTanAngleAtCenter;
-	};
+/* I use "accel" instead of "3-vector" as a datatype, because
+this checks that you meant to use an acceleration in a certain
+place. */
+struct accel
+{
+};
 
-        typedef struct {
-                int seq;
-		int offload_time;
-                unsigned char *image;
-                time_type pose_time;
-                Eigen::Vector3f position;
-                Eigen::Quaternionf latest_quaternion;
-                Eigen::Quaternionf render_quaternion;
-        } texture_pose;
+// High-level HMD specification, timewarp plugin
+// may/will calculate additional HMD info based on these specifications
+struct hmd_physical_info
+{
+    float ipd;
+    int   displayPixelsWide;
+    int   displayPixelsHigh;
+    float chromaticAberration[4];
+    float K[11];
+    int   visiblePixelsWide;
+    int   visiblePixelsHigh;
+    float visibleMetersWide;
+    float visibleMetersHigh;
+    float lensSeparationInMeters;
+    float metersPerTanAngleAtCenter;
+};
+
+using texture_pose = struct
+{
+    int                seq;
+    int                offload_time;
+    unsigned char*     image;
+    time_type          pose_time;
+    Eigen::Vector3f    position;
+    Eigen::Quaternionf latest_quaternion;
+    Eigen::Quaternionf render_quaternion;
+};
 }

@@ -726,4 +726,4 @@ public:
 	}
 };
 
-PLUGIN_MAIN(timewarp_gl)
+PLUGIN_MAIN(timewarp_gl);

@@ -188,4 +188,4 @@ private:
 
 };
 
-PLUGIN_MAIN(offload_data)
+PLUGIN_MAIN(offload_data);

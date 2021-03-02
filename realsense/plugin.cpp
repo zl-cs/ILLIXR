@@ -178,4 +178,3 @@ private:
 };
 
 PLUGIN_MAIN(realsense);
-

@@ -3,26 +3,34 @@
 
 #include "../cpu_timer.hpp"
 
-namespace ILLIXR {
+namespace ILLIXR
+{
 
-class ILLIXRCommon : public ::testing::Test { };
-
-class Adder {
-public:
-	Adder(int j_) : j{j_} { }
-	int j;
-	void add(int& i, int k) { i += j + k; }
+class ILLIXRCommon : public ::testing::Test
+{
 };
 
-TEST_F(ILLIXRCommon, CPUTimer) {
-	Adder adder {5};
-	int i = 4, k = 3;
+class Adder
+{
+public:
+    Adder(int j_)
+        : j { j_ }
+    { }
+    int  j;
+    void add(int& i, int k) const { i += j + k; }
+};
 
-	std::thread t = timed_thread("increment", &Adder::add, &adder, std::ref(i), k);
-	t.join();
+TEST_F(ILLIXRCommon, CPUTimer)
+{
+    constexpr int ADDER_INIT_VAL = 5;
+    Adder         adder { ADDER_INIT_VAL };
+    int           i = 4;
+    int           k = 3;
 
-	ASSERT_EQ(i, 12);
+    std::thread t = timed_thread("increment", &Adder::add, &adder, std::ref(i), k);
+    t.join();
+
+    ASSERT_EQ(i, 12);
 }
 
 }
-

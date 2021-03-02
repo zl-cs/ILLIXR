@@ -1,2 +1,3 @@
-LDFLAGS = $(shell pkg-config glfw3 glew --libs)
+PKG_DEPS = $(shell cat pkg-deps.txt)
+LDFLAGS = $(shell pkg-config ${PKG_DEPS} --libs)
 include common/common.mk

@@ -121,4 +121,4 @@ private:
 	int64_t _imu_integrator_seq{0};
 };
 
-PLUGIN_MAIN(offline_imu_cam)
+PLUGIN_MAIN(offline_imu_cam);

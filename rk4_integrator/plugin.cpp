@@ -420,4 +420,4 @@ private:
     }
 };
 
-PLUGIN_MAIN(imu_integrator)
+PLUGIN_MAIN(imu_integrator);
