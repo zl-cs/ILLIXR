@@ -3,7 +3,7 @@
 #include "runtime_impl.hpp"
 #include "common/cpu_timer/cpu_timer.hpp"
 
-constexpr std::chrono::seconds ILLIXR_RUN_DURATION_DEFAULT {10};
+constexpr std::chrono::seconds ILLIXR_RUN_DURATION_DEFAULT {40};
 
 ILLIXR::runtime* r;
 
