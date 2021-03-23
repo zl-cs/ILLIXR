@@ -138,9 +138,9 @@ namespace ILLIXR {
 
         typedef struct {
                 int seq;
-		int offload_time;
+                duration offload_time;
                 unsigned char *image;
-                RelativeClock::time_point pose_time;
+                time_point pose_time;
                 Eigen::Vector3f position;
                 Eigen::Quaternionf latest_quaternion;
                 Eigen::Quaternionf render_quaternion;
