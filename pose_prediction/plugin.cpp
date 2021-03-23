@@ -15,16 +15,17 @@ public:
         , _m_imu_raw{sb->subscribe_latest<imu_raw_type>("imu_raw")}
         , _m_true_pose{sb->subscribe_latest<pose_type>("true_pose")}
         , _m_ground_truth_offset{sb->subscribe_latest<Eigen::Vector3f>("ground_truth_offset")}
-        , _m_vsync_estimate{sb->subscribe_latest<time_type>("vsync_estimate")}
+        , _m_vsync_estimate{sb->subscribe_latest<time_point>("vsync_estimate")}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
     { }
 
     // No parameter get_fast_pose() predicts to the next vsync if a vsync
     // estimate is available, and predicts to `now` otherwise
     virtual fast_pose_type get_fast_pose() const override {
-		const time_type * const vsync_estimate = _m_vsync_estimate->get_latest_ro();
+		const time_point * const vsync_estimate = _m_vsync_estimate->get_latest_ro();
 
         if (vsync_estimate == nullptr) {
-            return get_fast_pose(std::chrono::high_resolution_clock::now());
+            return get_fast_pose(_m_clock->now());
         } else {
             return get_fast_pose(*vsync_estimate);
         }
@@ -44,7 +45,7 @@ public:
 			offset_pose = *pose;
 			offset_pose.position -= *offset;
 		} else {
-			offset_pose.sensor_time = std::chrono::system_clock::now();
+			offset_pose.sensor_time = _m_clock->now();
 			offset_pose.position = Eigen::Vector3f{0, 0, 0};
 			offset_pose.orientation = Eigen::Quaternionf{1, 0, 0, 0};
 		}
@@ -53,13 +54,13 @@ public:
 	}
 
     // future_time: An absolute timepoint in the future
-    virtual fast_pose_type get_fast_pose(time_type future_timestamp) const override {
+    virtual fast_pose_type get_fast_pose(time_point future_timestamp) const override {
 		const pose_type* slow_pose = _m_slow_pose->get_latest_ro();
 		if (!slow_pose) {
 			// No slow pose, return 0
             return fast_pose_type{
                 .pose = correct_pose(pose_type{}),
-				.predict_computed_time = std::chrono::system_clock::now(),
+				.predict_computed_time = _m_clock->now(),
 				.predict_target_time = future_timestamp,
             };
 		}
@@ -72,15 +73,15 @@ public:
 			// No imu_raw, return slow_pose
             return fast_pose_type{
                 .pose = correct_pose(*slow_pose),
-				.predict_computed_time = std::chrono::system_clock::now(),
+				.predict_computed_time = _m_clock->now(),
 				.predict_target_time = future_timestamp,
             };
         }
 
 		// slow_pose and imu_raw, do pose prediction
 
-        double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(future_timestamp - std::chrono::system_clock::now()).count();
-        std::pair<Eigen::Matrix<double,13,1>, time_type> predictor_result = predict_mean_rk4(dt/NANO_SEC);
+        double dt = std::chrono::duration<double, std::chrono::seconds::period>{future_timestamp - imu_raw->imu_time}.count();
+        std::pair<Eigen::Matrix<double,13,1>, time_point> predictor_result = predict_mean_rk4(dt/NANO_SEC);
 
         auto state_plus = predictor_result.first;
 
@@ -108,7 +109,7 @@ public:
         //       - the prediction target (the time that was requested for this pose.)
         return fast_pose_type {
             .pose = predicted_pose,
-            .predict_computed_time = std::chrono::high_resolution_clock::now(),
+            .predict_computed_time = _m_clock->now(),
             .predict_target_time = future_timestamp
         };
     }
@@ -192,16 +193,16 @@ private:
     std::unique_ptr<reader_latest<imu_raw_type>> _m_imu_raw;
 	std::unique_ptr<reader_latest<pose_type>> _m_true_pose;
 	std::unique_ptr<reader_latest<Eigen::Vector3f>> _m_ground_truth_offset;
-    std::unique_ptr<reader_latest<time_type>> _m_vsync_estimate;
+    std::unique_ptr<reader_latest<time_point>> _m_vsync_estimate;
 	mutable Eigen::Quaternionf offset {Eigen::Quaternionf::Identity()};
 	mutable std::shared_mutex offset_mutex;
-
+	const std::shared_ptr<const RelativeClock> _m_clock;
     
 
     // Slightly modified copy of OpenVINS method found in propagator.cpp
     // Returns a pair of the predictor state_plus and the time associated with the
     // most recent imu reading used to perform this prediction.
-    std::pair<Eigen::Matrix<double,13,1>,time_type> predict_mean_rk4(double dt) const {
+    std::pair<Eigen::Matrix<double,13,1>,time_point> predict_mean_rk4(double dt) const {
 
         // Pre-compute things
         const imu_raw_type *imu_raw = _m_imu_raw->get_latest_ro();
