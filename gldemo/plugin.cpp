@@ -21,8 +21,8 @@ using namespace ILLIXR;
 static constexpr int   EYE_TEXTURE_WIDTH   = ILLIXR::FB_WIDTH;
 static constexpr int   EYE_TEXTURE_HEIGHT  = ILLIXR::FB_HEIGHT;
 
-static constexpr std::chrono::nanoseconds vsync_period {std::size_t(NANO_SEC/60)};
-static constexpr std::chrono::milliseconds VSYNC_DELAY_TIME {std::size_t{2}};
+static constexpr std::chrono::nanoseconds vsync_period {std::chrono::nanoseconds{std::chrono::seconds{1}} / 60};
+static constexpr std::chrono::nanoseconds VSYNC_DELAY_TIME {std::chrono::milliseconds{2}};
 
 // Monado-style eyebuffers:
 // These are two eye textures; however, each eye texture
@@ -43,18 +43,18 @@ public:
 		, sb{pb->lookup_impl<switchboard>()}
 		//, xwin{pb->lookup_impl<xlib_gl_extended_window>()}
 		, pp{pb->lookup_impl<pose_prediction>()}
-		, vsync{sb->subscribe_latest<time_type>("vsync_estimate")}
+		, vsync{sb->subscribe_latest<time_point>("vsync_estimate")}
 		, _m_eyebuffer{sb->publish<rendered_frame>("eyebuffer")}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
 	{ }
 
 	// Essentially, a crude equivalent of XRWaitFrame.
 	void wait_vsync()
 	{
-		using namespace std::chrono_literals;
-		const time_type* next_vsync = vsync->get_latest_ro();
-		time_type now = std::chrono::system_clock::now();
+		const time_point* next_vsync = vsync->get_latest_ro();
+		time_point now = _m_clock->now();
 
-		time_type wait_time;
+		time_point wait_time;
 
 		if(next_vsync == nullptr)
 		{
@@ -66,7 +66,7 @@ public:
 
 #ifndef NDEBUG
 		if (log_count > LOG_PERIOD) {
-			const double vsync_in = std::chrono::duration_cast<std::chrono::milliseconds>(*next_vsync - now).count();
+			double vsync_in = std::chrono::duration<double, std::milli>{*next_vsync - now}.count();
             std::cout << "\033[1;32m[GL DEMO APP]\033[0m First vsync is in " << vsync_in << "ms" << std::endl;
 		}
 #endif
@@ -89,14 +89,14 @@ public:
 
 #ifndef NDEBUG
 			if (log_count > LOG_PERIOD) {
-                const double wait_in = std::chrono::duration_cast<std::chrono::milliseconds>(wait_time - now).count();
+				double wait_in = std::chrono::duration<double, std::milli>{wait_time - now}.count()
                 std::cout << "\033[1;32m[GL DEMO APP]\033[0m Waiting until next vsync, in " << wait_in << "ms" << std::endl;
 			}
 #endif
 			// Perform the sleep.
 			// TODO: Consider using Monado-style sleeping, where we nanosleep for
 			// most of the wait, and then spin-wait for the rest?
-			std::this_thread::sleep_until(wait_time);
+			std::this_thread::sleep_for(wait_time - now);
 		} else {
 #ifndef NDEBUG
 			if (log_count > LOG_PERIOD) {
@@ -195,19 +195,18 @@ public:
 			}
 
 #ifndef NDEBUG
-            const std::chrono::system_clock::time_point time_now = std::chrono::system_clock::now();
-            const std::chrono::nanoseconds time_since_last = time_now - time_last;
-            const double time_since_last_d = std::chrono::duration_cast<std::chrono::milliseconds>(time_since_last).count();
-            const double fps = 1000.0 / time_since_last_d;
+            const time_point now = _m_clock->now();
+			const double frame_duration_s = std::chrono::duration<double, std::chrono::seconds::period>{now - lastTime}.count();
+            const double fps = 1.0 / frame_duration_s;
 
 			if (log_count > LOG_PERIOD) {
                 std::cout << "\033[1;32m[GL DEMO APP]\033[0m Submitting frame to buffer " << buffer_to_use
-                          << ", frametime: " << time_since_last_d
+                          << ", frametime: " << frame_duration_s
                           << ", FPS: " << fps
                           << std::endl;
 			}
 #endif
-            time_last = std::chrono::system_clock::now();
+			lastTime = _m_clock->now();
 
 			glFlush();
 
@@ -220,9 +219,10 @@ public:
 
 			frame->render_pose = fast_pose;
 			which_buffer.store(buffer_to_use == 1 ? 0 : 1);
-			frame->render_time = std::chrono::system_clock::now();
+			auto now = _m_clock->now();
+			frame->render_time = now;
 			_m_eyebuffer->put(frame);
-			lastFrameTime = std::chrono::system_clock::now();
+			lastFrameTime = now;
 		}
 
 #ifndef NDEBUG
@@ -245,7 +245,7 @@ private:
 	const std::unique_ptr<const xlib_gl_extended_window> xwin;
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
-	const std::unique_ptr<reader_latest<time_type>> vsync;
+	const std::unique_ptr<reader_latest<time_point>> vsync;
 
 	// Switchboard plug for application eye buffer.
 	// We're not "writing" the actual buffer data,
@@ -253,7 +253,7 @@ private:
 	// correct eye/framebuffer in the "swapchain".
 	std::unique_ptr<writer<rendered_frame>> _m_eyebuffer;
 
-	time_type lastFrameTime;
+	time_point lastFrameTime;
 
 	GLuint eyeTextures[2];
 	GLuint eyeTextureFBO;
@@ -278,7 +278,9 @@ private:
 
 	Eigen::Matrix4f basicProjection;
 
-    std::chrono::system_clock::time_point time_last;
+	time_point lastTime;
+
+	const std::shared_ptr<const RelativeClock> _m_clock;
 
 	int createSharedEyebuffer(GLuint* texture_handle){
 
@@ -409,7 +411,8 @@ public:
 		assert(gl_result_1 && "glXMakeCurrent should not fail");
 		RAC_ERRNO_MSG("gldemo after glXMakeCurrent");
 
-        time_last = std::chrono::system_clock::now();
+		lastTime = _m_clock->now();
+
 		threadloop::start();
 
 		RAC_ERRNO_MSG("gldemo at end of start()");
