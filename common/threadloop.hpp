@@ -70,10 +70,10 @@ private:
 		record_coalescer it_log {record_logger_};
 		std::cout << "thread," << std::this_thread::get_id() << ",threadloop," << name << std::endl;
 
+		_m_stoplight->wait_for_ready();
 		_p_thread_setup();
 
 		while (!_m_stoplight->should_stop()) {
-			_m_stoplight->wait_for_ready();
 			skip_option s = _p_should_skip();
 
 			switch (s) {

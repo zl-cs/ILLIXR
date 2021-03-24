@@ -11,7 +11,6 @@
 #include "imgui/imgui_impl_opengl3.h"
 
 #include <GL/glew.h>
-#include <GLFW/glfw3.h>
 #include "common/threadloop.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
@@ -403,8 +402,6 @@ private:
 
 	bool follow_headset = true;
 
-	double lastTime;
-
 	Eigen::Vector3f tracking_position_offset = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
 
 
@@ -521,6 +518,7 @@ public:
             ILLIXR::abort("Please define ILLIXR_DEMO_DATA.");
 		}
 
+		RAC_ERRNO_MSG("gldemo before ObjScene");
 		demoscene = ObjScene(std::string(obj_dir), "scene.obj");
 		headset = ObjScene(std::string(obj_dir), "headset.obj");
 
@@ -543,7 +541,6 @@ public:
 		math_util::projection_fov( &basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f );
 
 		glfwMakeContextCurrent(nullptr);
-		lastTime = glfwGetTime();
 		threadloop::start();
 
 		RAC_ERRNO_MSG("debuview at bottom of start()");

@@ -36,6 +36,7 @@ public:
         , _m_imu_cam{sb->publish<imu_cam_type>("imu_cam")}
         , _m_rgb_depth{sb->publish<rgb_depth_type>("rgb_depth")}
         , _m_imu_integrator{sb->publish<imu_integrator_seq>("imu_integrator_seq")}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
         {
             cfg.disable_all_streams();
             cfg.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F, ACCEL_RATE); // adjustable to 0, 63 (default), 250 hz
@@ -105,10 +106,14 @@ public:
 
                     // Time as ullong (nanoseconds)
                     ullong imu_time = static_cast<ullong>(ts * 1000000);
+					if (!_m_first_imu_time) {
+						_m_first_imu_time = imu_time;
+						_m_first_real_time = _m_clock->now();
+					}
+					time_point imu_time_point{*_m_first_real_time + std::chrono::nanoseconds(imu_time - *_m_first_imu_time)};
 
                     // Time as time_point
-                    using time_point = std::chrono::system_clock::time_point;
-                    time_type imu_time_point{std::chrono::duration_cast<time_point::duration>(std::chrono::nanoseconds(imu_time))};
+                    time_point imu_time_point{*first_real_time + std::chrono::nanoseconds(imu_time - *first_imu_time)};
 
                     // Images
                     std::optional<cv::Mat *> img0 = std::nullopt;
@@ -175,6 +180,10 @@ private:
 	int last_iteration_accel;
 
     long long _imu_integrator_seq{0};
+
+	std::optional<ullong> _m_first_imu_time;
+	std::optional<time_point> _m_first_real_time;
+	const std::shared_ptr<const RelativeClock> _m_clock;
 };
 
 PLUGIN_MAIN(realsense);

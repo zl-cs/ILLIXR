@@ -81,7 +81,7 @@ private:
 
 	static constexpr double RUNNING_AVG_ALPHA = 0.1;
 
-	static constexpr std::chrono::nanoseconds vsync_period {std::size_t(NANO_SEC/DISPLAY_REFRESH_RATE)};
+	static constexpr std::chrono::nanoseconds vsync_period {freq2period(DISPLAY_REFRESH_RATE)};
 
 	const std::shared_ptr<xlib_gl_extended_window> xwin;
 	rendered_frame frame;
@@ -220,7 +220,7 @@ private:
 
 #ifndef NDEBUG
 		double time = std::chrono::duration<double, std::milli>{offload_time}.count();
-		std::cout << "Texture image collecting time: " << offload_time << "ms" << std::endl;
+		std::cout << "Texture image collecting time: " << time << "ms" << std::endl;
 #endif
 
 		return pixels;
@@ -369,7 +369,10 @@ public:
 	virtual void _p_thread_setup() override {
         assert(errno == 0 && "Errno should not be set at start of _p_thread_setup");
 
-		time_last_swap = _m_clock->now();
+		// Wait a vsync for gldemo to go first.
+		// This first time_last_swap will be "out of phase" with actual vsync.
+		// The second one should be on the dot, since we don't exit the first until actual vsync.
+		time_last_swap = _m_clock->now() + vsync_period;
 
 		// Generate reference HMD and physical body dimensions
     	HMD::GetDefaultHmdInfo(SCREEN_WIDTH, SCREEN_HEIGHT, &hmd_info);
@@ -686,12 +689,12 @@ public:
 
 #ifndef NDEBUG
 		if (log_count > LOG_PERIOD) {
-            const double time_swap = std::chrono::duration<double, std::chrono::milli>{time_after_swap - time_before_swap}.count();
-            const double latency_mtd = std::chrono::duration<double, std::chrono::milli>{imu_to_display}.count();
-            const double latency_ptd = std::chrono::duration<double, std::chrono::milli>{predict_to_display}.count();
-            const double latency_rtd = std::chrono::duration<double, std::chrono::milli>{render_to_display}.count();
+            const double time_swap = std::chrono::duration<double, std::milli>{time_after_swap - time_before_swap}.count();
+            const double latency_mtd = std::chrono::duration<double, std::milli>{imu_to_display}.count();
+            const double latency_ptd = std::chrono::duration<double, std::milli>{predict_to_display}.count();
+            const double latency_rtd = std::chrono::duration<double, std::milli>{render_to_display}.count();
             const time_point time_next_swap = GetNextSwapTimeEstimate();
-            const double timewarp_estimate = std::chrono::duration<double, std::chrono::milli>{time_next_swap - time_last_swap}.count();
+            const double timewarp_estimate = std::chrono::duration<double, std::milli>{time_next_swap - time_last_swap}.count();
 
             std::cout << "\033[1;36m[TIMEWARP]\033[0m Swap time: " << time_swap << "ms" << std::endl
 			          << "\033[1;36m[TIMEWARP]\033[0m Motion-to-display latency: " << latency_mtd << "ms" << std::endl

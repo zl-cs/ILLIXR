@@ -21,7 +21,7 @@ using namespace ILLIXR;
 static constexpr int   EYE_TEXTURE_WIDTH   = ILLIXR::FB_WIDTH;
 static constexpr int   EYE_TEXTURE_HEIGHT  = ILLIXR::FB_HEIGHT;
 
-static constexpr duration vsync_period {freq2period(60.0d)};
+static constexpr duration vsync_period {freq2period(60.0)};
 static constexpr duration VSYNC_DELAY_TIME {std::chrono::milliseconds{2}};
 
 // Monado-style eyebuffers:
@@ -89,7 +89,7 @@ public:
 
 #ifndef NDEBUG
 			if (log_count > LOG_PERIOD) {
-				double wait_in = std::chrono::duration<double, std::milli>{wait_time - now}.count()
+				double wait_in = std::chrono::duration<double, std::milli>{wait_time - now}.count();
                 std::cout << "\033[1;32m[GL DEMO APP]\033[0m Waiting until next vsync, in " << wait_in << "ms" << std::endl;
 			}
 #endif
@@ -108,6 +108,8 @@ public:
 
 	void _p_thread_setup() override {
 		assert(errno == 0 && "Errno should not be set at start of _p_thread_setup");
+
+		lastTime = _m_clock->now();
 
 		// Note: glXMakeContextCurrent must be called from the thread which will be using it.
         [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
@@ -195,8 +197,7 @@ public:
 			}
 
 #ifndef NDEBUG
-            const time_point now = _m_clock->now();
-			const double frame_duration_s = std::chrono::duration<double, std::chrono::seconds::period>{now - lastTime}.count();
+			const double frame_duration_s = std::chrono::duration<double, std::chrono::seconds::period>{_m_clock->now() - lastTime}.count();
             const double fps = 1.0 / frame_duration_s;
 
 			if (log_count > LOG_PERIOD) {
@@ -219,10 +220,9 @@ public:
 
 			frame->render_pose = fast_pose;
 			which_buffer.store(buffer_to_use == 1 ? 0 : 1);
-			auto now = _m_clock->now();
-			frame->render_time = now;
+			frame->render_time = _m_clock->now();
 			_m_eyebuffer->put(frame);
-			lastFrameTime = now;
+			lastFrameTime = frame->render_time;
 		}
 
 #ifndef NDEBUG
@@ -401,6 +401,8 @@ public:
 		if (obj_dir == nullptr) {
             ILLIXR::abort("Please define ILLIXR_DEMO_DATA.");
 		}
+
+		RAC_ERRNO_MSG("gldemo before ObjScene");
 		demoscene = ObjScene(std::string(obj_dir), "scene.obj");
 
 		// Construct a basic perspective projection
@@ -411,12 +413,13 @@ public:
 		assert(gl_result_1 && "glXMakeCurrent should not fail");
 		RAC_ERRNO_MSG("gldemo after glXMakeCurrent");
 
-		lastTime = _m_clock->now();
-
+		// Effectively, zero.
+		// Try to run gldemo right away.
 		threadloop::start();
 
 		RAC_ERRNO_MSG("gldemo at end of start()");
 	}
+
 };
 
 PLUGIN_MAIN(gldemo)
