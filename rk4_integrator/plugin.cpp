@@ -53,7 +53,7 @@ public:
 
 	void _p_one_iteration() override {
 		const imu_cam_type *datum = _m_imu_cam->get_latest_ro();
-		double timestamp_in_seconds = (double(datum->dataset_time) / NANO_SEC);
+		double timestamp_in_seconds = std::chrono::duration<double, std::chrono::seconds::period>{datum->dataset_time}.count();
 
 		imu_type data;
         data.timestamp = timestamp_in_seconds;
@@ -100,7 +100,7 @@ private:
 	}
 
 	// Timestamp we are propagating the biases to (new IMU reading time)
-	void propagate_imu_values(double timestamp, time_type real_time) {
+	void propagate_imu_values(double timestamp, time_point real_time) {
 		const imu_integrator_input *input_values = _m_imu_integrator_input->get_latest_ro();
 		if (input_values == NULL) {
 			return;
