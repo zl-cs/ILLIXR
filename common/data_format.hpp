@@ -54,8 +54,8 @@ namespace ILLIXR {
 
 	// IMU biases, initialization params, and slow pose needed by the IMU integrator
 	typedef struct {
-		double last_cam_integration_time;
-		double t_offset;
+		time_point last_cam_integration_time;
+		duration t_offset;
 		imu_params params;
 		
 		Eigen::Vector3d biasAcc;
