@@ -53,7 +53,7 @@ public:
 
 	void _p_one_iteration() override {
 		const imu_cam_type *datum = _m_imu_cam->get_latest_ro();
-		double timestamp_in_seconds = std::chrono::duration<double, std::chrono::seconds::period>{datum->dataset_time}.count();
+		double timestamp_in_seconds = datum->dataset_time / 1e9;
 
 		imu_type data;
         data.timestamp = timestamp_in_seconds;
@@ -107,7 +107,7 @@ private:
 		}
 
 		if (!has_last_offset) {
-			last_imu_offset = input_values->t_offset;
+			last_imu_offset = duration2double(input_values->t_offset);
 			has_last_offset = true;
 		}
 
@@ -128,10 +128,10 @@ private:
 		// counter++;
 
 		// Get what our IMU-camera offset should be (t_imu = t_cam + calib_dt)
-		double t_off_new = input_values->t_offset;
+		double t_off_new = duration2double(input_values->t_offset);
 
 		// This is the last CAM time
-		double time0 = input_values->last_cam_integration_time + last_imu_offset;
+		double time0 = duration2double(input_values->last_cam_integration_time.time_since_epoch()) + last_imu_offset;
 		double time1 = timestamp + t_off_new;
 
 		std::vector<imu_type> prop_data = select_imu_readings(_imu_vec, time0, time1);
