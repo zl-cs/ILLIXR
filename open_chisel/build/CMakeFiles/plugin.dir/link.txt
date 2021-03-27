@@ -1,1 +1,0 @@
-/usr/bin/clang++-10 -fPIC  --std=c++17 -fPIC -shared -Wl,-soname,libplugin.so -o libplugin.so CMakeFiles/plugin.dir/plugin.cpp.o  libopen_chisel_lib.a 

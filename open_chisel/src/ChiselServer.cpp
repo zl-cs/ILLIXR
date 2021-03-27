@@ -34,10 +34,7 @@ namespace chisel_server
     }
 
 
-    ChiselServer::~ChiselServer()
-    {
-
-    }
+    ChiselServer::~ChiselServer(){}
     //need to figure out a way to publish the data
     void ChiselServer::SetupMeshPublisher(const std::string& topic)
     {
@@ -205,54 +202,29 @@ namespace chisel_server
 
 
     //original IntegrateLastDepthImage()
-    void ChiselServer::IntegrateLastDepthImage()
-    {
-           printf("CHISEL: Integrating depth scan\n");
-         //  chiselMap->IntegrateDepthScan<DepthData>(projectionIntegrator, lastDepthImage, depthCamera.lastPose, depthCamera.cameraModel);
-            printf("CHISEL: Done with scan\n");
-            PublishLatestChunkBoxes();
-            PublishDepthFrustum();
-
-           // chiselMap->UpdateMeshes();
-            //hasNewData = false;
-    }
+    void ChiselServer::IntegrateLastDepthImage(){}
 
 //modified IntegrateLastDepthImage()
     void ChiselServer::IntegrateLastDepthImage(chisel::DepthImage<chisel_server::DepthData>* input_depth, chisel::Transform* input_pose)
 //    void IntegrateLastDepthImage(chisel::DepthImage<chisel_server::DepthData>* input_depth, chisel::Transform* input_pose)
     {
            printf("CHISEL: Integrating last depth scan\n");
-
-/*
-	       printf("x: %d, y:  %d, z: %d \n", input_pose.translation()(0), input_pose.translation()(1), input_pose.translation()(2));
-	       for(int i=0; i<input_depth->GetWidth(); i++)
-	       {
-	        for(int j=0; j<input_depth->GetHeight(); j++)
-	        {
-	           printf("%f\n",input_depth->DepthAt(i,j)); 
-	        }
-	       }
-*/
-
-//           chiselMap->IntegrateDepthScan<DepthData>(projectionIntegrator, input_depth, input_pose, depthCamera.cameraModel);
-           printf("orig x: %f, y:  %f, z: %f \n", input_pose->translation()(0), input_pose->translation()(1), input_pose->translation()(2));
-           printf("chiselmap #2: %p\n",(void*)&chiselMap);
-//           chiselMap->temp_IntegrateDepthScan(projectionIntegrator, input_depth, input_pose, cameraModel);
+           printf("chiselserver orig x: %f, y:  %f, z: %f \n", input_pose->translation()(0), input_pose->translation()(1), input_pose->translation()(2));
            printf("#1 fx: %f, fy: %f, cx: %f, cy: %f \n", cameraModel.GetIntrinsics().GetFx(),
                                                         cameraModel.GetIntrinsics().GetFy(),
                                                         cameraModel.GetIntrinsics().GetCx(),
                                                         cameraModel.GetIntrinsics().GetCy());
 
            chiselMap->IntegrateDepthScan<DepthData>(projectionIntegrator, input_depth, input_pose, cameraModel);
+           chiselMap->UpdateMeshes();
 
-           printf("CHISEL: Done with scan\n");
+           printf("CHISEL: integrate last image Done with scan\n");
 	       //TODO how to publish this
            /*
            PublishLatestChunkBoxes();
            printf("failed 1\n");
            PublishDepthFrustum();
            printf("failed 2\n");
-           chiselMap->UpdateMeshes();
            printf("failed 3\n");
            */
 

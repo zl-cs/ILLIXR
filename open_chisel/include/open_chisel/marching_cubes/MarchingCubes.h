@@ -42,7 +42,7 @@ namespace chisel
             static void MeshCube(const Eigen::Matrix<float, 3, 8>& vertex_coordinates, const Eigen::Matrix<float, 8, 1>& vertexSDF, TriangleVector* triangles)
             {
                 assert(triangles != nullptr);
-
+                
                 const int index = CalculateVertexConfiguration(vertexSDF);
 
                 Eigen::Matrix<float, 3, 12> edgeCoords;
@@ -67,10 +67,19 @@ namespace chisel
 
             static void MeshCube(const Eigen::Matrix<float, 3, 8>& vertexCoords, const Eigen::Matrix<float, 8, 1>& vertexSDF, VertIndex* nextIDX, Mesh* mesh)
             {
+//                printf("reached here\n");
                 assert(nextIDX != nullptr);
                 assert(mesh != nullptr);
                 const int index = CalculateVertexConfiguration(vertexSDF);
-
+                for(int i=0; i<8; i++)
+                {
+                    printf("vertex %d value: %f\n", i, vertexSDF(i));
+                    if(vertexSDF(i) >=0)
+                    {
+                        printf("vertex value of larger than 0 observed\n");
+                    }
+                }
+                printf("index number: %d\n", index);
                 Eigen::Matrix<float, 3, 12> edge_vertex_coordinates;
                 InterpolateEdgeVertices(vertexCoords, vertexSDF, &edge_vertex_coordinates);
 
@@ -79,6 +88,7 @@ namespace chisel
                 int table_col = 0;
                 while (table_row[table_col] != -1)
                 {
+                    printf("inside while loop\n");
                     mesh->vertices.emplace_back(edge_vertex_coordinates.col(table_row[table_col + 2]));
                     mesh->vertices.emplace_back(edge_vertex_coordinates.col(table_row[table_col + 1]));
                     mesh->vertices.emplace_back(edge_vertex_coordinates.col(table_row[table_col]));

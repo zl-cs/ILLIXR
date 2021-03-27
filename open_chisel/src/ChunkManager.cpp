@@ -98,16 +98,19 @@ namespace chisel
         if (!HasChunk(chunkID))
         {
             mutex.unlock();
+            printf("ChunkManager::RecomputeMesh: has no chunk\n");
             return;
         }
 
         MeshPtr mesh;
         if (!HasMesh(chunkID))
         {
+            printf("ChunkManager::RecomputeMesh: has no mesh\n");
             mesh = std::allocate_shared<Mesh>(Eigen::aligned_allocator<Mesh>());
         }
         else
         {
+            printf("ChunkManager::existing mesh found\n");
             mesh = GetMesh(chunkID);
         }
 
@@ -119,6 +122,7 @@ namespace chisel
 
         if(useColor)
         {
+            printf("ILLIXR should not arrive here\n");
             ColorizeMesh(mesh.get());
         }
 
@@ -126,7 +130,12 @@ namespace chisel
 
         mutex.lock();
         if(!mesh->vertices.empty())
+        {
             allMeshes[chunkID] = mesh;
+        }else
+        {
+            printf("mesh vertices empty\n");
+        }
         mutex.unlock();
     }
 
@@ -135,15 +144,19 @@ namespace chisel
 
         if (chunkMeshes.empty())
         {
+            printf("chunk mesh empty\n");
             return;
         }
 
         std::mutex mutex;
+        printf("recomputing mesh\n");
         for (const std::pair<ChunkID, bool>& chunk : chunkMeshes)
         //parallel_for(chunks.begin(), chunks.end(), [this, &mutex](const ChunkID& chunkID)
         {
             if (chunk.second)
+            {
               this->RecomputeMesh(ChunkID(chunk.first), mutex);
+            }
         }
 
     }
@@ -171,16 +184,16 @@ namespace chisel
         ChunkID minID = GetIDAt(frustumAABB.min);
         ChunkID maxID = GetIDAt(frustumAABB.max) + Eigen::Vector3i(1, 1, 1);
 
-        printf("FrustumAABB: %f %f %f %f %f %f\n", frustumAABB.min.x(), frustumAABB.min.y(), frustumAABB.min.z(), frustumAABB.max.x(), frustumAABB.max.y(), frustumAABB.max.z());
+        printf("FrustumAABB: min:x %f y: %f z: %f \n max: x: %f y: %f z: %f\n", frustumAABB.min.x(), frustumAABB.min.y(), frustumAABB.min.z(), frustumAABB.max.x(), frustumAABB.max.y(), frustumAABB.max.z());
         for(int i=0; i<8; i++)
         {
-            printf("chunkman frustum x: %f, y: %f, z: %f \n", 
+            printf("chunkmanager frustum x: %f, y: %f, z: %f \n", 
                                            frustum.GetCorners()[i].x(), 
                                            frustum.GetCorners()[i].y(), 
                                            frustum.GetCorners()[i].z());
         }
-        printf("Frustum min: %d %d %d max: %d %d %d\n", minID.x(), minID.y(), minID.z(), maxID.x(), maxID.y(), maxID.z());
-        printf("chunk x: %d, chunk y: %d, chunk z: %d , voxelreso %f \n", chunkSize(0), chunkSize(1), chunkSize(2), voxelResolutionMeters);
+        printf("Frustum min: x: %d y: %d z: %d\n max: %d %d %d\n", minID.x(), minID.y(), minID.z(), maxID.x(), maxID.y(), maxID.z());
+        printf("chunksize x: %d, y: %d, z: %d , voxelreso %f \n", chunkSize(0), chunkSize(1), chunkSize(2), voxelResolutionMeters);
         printf("ILLIXR DEBUG minID(0): %d, minID(1): %d, minID(2): %d \n", minID(0), minID(1), minID(2));
         printf("ILLIXR DEBUG maxID(0): %d, maxID(1): %d, maxID(2): %d \n", maxID(0), maxID(1), maxID(2)); 
         //printf("ILLIXR ChunkManager checkpoint 1\n");
@@ -284,10 +297,12 @@ namespace chisel
             cornerCoords.col(i) = coords + cubeCoordOffsets.col(i);
             cornerSDF(i) = thisVoxel.GetSDF();
         }
-
         if (allNeighborsObserved)
         {
+            printf("inside voxel all Neighbors Observed\n");
+
             MarchingCubes::MeshCube(cornerCoords, cornerSDF, nextMeshIndex, mesh);
+            printf("inside mesh vert empty? %s\n", mesh->vertices.empty() ? "Empty" : "Not Empty");
         }
     }
 
@@ -367,8 +382,12 @@ namespace chisel
 
         if (allNeighborsObserved)
         {
+            printf("border voxel: all Neighbors Observed\n");
+
             MarchingCubes::MeshCube(cornerCoords, cornerSDF, nextMeshIndex, mesh);
+            printf("border mesh vert empty? %d\n", mesh->vertices.empty());
         }
+        
     }
 
 
@@ -435,7 +454,7 @@ namespace chisel
             }
         }
 
-        //printf("Generated a new mesh with %lu verts, %lu norm, and %lu idx\n", mesh->vertices.size(), mesh->normals.size(), mesh->indices.size());
+        printf("Generated a new mesh with %lu verts, %lu norm, and %lu idx\n", mesh->vertices.size(), mesh->normals.size(), mesh->indices.size());
 
         assert(mesh->vertices.size() == mesh->normals.size());
         assert(mesh->vertices.size() == mesh->indices.size());
@@ -661,7 +680,7 @@ namespace chisel
 
         size_t currentNum = chunks.size() * (chunkSize(0) * chunkSize(1) * chunkSize(2));
         float currentMemory = currentNum * sizeof(DistVoxel) / 1000000.0f;
-
+        printf("chunk size: %lu \n", chunks.size());
         printf("Num Unknown: %lu, Num KnownIn: %lu, Num KnownOut: %lu Weight: %f\n", stats.numUnknown, stats.numKnownInside, stats.numKnownOutside, stats.totalWeight);
         printf("Bounds: %f %f %f %f %f %f\n", totalBounds.min.x(), totalBounds.min.y(), totalBounds.min.z(), totalBounds.max.x(), totalBounds.max.y(), totalBounds.max.z());
         printf("Theoretical max (MB): %f, Current (MB): %f\n", maxMemory, currentMemory);

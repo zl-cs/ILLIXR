@@ -87,6 +87,14 @@ namespace ILLIXR {
 	} pose_type;
 
 	typedef struct {
+		time_type sensor_time; // Recorded time of sensor data ingestion
+		Eigen::Vector3f position;
+		Eigen::Quaternionf orientation;
+		std::string depth_timestamp;
+		std::string depth_img;
+	} tum_pose_type;
+
+	typedef struct {
 		pose_type pose;
 		time_type predict_computed_time; // Time at which the prediction was computed
 		time_type predict_target_time; // Time that prediction targeted.

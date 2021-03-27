@@ -58,8 +58,10 @@ namespace chisel
                                                     const PinholeCamera& camera,
                                                     const Transform* cameraPose, Chunk* chunk) const
             {
-                assert(chunk != nullptr);
                 printf("ILLIXR integrate\n");
+
+                assert(chunk != nullptr);
+
                 Eigen::Vector3i numVoxels = chunk->GetNumVoxels();
                 float resolution = chunk->GetVoxelResolutionMeters();
                 Vec3 origin = chunk->GetOrigin();
@@ -72,7 +74,8 @@ namespace chisel
                     //Vec3 voxelCenterInCamera = cameraPose.linear().transpose() * (voxelCenter - cameraPose.translation());
                     Vec3 voxelCenterInCamera = cameraPose->linear().transpose() * (voxelCenter - cameraPose->translation());
                     Vec3 cameraPos = camera.ProjectPoint(voxelCenterInCamera);
-                    printf("ILLIXR cordinate check\n");
+                    printf("camera pos 0: %f, pos 1: %f, pos 2: %f\n", cameraPos(0), cameraPos(1), cameraPos(2));
+                   // printf("ILLIXR cordinate check\n");
 
                     if (!camera.IsPointOnImage(cameraPos) || voxelCenterInCamera.z() < 0)
                         continue;
@@ -80,24 +83,37 @@ namespace chisel
                     float voxelDist = voxelCenterInCamera.z();
                     float depth = depthImage->DepthAt((int)cameraPos(1), (int)cameraPos(0)); //depthImage->BilinearInterpolateDepth(cameraPos(0), cameraPos(1));
 
-                    printf("ILLIXR depth check\n");
 
                     if(std::isnan(depth))
                     {
+                        printf("ILLIXR depth check failed\n");
                         continue;
                     }
 
                     float truncation = truncator->GetTruncationDistance(depth);
                     float surfaceDist = depth - voxelDist;
-                    printf("ILLIXR surfacedist: %f\n", fabs(surfaceDist));
+                   // printf("ILLIXR surfacedist: %f\n", surfaceDist);
+                   // printf("ILLIXR truncation: %f \n", truncation);
+                   // printf("ILLIXR diag: %f\n", diag);
+//                    printf("ILLIXR surfacedist: %f\n", fabs(surfaceDist));
                     if (fabs(surfaceDist) < truncation + diag)
                     {
+                        printf("ILLIXR surfacedist: %f = depth: %f - voxelDist: %f\n", surfaceDist, depth, voxelDist);
+                        printf("ILLIXR truncation: %f \n", truncation);
+                        printf("ILLIXR diag: %f\n", diag);
+
+                        printf("ILLIXR dist voxel setup\n");
                         DistVoxel& voxel = chunk->GetDistVoxelMutable(i);
+                        //printf("pre voxel size %d", voxel.size());
                         voxel.Integrate(surfaceDist, 1.0f);
+                        //printf("post voxel size %d", voxel.size());
+//                        voxel.Integrate(fabs(surfaceDist), 1.0f);
                         updated = true;
                     }
                     else if (enableVoxelCarving && surfaceDist > truncation + carvingDist)
                     {
+                        printf("ILLIXR dist voxel carving setup\n");
+
                         DistVoxel& voxel = chunk->GetDistVoxelMutable(i);
                         if (voxel.GetWeight() > 0 && voxel.GetSDF() < 1e-5)
                         {
@@ -105,8 +121,6 @@ namespace chisel
                             updated = true;
                         }
                     }
-
-
                 }
                 return updated;
             }

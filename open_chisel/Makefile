@@ -5,17 +5,32 @@ CXX := clang++-10
 CC := clang-10
 
 .PHONY: plugin.opt.so
-plugin.opt.so: build/Makefile
-	make -C build "-j$(nproc)" && \
+plugin.opt.so: build/Release/Makefile
+	make -C build/Release "-j$(nproc)" && \
 	rm -f $@ && \
-	ln -s build/libplugin.so $@ && \
+	ln -s build/Release/libplugin.so $@ && \
+	true
+
+.PHONY: plugin.dbg.so
+plugin.dbg.so: build/Debug/Makefile
+	make -C build/Debug "-j$(nproc)" && \
+	rm -f $@ && \
+	ln -s build/Debug/libplugin.so $@ && \
 	true
 
 
-build/Makefile:
-	mkdir build && \
-	cd build && \
-	cmake -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_C_COMPILER=$(CC) .. && \
+build/Debug/Makefile:
+	mkdir -p build/Debug && \
+	cd build/Debug && \
+	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_C_COMPILER=$(CC) ../.. && \
+#	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_C_COMPILER=$(CC) ../.. && \
+	true
+
+build/Release/Makefile:
+	mkdir -p build/Release && \
+	cd build/Release && \
+#	cmake -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_C_COMPILER=$(CC) ../.. && \
+	cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_C_COMPILER=$(CC) ../.. && \
 	true
 
 

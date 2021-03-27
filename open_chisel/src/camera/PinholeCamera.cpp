@@ -55,11 +55,11 @@ namespace chisel
     void PinholeCamera::SetupFrustum(const Transform& view, Frustum* frustum) const
     {
         assert(frustum != nullptr);
-        printf("#5 orig x: %f, y:  %f, z: %f \n", view.translation()(0), view.translation()(1), view.translation()(2));
-        printf("#5 fx: %f, fy: %f, cx: %f, cy: %f, width: %d, height: %d\n", intrinsics.GetFx(), intrinsics.GetFy(), intrinsics.GetCx(), intrinsics.GetCy(), width, height);
-        printf("#5 nearplane: %f, farplane:  %f\n", nearPlane, farPlane);
-        
-        frustum->SetFromParams(view, nearPlane, farPlane, intrinsics.GetFx(), intrinsics.GetFy(), intrinsics.GetCx(), intrinsics.GetCy(), width, height);
+        printf("Setup frustum orig x: %f, y:  %f, z: %f \n", view.translation()(0), view.translation()(1), view.translation()(2));
+        printf("Setup frustum #5 fx: %f, fy: %f, cx: %f, cy: %f, width: %d, height: %d\n", intrinsics.GetFx(), intrinsics.GetFy(), intrinsics.GetCx(), intrinsics.GetCy(), width, height);
+        printf("Setup frustum #5 nearplane: %f, farplane:  %f\n", nearPlane, farPlane);
+        //fixed abug where GetFy() is called twice()
+        frustum->SetFromParams(view, nearPlane, farPlane, intrinsics.GetFy(), intrinsics.GetFy(), intrinsics.GetCx(), intrinsics.GetCy(), width, height);
     }
 
     bool PinholeCamera::IsPointOnImage(const Vec3& point) const

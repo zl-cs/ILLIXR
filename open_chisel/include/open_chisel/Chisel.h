@@ -55,22 +55,22 @@ namespace chisel
                                                               const Transform* extrinsic,
                                                               const PinholeCamera& camera)
             {
-
-                    DataType minimum, maximum, mean; depthImage->GetStats(minimum, maximum, mean); 
-                    printf("minimum : %f maximum: %f mean: %f \n", minimum, maximum, mean);
                     printf("CHISEL: Integrating a scan\n");
 
-                    Frustum frustum;
-                    //do i need to pass in this?
+                    DataType minimum, maximum, mean; 
+                    depthImage->GetStats(minimum, maximum, mean); 
+                    printf("depth img stats: minimum : %f maximum: %f mean: %f \n", minimum, maximum, mean);
 
-                    printf("#2 fx: %f, fy: %f, cx: %f, cy: %f \n", camera.GetIntrinsics().GetFx(),
+                    Frustum frustum;
+/*                    printf("#2 fx: %f, fy: %f, cx: %f, cy: %f \n", camera.GetIntrinsics().GetFx(),
                                                                     camera.GetIntrinsics().GetFy(),
                                                                     camera.GetIntrinsics().GetCx(),
                                                                     camera.GetIntrinsics().GetCy());
-
+*/
                     PinholeCamera cameraCopy = camera;
                     cameraCopy.SetNearPlane(static_cast<float>(minimum));
                     cameraCopy.SetFarPlane(static_cast<float>(maximum));
+/*
                     printf("#3 fx: %f, fy: %f, cx: %f, cy: %f \n", cameraCopy.GetIntrinsics().GetFx(),
                                                                     cameraCopy.GetIntrinsics().GetFy(),
                                                                     cameraCopy.GetIntrinsics().GetCx(),
@@ -80,24 +80,23 @@ namespace chisel
                     {
                         printf("old x: %f , old y: %f, old z: %f \n", frustum.GetCorners()[i].x(),
                                                                       frustum.GetCorners()[i].y(),
-                                                                      frustum.GetCorners()[i].z());                                                                      
+                                                                      frustum.GetCorners()[i].z());
                     }
+*/
                     cameraCopy.SetupFrustum(*extrinsic, &frustum);
                     for(int i=0; i< 8; i++)
                     {
-                        printf("new x: %f , old y: %f, old z: %f \n", frustum.GetCorners()[i].x(),
+                        printf("new x: %f , new y: %f, new z: %f \n", frustum.GetCorners()[i].x(),
                                                                       frustum.GetCorners()[i].y(),
                                                                       frustum.GetCorners()[i].z());                                                                      
                     }
 
-                    printf("#2 orig x: %f, y:  %f, z: %f \n", extrinsic->translation()(0), extrinsic->translation()(1), extrinsic->translation()(2));
-
-                    printf("ILLIXR checkpoint 0\n");
+//                    printf("#2 orig x: %f, y:  %f, z: %f \n", extrinsic->translation()(0), extrinsic->translation()(1), extrinsic->translation()(2));
 
                     ChunkIDList chunksIntersecting;
-                    printf("ILLIXR checkpoint 0.25\n");
+                    //323 stop
                     chunkManager.GetChunkIDsIntersecting(frustum, &chunksIntersecting);
-                    printf("ILLIXR checkpoint 0.5\n");
+                    //printf("ILLIXR checkpoint 0.5\n");
 
                     std::mutex mutex;
                     ChunkIDList garbageChunks;
@@ -110,39 +109,44 @@ namespace chisel
                         if (!chunkManager.HasChunk(chunkID))
                         {
                            chunkNew = true;
+                           //this is where chunkmap getting inserted
                            chunkManager.CreateChunk(chunkID);
                         }
 
                         ChunkPtr chunk = chunkManager.GetChunk(chunkID);
                         mutex.unlock();
-                        printf("ILLIXR checkpoint 2\n");
+                 //       printf("ILLIXR checkpoint 2\n");
 
                         bool needsUpdate = integrator.Integrate(depthImage, camera, extrinsic, chunk.get());
                         //bool needsUpdate = true;
                         mutex.lock();
                         if (needsUpdate)
                         {
+                            int count=0;
+                            printf("needs update\n");
                             for (int dx = -1; dx <= 1; dx++)
                             {
                                 for (int dy = -1; dy <= 1; dy++)
                                 {
                                     for (int dz = -1; dz <= 1; dz++)
                                     {
+                                        count++;
                                         meshesToUpdate[chunkID + ChunkID(dx, dy, dz)] = true;
                                     }
                                 }
                             }
+                            printf("ILLIXR: %d meshes need update\n", count);
                         }
                         else if(chunkNew)
                         {
                             garbageChunks.push_back(chunkID);
                         }
                         mutex.unlock();
-                        printf("ILLIXR checkpoint 3\n");
+                     //   printf("ILLIXR checkpoint 3\n");
 
                     }
                     //);
-                    printf("CHISEL: Done with scan\n");
+                    printf("CHISEL: Integrate Done with scan\n");
                     GarbageCollect(garbageChunks);
                     chunkManager.PrintMemoryStatistics();
             }

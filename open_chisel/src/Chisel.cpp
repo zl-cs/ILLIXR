@@ -59,13 +59,13 @@ namespace chisel
 
     void Chisel::GarbageCollect(const ChunkIDList& chunks)
     {
-        std::cout << chunkManager.GetChunks().size() << " chunks " << chunkManager.GetAllMeshes().size() << "meshes before collect.";
+        std::cout << chunkManager.GetChunks().size() << " chunks " << chunkManager.GetAllMeshes().size() << "meshes before collect." <<std::endl;
        for (const ChunkID& chunkID : chunks)
        {
            chunkManager.RemoveChunk(chunkID);
            meshesToUpdate.erase(chunkID);
        }
-        std::cout << chunkManager.GetChunks().size() << " chunks " << chunkManager.GetAllMeshes().size() << "meshes after collect.";
+        std::cout << chunkManager.GetChunks().size() << " chunks " << chunkManager.GetAllMeshes().size() << "meshes after collect." << std::endl;
     }
 
     bool Chisel::SaveAllMeshesToPLY(const std::string& filename)
@@ -73,7 +73,8 @@ namespace chisel
         printf("Saving all meshes to PLY file...\n");
 
         chisel::MeshPtr fullMesh(new chisel::Mesh());
-
+        const chisel::MeshMap& meshMap = chunkManager.GetAllMeshes();
+        printf("saveall mesh map size %lu\n", meshMap.size());
         size_t v = 0;
         for (const std::pair<ChunkID, MeshPtr>& it : chunkManager.GetAllMeshes())
         {
