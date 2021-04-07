@@ -8,15 +8,23 @@ data:
     archive_path:
       download_url: 'http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip'
 demo_data: demo_data/
-loader:
+
+enable_offload:   False
+enable_alignment: False
+enable_verbose_errors: False
+
+action:
   name: monado
   monado:
     path:
       git_repo: https://github.com/ILLIXR/monado_integration.git
-      version: master
+      version: "2.0"
   openxr_app:
     path:
       git_repo: https://github.com/ILLIXR/Monado_OpenXR_Simple_Example.git
-      version: master
+      version: "2.0"
     config: {}
+  kimera_path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO/
+  
+
 profile: opt

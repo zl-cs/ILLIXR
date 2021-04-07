@@ -20,7 +20,8 @@
 // IMU sample time to live in seconds
 #define IMU_TTL 5
 
-using PimUniquePtr = std::unique_ptr<gtsam::PreintegrationType>;
+// using PimUniquePtr = std::unique_ptr<gtsam::PreintegrationType>;
+using PimUniquePtr = gtsam::PreintegrationType*;
 using ImuBias = gtsam::imuBias::ConstantBias;
 using namespace ILLIXR;
 
@@ -72,6 +73,8 @@ public:
 
 		clean_imu_vec(timestamp_in_seconds);
         propagate_imu_values(timestamp_in_seconds, datum->time);
+
+        RAC_ERRNO_MSG("gtsam_integrator");
 	}
 
 private:
@@ -125,7 +128,8 @@ private:
 			params->biasAccCovariance = std::pow(input_values->params.acc_walk, 2.0) * Eigen::Matrix3d::Identity();
 			params->biasOmegaCovariance = std::pow(input_values->params.gyro_walk, 2.0) * Eigen::Matrix3d::Identity();
 
-			pim_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(params, imu_bias);
+			// pim_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(params, imu_bias);
+			pim_ = new gtsam::PreintegratedCombinedMeasurements(params, imu_bias);
 			last_imu_offset = input_values->t_offset;
 		}
 

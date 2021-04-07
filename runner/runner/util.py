@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 import itertools
 import multiprocessing
@@ -21,8 +22,10 @@ from typing import (
     Any,
     AnyStr,
     Awaitable,
+    BinaryIO,
     Callable,
     Iterable,
+    Iterator,
     Generic,
     IO,
     List,
@@ -127,7 +130,7 @@ class CalledProcessError(Exception):
         if env_var_str:
             env_var_str += " "
         cwd_str = f"-C {shlex.quote(str(self.cwd))} " if self.cwd.resolve() != Path().resolve() else ""
-        env_cmd_str = f"env {cwd_str}- {env_var_str}" if env_var_str or cwd_str else ""
+        env_cmd_str = f"env {cwd_str}{env_var_str}" if env_var_str or cwd_str else ""
         cmd_str = f"{env_cmd_str}{shlex.join(self.args2)}"
         stdout = ("\nstdout:\n" + textwrap.indent(self.stdout.decode(), "  ")) if self.stdout is not None else ""
         stderr = ("\nstderr:\n" + textwrap.indent(self.stderr.decode(), "  ")) if self.stderr is not None else ""
@@ -145,6 +148,7 @@ def subprocess_run(
     env: Optional[Mapping[str, str]] = None,
     env_override: Optional[Mapping[str, str]] = None,
     capture_output: bool = False,
+    stdout: Optional[BinaryIO] = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Wrapper around of subprocess.run.
 
@@ -163,7 +167,7 @@ def subprocess_run(
     if env_override:
         env.update(env_override)
 
-    proc = subprocess.run(args, env=env, cwd=cwd, capture_output=capture_output)
+    proc = subprocess.run(args, env=env, cwd=cwd, capture_output=capture_output, stdout=stdout)
 
     if check:
         if proc.returncode != 0:
@@ -209,9 +213,9 @@ def threading_imap_unordered(
 
     If the length cannot be determined by operator.length_hint, `length_hint` will be used. If it is None, we fallback to tqdm without a `total`.
     """
-    results: queue.Queue[V] = queue.Queue(maxsize=operator.length_hint(iterable))
+    results: queue.Queue[Tuple[str, Union[V, BaseException]]] = queue.Queue(maxsize=operator.length_hint(iterable))
 
-    def worker(chunk: List[T], results: queue.Queue[V]) -> None:
+    def worker(chunk: List[T], results: queue.Queue[Tuple[str, Union[V, BaseException]]]) -> None:
         try:
             for elem in chunk:
                 results.put(("elem", func(elem)))
@@ -226,7 +230,7 @@ def threading_imap_unordered(
     for thread in threads:
         thread.start()
 
-    def get_results(results: queue.Queue[V]) -> Iterable[V]:
+    def get_results(results: queue.Queue[Tuple[str, Union[V, BaseException]]]) -> Iterable[V]:
         while any(thread.is_alive() for thread in threads):
             try:
                 result = results.get(timeout=0.5)
@@ -235,9 +239,9 @@ def threading_imap_unordered(
             else:
                 if result[0] == "elem":
                     tqdm.write(str(result[1]))
-                    yield result[1]
+                    yield cast(V, result[1])
                 elif result[0] == "exception":
-                    raise result[1]
+                    raise cast(BaseException, result[1])
                 else:
                     raise ValueError(f"Unknown signal from thread worker: {result[0]}")
 
@@ -246,6 +250,7 @@ def threading_imap_unordered(
             get_results(results),
             total=my_length_hint(iterable, length_hint),
             desc=desc,
+            unit="plugins",
         )
     )
 
@@ -310,7 +315,7 @@ class TqdmOutputFile(Generic[AnyStr]):
     desc: Optional[str] = None
 
     def __post_init__(self) -> None:
-        self.t = tqdm(total=self.length, desc=self.desc)
+        self.t = tqdm(total=self.length, desc=self.desc, unit="bytes", unit_scale=True)
 
     def read(self, block_size: int = BLOCKSIZE) -> AnyStr:
         buf = self.fileobj.read(block_size)
@@ -345,9 +350,9 @@ def truncate(string: str, length: int) -> str:
 
 def unzip_with_progress(zip_path: Path, output_dir: Path, desc: Optional[str] = None) -> None:
     try:
-        with zipfile.PyZipFile(zip_path) as zf:
+        with zipfile.PyZipFile(str(zip_path)) as zf:
             total = sum(zi.file_size for zi in zf.infolist())
-            progress = tqdm(desc=desc, total=total)
+            progress = tqdm(desc=desc, total=total, unit="bytes", unit_scale=True)
             for zi in zf.infolist():
                 output_path = output_dir / zi.filename
                 if not zi.is_dir():
@@ -494,3 +499,54 @@ Returns:
             return cache_dest
     else:
         raise ValueError(f"Unsupported path description {path_descr}")
+
+
+@contextlib.contextmanager
+def noop_context(x: Any) -> Iterator[Any]:
+    yield x
+
+
+def make(
+    path: Path,
+    targets: List[str],
+    var_dict: Optional[Mapping[str, str]] = None,
+    parallelism: Optional[int] = None,
+    env_override: Optional[Mapping[str, str]] = None
+) -> None:
+
+    if parallelism is None:
+        parallelism = max(1, multiprocessing.cpu_count() // 2)
+
+    var_dict_args = shlex.join(
+        f"{key}={val}" for key, val in (var_dict if var_dict else {}).items()
+    )
+
+    subprocess_run(
+        ["make", "-j", str(parallelism), "-C", str(path), *targets, *var_dict_args],
+        env_override=env_override,
+        check=True,
+        capture_output=True,
+    )
+
+
+def cmake(
+    path: Path, build_path: Path, var_dict: Optional[Mapping[str, str]] = None
+) -> None:
+    parallelism = max(1, multiprocessing.cpu_count() // 2)
+    var_args = [f"-D{key}={val}" for key, val in (var_dict if var_dict else {}).items()]
+    build_path.mkdir(exist_ok=True)
+    subprocess_run(
+        [
+            "cmake",
+            "-S",
+            str(path),
+            "-B",
+            str(build_path),
+            "-G",
+            "Unix Makefiles",
+            *var_args,
+        ],
+        check=True,
+        capture_output=True,
+    )
+    make(build_path, ["all"])
