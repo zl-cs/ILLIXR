@@ -1,0 +1,13 @@
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/CMakeFiles/rebuild_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/CMakeFiles/edit_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/CMakeFiles/InfiniTAM.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/FernRelocLib/CMakeFiles/rebuild_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/FernRelocLib/CMakeFiles/edit_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/InputSource/CMakeFiles/rebuild_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/InputSource/CMakeFiles/edit_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/ITMLib/CMakeFiles/rebuild_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/ITMLib/CMakeFiles/edit_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/MiniSlamGraphLib/CMakeFiles/rebuild_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/MiniSlamGraphLib/CMakeFiles/edit_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/ORUtils/CMakeFiles/rebuild_cache.dir
+/home/bytian/Desktop/ILLIXR/infinitam/Apps/InfiniTAM/ORUtils/CMakeFiles/edit_cache.dir
