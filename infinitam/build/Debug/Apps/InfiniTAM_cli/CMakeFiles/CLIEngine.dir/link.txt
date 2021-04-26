@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCLIEngine.a CMakeFiles/CLIEngine.dir/CLIEngine.cpp.o
+/usr/bin/ranlib libCLIEngine.a

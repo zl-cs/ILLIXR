@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIEngine.a CMakeFiles/UIEngine.dir/UIEngine.cpp.o
+/usr/bin/ranlib libUIEngine.a

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libFernRelocLib.a CMakeFiles/FernRelocLib.dir/FernConservatory.cpp.o CMakeFiles/FernRelocLib.dir/PoseDatabase.cpp.o CMakeFiles/FernRelocLib.dir/RelocDatabase.cpp.o
+/usr/bin/ranlib libFernRelocLib.a
