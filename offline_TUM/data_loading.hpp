@@ -24,7 +24,6 @@ public:
 	{ }
 	std::unique_ptr<cv::Mat> unmodified_load() const {
 		auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_UNCHANGED)}};
-		/* TODO: make this load in grayscale */
 		assert(!img->empty());
 		return img;
 	}
@@ -34,7 +33,6 @@ public:
 		cv::Mat *converted_mat = new cv::Mat();
 		cv::cvtColor(original_mat,*converted_mat,cv::COLOR_RGB2RGBA,0);
 		auto img = std::unique_ptr<cv::Mat>{converted_mat};
-		/* TODO: make this load in grayscale */
 		assert(!img->empty());
 		return img;
 	}

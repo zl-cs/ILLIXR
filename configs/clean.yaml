@@ -38,6 +38,7 @@ plugin_groups:
     - path: rk4_integrator
     - path: timewarp_gl
     - path: InfiniTAM
+    - path: offline_TUM
 
 action:
   name: clean

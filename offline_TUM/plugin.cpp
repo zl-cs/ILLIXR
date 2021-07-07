@@ -35,7 +35,6 @@ protected:
 	virtual skip_option _p_should_skip() override {
 		if (_m_sensor_data_it != _m_sensor_data.end()) {
 			dataset_now = _m_sensor_data_it->first;
-			// Sleep for the difference between the current IMU vs 1st IMU and current UNIX time vs UNIX time the component was init
 			//std::cout<<"sleep for : "<<(dataset_now - dataset_prev) <<std::endl;
 			//dataset_prev = dataset_now;
 			std::this_thread::sleep_for(
@@ -43,7 +42,7 @@ protected:
 				+ real_first_time
 				- std::chrono::high_resolution_clock::now()
 			);
-            //in the TUM case, since we have no actual imu reading we use depth image to filter
+            		//in the TUM case, since we have no actual imu reading we use depth image to filter
 			if (_m_sensor_data_it->second.cam0) {
 				return skip_option::run;
 			} else {
