@@ -260,16 +260,16 @@ def load_monado(config: Mapping[str, Any]) -> None:
     else:
         ## Get the full path to the 'app' binary
         openxr_app_path     = None
-        openxr_app_bin_path = pathify(openxr_app_obj["app"], root_dir, cache_path, True, True)
-
+        #openxr_app_bin_path = pathify(openxr_app_obj["app"], root_dir, cache_path, True, True)
+        openxr_app_bin_path = Path(openxr_app_obj["app"])
     ## Compile the OpenXR app if we received an 'app' with 'src_path'
+    print (openxr_app_bin_path)
     if openxr_app_path:
         cmake(
             openxr_app_path,
             openxr_app_path / "build",
             dict(CMAKE_BUILD_TYPE=cmake_profile, **openxr_app_config),
         )
-
     if not openxr_app_bin_path.exists():
         raise RuntimeError(f"{action_name} Failed to build openxr_app (mainline={is_mainline}, path={openxr_app_bin_path})")
 
@@ -284,11 +284,10 @@ def load_monado(config: Mapping[str, Any]) -> None:
         env_monado_service: Mapping[str, str] = dict(**os.environ, **env_monado)
 
         ## Open the Monado service application in the background
-        monado_service_proc = subprocess.Popen([str(monado_target_path)], env=env_monado_service, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        #monado_service_proc = subprocess.Popen([str(monado_target_path)], env=env_monado_service, stdin=PIPE, stdout=PIPE, stderr=PIPE)
 
     ## Give the Monado service some time to boot up and the user some time to initialize VIO
     time.sleep(5)
-
     subprocess_run(
         [str(openxr_app_bin_path)],
         env_override=dict(

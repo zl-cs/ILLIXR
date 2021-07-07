@@ -76,19 +76,17 @@ protected:
 		}});
 
 		std::optional<cv::Mat> depth = sensor_datum.cam0
-			? std::make_optional<cv::Mat>(*(sensor_datum.cam0.value().load().release()))
+			? std::make_optional<cv::Mat>(*(sensor_datum.cam0.value().unmodified_load().release()))
 			: std::nullopt
 			;
 		RAC_ERRNO_MSG("offline_TUM after depth");
 		std::optional<cv::Mat> rgb = sensor_datum.cam1
-			? std::make_optional<cv::Mat>(*(sensor_datum.cam1.value().load().release()))
+			? std::make_optional<cv::Mat>(*(sensor_datum.cam1.value().modified_load().release()))
 			: std::nullopt
 			;
 		RAC_ERRNO_MSG("offline_TUM after rgb");
-        if(!depth)
-        {
-            std::cout<<"has no depth "<<std::endl;
-        }
+		
+        
         _m_rgb_depth.put(_m_rgb_depth.allocate<rgb_depth_type>(
             rgb_depth_type {
                 rgb,
@@ -96,7 +94,6 @@ protected:
                 dataset_now
             }
         ));
-
 		RAC_ERRNO_MSG("offline_TUM at bottom of iteration");
 	}
 

@@ -22,8 +22,18 @@ public:
 	lazy_load_image(const std::string& path)
 		: _m_path(path)
 	{ }
-	std::unique_ptr<cv::Mat> load() const {
+	std::unique_ptr<cv::Mat> unmodified_load() const {
 		auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_UNCHANGED)}};
+		/* TODO: make this load in grayscale */
+		assert(!img->empty());
+		return img;
+	}
+	std::unique_ptr<cv::Mat> modified_load() const {
+		//auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_UNCHANGED)}};
+		cv::Mat original_mat = cv::imread(_m_path, cv::IMREAD_UNCHANGED);
+		cv::Mat *converted_mat = new cv::Mat();
+		cv::cvtColor(original_mat,*converted_mat,cv::COLOR_RGB2RGBA,0);
+		auto img = std::unique_ptr<cv::Mat>{converted_mat};
 		/* TODO: make this load in grayscale */
 		assert(!img->empty());
 		return img;
@@ -54,8 +64,7 @@ load_data() {
 
 	std::map<ullong, sensor_types> data;
 
-    //for now cam0 is depth
-	const std::string dataset_subpath = "/associate_depth.csv";
+	const std::string dataset_subpath = "/final.csv";
 	std::ifstream dataset_file {illixr_data + dataset_subpath};
 	if (!dataset_file.good()) {
 		std::cerr << "${ILLIXR_DATA}" << dataset_subpath << " (" << illixr_data << dataset_subpath << ") is not a good path" << std::endl;
@@ -70,7 +79,7 @@ load_data() {
         ullong t = std::stoull(unit_conv);
 //        std::cout<<"depth t: "<<t<<std::endl;
 		data[t].cam0 = {illixr_data +  "/" + row[9]};
-		data[t].cam0 = {illixr_data +  "/" + row[11]};
+		data[t].cam1 = {illixr_data +  "/" + row[11]};
 	}
 	std::cout<<"finished data loading"<<std::endl;
 	return data;

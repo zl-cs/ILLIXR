@@ -27,6 +27,7 @@ public:
 		pb.register_impl<gen_guid>(std::make_shared<gen_guid>());
 		pb.register_impl<switchboard>(std::make_shared<switchboard>(&pb));
 #ifndef ILLIXR_MONADO_MAINLINE
+//pyh: comment out now to disable illixr extended window spawn
         pb.register_impl<xlib_gl_extended_window>(std::make_shared<xlib_gl_extended_window>(ILLIXR::FB_WIDTH, ILLIXR::FB_HEIGHT, appGLCtx));
 #endif /// ILLIXR_MONADO_MAINLINE
 		pb.register_impl<Stoplight>(std::make_shared<Stoplight>());

@@ -1,6 +1,7 @@
 plugin_groups:
   - plugin_group:
-    - path: offline_imu_cam
+   # - path: offline_imu_cam
+    - path: zed
     - path: gtsam_integrator
     - path: pose_prediction
     - name: OpenVINS
@@ -51,11 +52,14 @@ action:
       XRT_BUILD_DRIVER_VIVE         : OFF
       XRT_BUILD_DRIVER_HANDTRACKING : OFF
       XRT_BUILD_DRIVER_WMR          : OFF
-      XRT_FEATURE_SERVICE           : ON
+      XRT_FEATURE_SERVICE           : OFF
+#      XRT_FEATURE_SERVICE           : ON
 
-  openxr_app: !include "openxr_app.yaml"
+  openxr_app: !include "godot_material.yaml"
+#  openxr_app: !include "openxr_app.yaml"
 
   kimera_path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO.git/
   audio_path:  .cache/paths/https%c%s%sgithub.com%sILLIXR%saudio_pipeline.git/
 
+  command: gdb -q --args $cmd
 profile: opt

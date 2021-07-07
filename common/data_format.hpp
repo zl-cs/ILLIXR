@@ -28,6 +28,8 @@ namespace ILLIXR {
 	// time is the current UNIX time where dataset_time is the time read from the csv
 	struct imu_cam_type : public switchboard::event {
 		time_type time;
+		//std::optional<Eigen::Vector3f> angular_v;
+		//std::optional<Eigen::Vector3f> linear_a;
 		Eigen::Vector3f angular_v;
 		Eigen::Vector3f linear_a;
 		std::optional<cv::Mat> img0;
@@ -48,11 +50,10 @@ namespace ILLIXR {
 		{ }
 	};
 
-    class rgb_depth_type : public switchboard::event {
+    struct rgb_depth_type : public switchboard::event {
         std::optional<cv::Mat> rgb;
         std::optional<cv::Mat> depth;
         [[maybe_unused]] ullong timestamp;
-	public:
 		rgb_depth_type(
 					   std::optional<cv::Mat> _rgb,
 					   std::optional<cv::Mat> _depth,
