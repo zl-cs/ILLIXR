@@ -251,11 +251,6 @@ async def load_monado(config: Dict[str, Any]) -> None:
                 **monado_config,
             ),
         ),
-        cmake(
-            openxr_app_path,
-            openxr_app_path / "build",
-            dict(CMAKE_BUILD_TYPE=cmake_profile, **openxr_app_config),
-        ),
         build_runtime(config, "so"),
         gather_aws(
             *(
@@ -265,7 +260,7 @@ async def load_monado(config: Dict[str, Any]) -> None:
         ),
     )
     await subprocess_run(
-        [str(openxr_app_path / "build" / "./openxr-example")],
+        [str(openxr_app_path)],
         check=True,
         env=dict(
             XR_RUNTIME_JSON=str(monado_path / "build" / "openxr_monado-dev.json"),
