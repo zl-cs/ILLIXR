@@ -22,6 +22,6 @@ loader:
     config:
       ILLIXR_PATH: ../../ILLIXR
   openxr_app:
-    path: ../OpenXR-Apps/demo/bin
+    path: "../OpenXR-Apps/demo/bin/demo.x86_64"
     config: {}
 profile: opt

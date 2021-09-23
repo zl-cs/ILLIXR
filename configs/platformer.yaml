@@ -22,6 +22,6 @@ loader:
     config:
       ILLIXR_PATH: ../../ILLIXR
   openxr_app:
-    path: ../OpenXR-Apps/platformer/bin
+    path: "../OpenXR-Apps/platformer/bin/platformer.x86_64"
     config: {}
 profile: opt

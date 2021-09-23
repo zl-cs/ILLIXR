@@ -234,7 +234,7 @@ async def load_monado(config: Dict[str, Any]) -> None:
     openxr_app_config = config["loader"]["openxr_app"].get("config", {})
     openxr_app_path = pathify(config["loader"]["openxr_app"]["path"], root_dir)
 
-    _, _, _, plugin_paths = await gather_aws(
+    _, _, plugin_paths = await gather_aws(
         cmake(
             monado_path,
             monado_path / "build",
