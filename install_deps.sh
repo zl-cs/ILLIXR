@@ -39,3 +39,6 @@ wget -O data/test.png https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/
 # Install dependencies for RITnet
 . $HOME/miniconda3/etc/profile.d/conda.sh
 conda env create --name RITnet --file benchmark/RITnet/environment.yml
+
+# Build OpenVINS
+./benchmark/open_vins_ws/src/open_vins/install_deps.sh

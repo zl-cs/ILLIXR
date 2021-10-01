@@ -2,7 +2,7 @@
 	path = benchmark/ElasticFusion
 	url = https://github.com/ILLIXR/ElasticFusion.git
 [submodule "benchmark/open_vins"]
-	path = benchmark/open_vins
+	path = benchmark/open_vins_ws/src/open_vins
 	url = https://github.com/ILLIXR/open_vins.git
 [submodule "benchmark/HOTlab"]
 	path = benchmark/HOTlab
@@ -16,3 +16,12 @@
 [submodule "benchmark/RITnet"]
 	path = benchmark/RITnet
 	url = https://github.com/ILLIXR/RITnet.git
+[submodule "benchmark/open_vins_ws/src/catkin"]
+	path = benchmark/open_vins_ws/src/catkin
+	url = git@github.com:ros/catkin.git
+[submodule "benchmark/open_vins_ws/src/ros_comm"]
+	path = benchmark/open_vins_ws/src/ros_comm
+	url = git@github.com:ros/ros_comm.git
+[submodule "benchmark/open_vins_ws/src/roscpp_core"]
+	path = benchmark/open_vins_ws/src/roscpp_core
+	url = git@github.com:ros/roscpp_core.git
