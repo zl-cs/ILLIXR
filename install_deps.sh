@@ -9,8 +9,10 @@ sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
 sudo apt-get update
 sudo apt-get install -y intel-basekit
 
-# This allows us to use perf without escalating priveleges
+# Install perf
+sudo apt-get install -y linux-tools-common
 sudo sh -c 'echo 0 > /proc/sys/kernel/perf_event_paranoid'
+sudo sh -c 'echo 0 > /proc/sys/kernel/kptr_restrict'
 
 # If we don't specify which clang, assume clang-10
 if ! which clang++; then
