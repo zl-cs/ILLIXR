@@ -17,4 +17,23 @@ if ! which clang++; then
     sudo ln -s $(which clang++-10) /usr/bin/local/clang++
 fi
 
-./benchmarks/ElasticFusion/install_deps.sh
+# Build audio_pipeline
+make -C benchmark/audio_pipeline solo.opt
+
+mkdir -p data
+
+# Build ElasticFusion
+./benchmark/ElasticFusion/install_deps.sh
+./benchmark/ElasticFusion/build.sh
+wget -O data/dyson_lab.klg www.doc.ic.ac.uk/~sleutene/datasets/elasticfusion/dyson_lab.klg
+
+# Build Hologram
+make -C benchmark/HOTlab/C/source all
+
+# Build visual_postprocessing
+make -C benchmark/visual_postprocessing/src all
+wget -O data/test.png https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Internet_map_1024_-_transparent%2C_inverted.png/1024px-Internet_map_1024_-_transparent%2C_inverted.png
+
+# Install dependencies for RITnet
+. $HOME/miniconda3/etc/profile.d/conda.sh
+conda env create --name RITnet --file benchmark/RITnet/environment.yml
