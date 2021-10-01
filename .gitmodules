@@ -2,7 +2,7 @@
 	path = benchmark/ElasticFusion
 	url = https://github.com/ILLIXR/ElasticFusion.git
 [submodule "benchmark/open_vins"]
-	path = benchmark/open_vins_ws/src/open_vins
+	path = benchmark/open_vins
 	url = https://github.com/ILLIXR/open_vins.git
 [submodule "benchmark/HOTlab"]
 	path = benchmark/HOTlab

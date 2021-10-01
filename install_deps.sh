@@ -19,10 +19,12 @@ if ! which clang++; then
     sudo ln -s $(which clang++-10) /usr/bin/local/clang++
 fi
 
-# Build audio_pipeline
-make -C benchmark/audio_pipeline solo.opt
-
 mkdir -p data
+
+# Build audio_pipeline
+# ln -s common benchmark/audio_pipeline
+# make -C benchmark/audio_pipeline solo.opt.exe
+make -C benchmark/audio_pipeline solo.opt
 
 # Build ElasticFusion
 ./benchmark/ElasticFusion/install_deps.sh
@@ -34,11 +36,11 @@ make -C benchmark/HOTlab/C/source all
 
 # Build visual_postprocessing
 make -C benchmark/visual_postprocessing/src all
-wget -O data/test.png https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Internet_map_1024_-_transparent%2C_inverted.png/1024px-Internet_map_1024_-_transparent%2C_inverted.png
 
 # Install dependencies for RITnet
 . $HOME/miniconda3/etc/profile.d/conda.sh
 conda env create --name RITnet --file benchmark/RITnet/environment.yml
 
 # Build OpenVINS
-./benchmark/open_vins_ws/src/open_vins/install_deps.sh
+head -n 1711 ../ILLIXR/data1/cam1/data.csv > data/corrected_cam1_data.csv
+make -C benchmark/open_vins opt
