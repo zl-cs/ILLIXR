@@ -24,9 +24,10 @@
       # available at compile- and run-time
       propagatedBuildInputs = [
         # TODO: dynamic libraries
-	# TODO: dataset
-	# TODO: each plugin .so (will have to make a flake for each plugin)
 	# TODO: ... other stuff
+
+	# plugins, dataset, monado, and OpenXR app, will be pulled in by a parent package;
+	# No need for them here.
       ];
     };
 
