@@ -3,7 +3,7 @@
   let
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
   in {
-    packages.x86_64-linux.illixr-runtime = pkgs.stdenv.mkDerivation {
+    packages.x86_64-linux.illixr-runtime = pkgs.clangStdenv.mkDerivation {
       pname = "illixr-runtime";
       version = "2.2.0-latest";
       src = ./.;
@@ -16,7 +16,6 @@
 
       # only available at compile-time
       buildInputs = [
-	# TODO: clang compiler
 	# TODO: common headers (will have to make a flake for ../common)
 	# TODO: ... other stuff
       ];
