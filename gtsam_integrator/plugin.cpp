@@ -241,7 +241,6 @@ private:
 				<< out_pose.y() << ", "
 				<< out_pose.z() << std::endl;
 #endif
-		std::cout<<"OUR SCHEME POSE!!!: "<<" "<</*real_time<<" "<<*/out_pose.translation().x()<<" "<<out_pose.translation().y()<<" "<<out_pose.translation().z()<<" "<<out_pose.rotation().toQuaternion().x()<<" "<<out_pose.rotation().toQuaternion().y()<<" "<<out_pose.rotation().toQuaternion().z()<<" "<<out_pose.rotation().toQuaternion().w()<<" "<<std::endl;
         const pose_type *true_pose = _m_true_pose->get_latest_ro();
 		if (!first_true_pose_flag){
 			first_true_pose[0]=true_pose->position[0];
@@ -258,9 +257,6 @@ private:
 			_set_offset(corrected_true_pose.orientation);
 			first_true_pose_flag=true;
 		}
-
-        //std::cout<<"True POSE!!!: "<</*true_pose->sensor_time<<*/true_pose->position[0]-first_true_pose[0]<<true_pose->position[1]-first_true_pose[1]<<true_pose->position[2]-first_true_pose[2]<<true_pose->orientation.x()-first_true_pose[3]<<true_pose->orientation.y()-first_true_pose[4]<<true_pose->orientation.z()-first_true_pose[5]<<true_pose->orientation.w()-first_true_pose[6]<<std::endl;
-        std::cout<<"True POSE!!!: "<<" "<</*true_pose->sensor_time<<" "<<*/corrected_true_pose.position[0]<<" "<<corrected_true_pose.position[1]<<" "<<corrected_true_pose.position[2]<<" "<<corrected_true_pose.orientation.x()<<" "<<corrected_true_pose.orientation.y()<<" "<<corrected_true_pose.orientation.z()<<" "<<corrected_true_pose.orientation.w()<<" "<<std::endl;
        
 		_m_imu_raw->put(new imu_raw_type{
 			prev_bias.gyroscope(),
