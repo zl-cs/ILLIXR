@@ -1,6 +1,6 @@
 ## Using ?= makes these variables overridable
 ## Simply define them before including common.mk
-CXX := clang++-10
+CXX := $(CXX)
 STDCXX ?= c++17
 CFLAGS := $(CFLAGS) -DGLSL_VERSION='"330 core"'
 RM := rm -f
@@ -48,7 +48,7 @@ plugin.opt.so: plugin.cpp $(CPP_FILES) $(HPP_FILES) Makefile
 
 main.dbg.exe: main.cpp $(CPP_FILES) $(HPP_FILES) Makefile
 	$(CXX) -ggdb -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(DBG_FLAGS) \
-	-o $@ main.cpp $(CPP_FILES) $(LDFLAGS)
+	-o $(out)/bin/$@ main.cpp $(CPP_FILES) $(LDFLAGS)
 
 main.opt.exe: main.cpp $(CPP_FILES) $(HPP_FILES) Makefile
 	$(CXX)        -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(OPT_FLAGS) \
