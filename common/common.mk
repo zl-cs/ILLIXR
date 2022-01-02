@@ -36,6 +36,8 @@ GTEST_LOC := $(shell env working_dir='${PWD}' '${PWD}/deps.sh' && echo '${parent
 
 GTEST_FLAGS := -DGTEST_HAS_PTHREAD=1 -lpthread -DGTEST_HAS_PTHREAD=1 -lpthread -I$(GTEST_LOC)/include -L$(GTEST_LOC)/build/lib -lgtest_main -lpthread -lgtest -lpthread
 
+## If building with Nix Flakes, then NIX_FLAKES is set to 'ON'
+## then change the output directories accordingly
 ifeq ($(NIX_FLAKES),ON)
 	LIB_DIR := $(out)/lib
 	BIN_DIR := $(out)/bin
