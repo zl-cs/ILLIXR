@@ -1,59 +1,34 @@
 {
-  outputs = { self, nixpkgs }:
-  let
-    pkgs = nixpkgs.legacyPackages.x86_64-linux;
-  in {
-    packages.x86_64-linux.illixr-runtime = pkgs.clangStdenv.mkDerivation {
+  outputs = { self, nixpkgs }: {
+    packages.x86_64-linux.illixr-runtime =
+    with import nixpkgs { system = "x86_64-linux"; };
+    clangStdenv.mkDerivation {
       pname = "illixr-runtime";
-      version = "2.2.0-latest";
-      src = ./.;
-      phases = "buildPhase";
-
+      version = "2.2.1-latest";
+      src = self;
+      configurePhase = ''
+        export NIX_FLAKES=ON
+      '';
       buildPhase = ''
-        # cd $src/runtime
-	mkdir -p $out/bin
-	make -C $src/runtime main.dbg.exe
-        # TODO: build goes here
-      '';
-
-      installPhase = ''
+        mkdir -p $out/lib
         mkdir -p $out/bin
+        mkdir -p $out/obj
+        make -C $src/runtime main.dbg.exe
       '';
-
-      # only available at compile-time
+      installPhase = ''
+        # So far the installation is handled by 'Makefile's,
+        # but please keep this 'installPhase' and comments,
+        # or please disable 'installPhase'.
+      '';
       buildInputs = [
-        # TODO: common headers (will have to make a flake for ../common)
-	# TODO: ... other stuff
-        ./common
-	pkgs.pkgconfig
-	# pkgs.clang_10
-	pkgs.opencv3
-	pkgs.gnumake
-	# pkgs.cmake
-	pkgs.eigen
-	pkgs.boost175
-	pkgs.boost175.out
-	pkgs.boost175.dev
-	pkgs.blas
-	pkgs.glew
-	pkgs.glfw
-	pkgs.libGL
-	pkgs.freeglut
-	# pkgs.cudaPackages.cudatoolkit_10_1
-	pkgs.x11
-	pkgs.sqlite
-      ];
-
-      # available at compile- and run-time
-      propagatedBuildInputs = [
-        # TODO: dynamic libraries
-	# TODO: ... other stuff
-
-	# plugins, dataset, monado, and OpenXR app, will be pulled in by a parent package;
-	# No need for them here.
+        libGL
+        x11
+        glew
+        sqlite
+        pkgconfig
+        glfw
       ];
     };
-
     defaultPackage.x86_64-linux = self.packages.x86_64-linux.illixr-runtime;
   };
 }
