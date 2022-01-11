@@ -30,10 +30,10 @@
       ];
     };
 
-    packages.x86_64-linux.illixr-timewarp_gl =
+    packages.x86_64-linux.illixr-plugin =
     with import nixpkgs { system = "x86_64-linux"; };
     clangStdenv.mkDerivation {
-      pname = "illixr-timewarp_gl";
+      pname = "illixr-plugin";
       version = "2.2.1-latest";
       src = self;
       configurePhase = ''
@@ -43,7 +43,7 @@
         mkdir -p $out/lib
         mkdir -p $out/bin
         mkdir -p $out/obj
-        make -C $src/timewarp_gl plugin.dbg.so
+        make -C $src/runtime plugin.dbg.so
       '';
       installPhase = ''
         # So far the installation is handled by 'Makefile's,
