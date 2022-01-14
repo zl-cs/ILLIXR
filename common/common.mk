@@ -39,40 +39,39 @@ GTEST_FLAGS := -DGTEST_HAS_PTHREAD=1 -lpthread -DGTEST_HAS_PTHREAD=1 -lpthread -
 ## If building with Nix Flakes, then NIX_FLAKES is set to 'ON'
 ## then change the output directories accordingly
 ifeq ($(NIX_FLAKES),ON)
-	LIB_DIR := $(out)/lib
-	BIN_DIR := $(out)/bin
-	OBJ_DIR := $(out)/obj
+	OUT_DIR := $(out)
 else
-	LIB_DIR :=
-	BIN_DIR :=
-	OBJ_DIR :=
+	OUT_DIR := .
 endif
 
 ## In the future, if compilation is slow, we can enable partial compilation of object files with
 ##  $(OBJ_FILES:.o=.dbg.o) and  $(OBJ_FILES:.o=.opt.o)
-plugin.dbg.so: plugin.cpp $(CPP_FILES) $(HPP_FILES) Makefile
+plugin.dbg.so: plugin.cpp $(CPP_FILES) $(HPP_FILES) Makefile $(OUT_DIR)
 	$(CXX) -ggdb -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(DBG_FLAGS) -shared -fpic \
-	-o $(LIB_DIR)/$@ plugin.cpp $(CPP_FILES) $(LDFLAGS)
+	-o $(OUT_DIR)/$@ plugin.cpp $(CPP_FILES) $(LDFLAGS)
 
-plugin.opt.so: plugin.cpp $(CPP_FILES) $(HPP_FILES) Makefile
+plugin.opt.so: plugin.cpp $(CPP_FILES) $(HPP_FILES) Makefile $(OUT_DIR)
 	$(CXX)       -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(OPT_FLAGS) -shared -fpic \
-	-o $(LIB_DIR)/$@ plugin.cpp $(CPP_FILES) $(LDFLAGS)
+	-o $(OUT_DIR)/$@ plugin.cpp $(CPP_FILES) $(LDFLAGS)
 
-main.dbg.exe: main.cpp $(CPP_FILES) $(HPP_FILES) Makefile
+main.dbg.exe: main.cpp $(CPP_FILES) $(HPP_FILES) Makefile $(OUT_DIR)
 	$(CXX) -ggdb -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(DBG_FLAGS) \
-	-o $(BIN_DIR)/$@ main.cpp $(CPP_FILES) $(LDFLAGS)
+	-o $(OUT_DIR)/$@ main.cpp $(CPP_FILES) $(LDFLAGS)
 
-main.opt.exe: main.cpp $(CPP_FILES) $(HPP_FILES) Makefile
+main.opt.exe: main.cpp $(CPP_FILES) $(HPP_FILES) Makefile $(OUT_DIR)
 	$(CXX)        -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(OPT_FLAGS) \
-	-o $(BIN_DIR)/$@ main.cpp $(CPP_FILES) $(LDFLAGS)
+	-o $(OUT_DIR)/$@ main.cpp $(CPP_FILES) $(LDFLAGS)
 
-%.dbg.o: %.cpp $(OTHER_DEPS) Makefile
+%.dbg.o: %.cpp $(OTHER_DEPS) Makefile $(OUT_DIR)
 	$(CXX) -ggdb  -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(DBG_FLAGS) \
-	-o $(OBJ_DIR)/$@ $<
+	-o $(OUT_DIR)/$@ $<
 
-%.opt.o: %.cpp $(OTHER_DEPS) Makefile
+%.opt.o: %.cpp $(OTHER_DEPS) Makefile $(OUT_DIR)
 	$(CXX)        -std=$(STDCXX) $(CFLAGS) $(CPPFLAGS) $(OPT_FLAGS) \
-	-o $(OBJ_DIR)/$@ $<
+	-o $(OUT_DIR)/$@ $<
+
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
 
 .PHONY: tests/run tests/gdb
 ifeq ($(CPP_TEST_FILES),)

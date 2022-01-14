@@ -10,10 +10,7 @@
         export NIX_FLAKES=ON
       '';
       buildPhase = ''
-        mkdir -p $out/lib
-        mkdir -p $out/bin
-        mkdir -p $out/obj
-        make -C $src/timewarp_gl main.dbg.exe
+        make -C $src/timewarp_gl plugin.dbg.so
       '';
       installPhase = ''
         # So far the installation is handled by 'Makefile's,
@@ -21,6 +18,13 @@
         # or please disable 'installPhase'.
       '';
       buildInputs = [
+        libGL
+        glew
+        boost
+        opencv3
+        eigen
+        glfw
+        x11
       ];
     };
     defaultPackage.x86_64-linux = self.packages.x86_64-linux.illixr-timewarp_gl;
