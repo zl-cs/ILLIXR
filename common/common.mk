@@ -41,7 +41,7 @@ GTEST_FLAGS := -DGTEST_HAS_PTHREAD=1 -lpthread -DGTEST_HAS_PTHREAD=1 -lpthread -
 ifeq ($(NIX_FLAKES),ON)
 	OUT_DIR := $(out)
 else
-	OUT_DIR := .
+	OUT_DIR := result
 endif
 
 ## In the future, if compilation is slow, we can enable partial compilation of object files with
