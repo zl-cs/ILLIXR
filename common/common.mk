@@ -39,7 +39,7 @@ GTEST_FLAGS := -DGTEST_HAS_PTHREAD=1 -lpthread -DGTEST_HAS_PTHREAD=1 -lpthread -
 ## If building with Nix Flakes, then NIX_FLAKES is set to 'ON'
 ## then change the output directories accordingly
 ifeq ($(NIX_FLAKES),ON)
-	OUT_DIR := $(out)
+	OUT_DIR := $(out)/$(shell basename $(CURDIR))
 else
 	OUT_DIR := .
 endif
