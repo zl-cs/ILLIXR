@@ -29,6 +29,58 @@
       ];
     };
 
+    packages.x86_64-linux.illixr-offline_imu_cam =
+    with import nixpkgs { system = "x86_64-linux"; };
+    clangStdenv.mkDerivation {
+      pname = "illixr-offline_imu_cam";
+      version = "2.2.1-latest";
+      src = self;
+      configurePhase = ''
+        export NIX_FLAKES=ON
+      '';
+      buildPhase = ''
+        make -C $src/offline_imu_cam plugin.dbg.so
+      '';
+      installPhase = ''
+        # So far the installation is handled by 'Makefile's,
+        # but please keep this 'installPhase' and comments,
+        # or please disable 'installPhase'.
+      '';
+      buildInputs = [
+        boost
+        opencv3
+        eigen
+        libGL
+        glfw
+      ];
+    };
+
+    packages.x86_64-linux.illixr-ground_truth_slam =
+    with import nixpkgs { system = "x86_64-linux"; };
+    clangStdenv.mkDerivation {
+      pname = "illixr-ground_truth_slam";
+      version = "2.2.1-latest";
+      src = self;
+      configurePhase = ''
+        export NIX_FLAKES=ON
+      '';
+      buildPhase = ''
+        make -C $src/ground_truth_slam plugin.dbg.so
+      '';
+      installPhase = ''
+        # So far the installation is handled by 'Makefile's,
+        # but please keep this 'installPhase' and comments,
+        # or please disable 'installPhase'.
+      '';
+      buildInputs = [
+        boost
+        opencv3
+        eigen
+        libGL
+        glfw
+      ];
+    };
+
     packages.x86_64-linux.illixr-gldemo =
     with import nixpkgs { system = "x86_64-linux"; };
     clangStdenv.mkDerivation {
