@@ -9,8 +9,10 @@
 #include <opencv2/imgproc.hpp>
 #include <eigen3/Eigen/Dense>
 
-#include "csv_iterator.hpp"
-#include "common/error_util.hpp"
+#include "cam_dataset.hpp"
+#include "euroc_mav.hpp"
+#include "imu_dataset.hpp"
+#include "tum_vie.hpp"
 
 
 typedef unsigned long long ullong;
@@ -47,47 +49,22 @@ load_data() {
 	const char* illixr_data_c_str = std::getenv("ILLIXR_DATA");
 	if (!illixr_data_c_str) {
 		std::cerr << "Please define ILLIXR_DATA" << std::endl;
-        ILLIXR::abort();
+		ILLIXR::abort();
 	}
 	std::string illixr_data = std::string{illixr_data_c_str};
-
+	imu_dataset imu_loaded {load_euroc_mav_imu(illixr_data)};
+	cam_dataset cam_loaded {load_euroc_mav_cam(illixr_data)};
+	static constexpr double nano = 1e-9;
 	std::map<ullong, sensor_types> data;
-
-	const std::string imu0_subpath = "/imu0/data.csv";
-	std::ifstream imu0_file {illixr_data + imu0_subpath};
-	if (!imu0_file.good()) {
-		std::cerr << "${ILLIXR_DATA}" << imu0_subpath << " (" << illixr_data << imu0_subpath << ") is not a good path" << std::endl;
-        ILLIXR::abort();
+	for (const auto& imu : imu_loaded) {
+		data[imu.time / nano].imu0 = {{imu.gyro_x, imu.gyro_y, imu.gyro_z},
+                               				{imu.accel_x, imu.accel_y, imu.accel_z}};
 	}
-	for (CSVIterator row{imu0_file, 1}; row != CSVIterator{}; ++row) {
-		ullong t = std::stoull(row[0]);
-		Eigen::Vector3d av {std::stod(row[1]), std::stod(row[2]), std::stod(row[3])};
-		Eigen::Vector3d la {std::stod(row[4]), std::stod(row[5]), std::stod(row[6])};
-		data[t].imu0 = {av, la};
+	for (const auto& cam : cam_loaded.first) {
+		data[cam.time / nano].cam0 = {cam.path};
 	}
-
-	const std::string cam0_subpath = "/cam0/data.csv";
-	std::ifstream cam0_file {illixr_data + cam0_subpath};
-	if (!cam0_file.good()) {
-		std::cerr << "${ILLIXR_DATA}" << cam0_subpath << " (" << illixr_data << cam0_subpath << ") is not a good path" << std::endl;
-        ILLIXR::abort();
+	for (const auto& cam : cam_loaded.second) {
+		data[cam.time / nano].cam1 = {cam.path};
 	}
-	for (CSVIterator row{cam0_file, 1}; row != CSVIterator{}; ++row) {
-		ullong t = std::stoull(row[0]);
-		data[t].cam0 = {illixr_data + "/cam0/data/" + row[1]};
-	}
-
-	const std::string cam1_subpath = "/cam1/data.csv";
-	std::ifstream cam1_file {illixr_data + cam1_subpath};
-	if (!cam1_file.good()) {
-		std::cerr << "${ILLIXR_DATA}" << cam1_subpath << " (" << illixr_data << cam1_subpath << ") is not a good path" << std::endl;
-        ILLIXR::abort();
-	}
-	for (CSVIterator row{cam1_file, 1}; row != CSVIterator{}; ++row) {
-		ullong t = std::stoull(row[0]);
-		std::string fname = row[1];
-		data[t].cam1 = {illixr_data + "/cam1/data/" + row[1]};
-	}
-
 	return data;
 }
