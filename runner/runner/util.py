@@ -454,8 +454,12 @@ Returns:
             )
         elif cache_dest.exists():
             return cache_dest
-        else:
+        elif zipfile.is_zipfile(archive_path):
             unzip_with_progress(archive_path, cache_dest, f"Unzipping {truncate(str(cache_key), DISPLAY_PATH_LENGTH)}")
+            return cache_dest
+        else:
+            print(f"Unpacking {truncate(str(cache_key), DISPLAY_PATH_LENGTH)}")
+            shutil.unpack_archive(archive_path, cache_dest)
             return cache_dest
     elif "git_repo" in path_descr:
         cache_dest = cache_path / escape_fname(path_descr["git_repo"])
