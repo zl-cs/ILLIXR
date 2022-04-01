@@ -21,3 +21,16 @@ struct cam_element {
 };
 
 using cam_data = std::pair<std::vector<cam_element>, std::vector<cam_element>>;
+
+struct pose_element {
+	double time;
+	double pos_x;
+	double pos_y;
+	double pos_z;
+	double orient_x;
+	double orient_y;
+	double orient_z;
+	double orient_w;
+};
+
+using pose_data = std::vector<pose_element>;

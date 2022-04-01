@@ -19,7 +19,6 @@ imu_data load_euroc_mav_imu(const std::string& dataset_path) {
 	}
 	static constexpr double nano = 1e-9;
 	imu_data data;
-	std::size_t i {0};
 	for (CSVIterator row{imu0_file, 1}; row != CSVIterator{}; ++row) {
 		imu_element elem {std::stod(row[0]) * nano,
 			              std::stod(row[1]),
@@ -29,7 +28,6 @@ imu_data load_euroc_mav_imu(const std::string& dataset_path) {
 						  std::stod(row[5]),
 						  std::stod(row[6])};
 		data.emplace_back(std::move(elem));
-		++i;
 	}
 	return data;
 }
@@ -64,6 +62,32 @@ cam_data load_euroc_mav_cam(const std::string& dataset_path) {
 		cam_element elem {std::stod(row[0]) * nano,
 					      dataset_path + "/cam1/data/" + row[1]};
 		data.second.emplace_back(std::move(elem));
+	}
+	return data;
+}
+
+pose_data load_euroc_mav_pose(const std::string& dataset_path) {
+	const std::string pose_subpath {"/state_groundtruth_estimate0/data.csv"};
+	std::ifstream pose_file {dataset_path + pose_subpath};
+	if (!pose_file.good()) {
+		std::cerr << dataset_path
+				  << pose_subpath
+				  <<  " is not a good path"
+				  << std::endl;
+        ILLIXR::abort();
+	}
+	static constexpr double nano = 1e-9;
+	pose_data data;
+	for(CSVIterator row{pose_file, 1}; row != CSVIterator{}; ++row) {
+		pose_element elem {std::stod(row[0]) * nano,
+			               std::stod(row[1]),
+						   std::stod(row[2]),
+						   std::stod(row[3]),
+						   std::stod(row[4]),
+						   std::stod(row[5]),
+						   std::stod(row[6]),
+		                   std::stod(row[7])};
+		data.emplace_back(std::move(elem));
 	}
 	return data;
 }
