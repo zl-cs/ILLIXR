@@ -9,10 +9,9 @@
 #include <opencv2/imgproc.hpp>
 #include <eigen3/Eigen/Dense>
 
-#include "cam_dataset.hpp"
-#include "euroc_mav.hpp"
-#include "imu_dataset.hpp"
-#include "tum_vie.hpp"
+#include "../dataset_tools/dataset.hpp"
+#include "../dataset_tools/euroc_mav.hpp"
+#include "../dataset_tools/tum_vie.hpp"
 
 
 typedef unsigned long long ullong;
@@ -52,13 +51,14 @@ load_data() {
 		ILLIXR::abort();
 	}
 	std::string illixr_data = std::string{illixr_data_c_str};
-	imu_dataset imu_loaded {load_euroc_mav_imu(illixr_data)};
-	cam_dataset cam_loaded {load_euroc_mav_cam(illixr_data)};
+	imu_data imu_loaded {load_euroc_mav_imu(illixr_data)};
+	cam_data cam_loaded {load_euroc_mav_cam(illixr_data)};
+	std::cout << illixr_data << std::endl;
 	static constexpr double nano = 1e-9;
 	std::map<ullong, sensor_types> data;
 	for (const auto& imu : imu_loaded) {
 		data[imu.time / nano].imu0 = {{imu.gyro_x, imu.gyro_y, imu.gyro_z},
-                               				{imu.accel_x, imu.accel_y, imu.accel_z}};
+									  {imu.accel_x, imu.accel_y, imu.accel_z}};
 	}
 	for (const auto& cam : cam_loaded.first) {
 		data[cam.time / nano].cam0 = {cam.path};
