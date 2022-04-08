@@ -1,3 +1,4 @@
+#include <iostream>
 #include <map>
 #include <fstream>
 #include <string>
@@ -37,7 +38,7 @@ load_data() {
 
 	std::map<ullong, sensor_types> data;
 
-	pose_data pose_loaded {load_euroc_mav_pose(illixr_data)};
+	pose_data pose_loaded {load_tum_rgbd_pose(illixr_data)};
 
 	static constexpr double nano = 1e-9;
 	for (const auto& pose : pose_loaded) {

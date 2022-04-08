@@ -20,6 +20,8 @@ imu_data load_tum_rgbd_imu(const std::string& dataset_path) {
 	}
 	imu_data data;
     std::string tmp;
+	std::getline(imu_file, tmp);
+	std::getline(imu_file, tmp);
     while (std::getline(imu_file, tmp)) {
         imu_element elem;
         imu_file >> elem.time;
@@ -56,6 +58,8 @@ cam_data load_tum_rgbd_cam(const std::string& dataset_path) {
     cam_data data;
     std::string tmp;
     std::size_t count {0};
+	std::getline(cam0_file, tmp);
+	std::getline(cam0_file, tmp);
     while (std::getline(cam0_file, tmp)) {
         cam_element elem;
         cam0_file >> elem.time;
@@ -63,6 +67,8 @@ cam_data load_tum_rgbd_cam(const std::string& dataset_path) {
 		data.first.emplace_back(std::move(elem));
     }
     count = 0;
+	std::getline(cam1_file, tmp);
+	std::getline(cam1_file, tmp);
     while (std::getline(cam1_file, tmp)) {
 		cam_element elem;
         cam1_file >> elem.time;
@@ -84,6 +90,8 @@ pose_data load_tum_rgbd_pose(const std::string& dataset_path) {
 	}
 	pose_data data;
     std::string tmp;
+	std::getline(pose_file, tmp);
+	std::getline(pose_file, tmp);
     while (std::getline(pose_file, tmp)) {
         pose_element elem;
         pose_file >> elem.time;

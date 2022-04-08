@@ -36,10 +36,14 @@ load_data() {
 
 	std::map<ullong, sensor_types> data;
 
-	pose_data pose_loaded {load_euroc_mav_pose(illixr_data)};
+	pose_data pose_loaded {load_tum_rgbd_pose(illixr_data)};
 
 	static constexpr double nano = 1e-9;
 	for (const auto& pose : pose_loaded) {
+		std::cout << "pose.time: " << pose.time << '\n';
+		std::cout << "pose.pos_x: " << pose.pos_x << '\n';
+		std::cout << "pose.pos_y: " << pose.pos_y << '\n';
+		std::cout << "pose.pos_z: " << pose.pos_z << '\n';
 		data[pose.time / nano] = {{},
 								  {pose.pos_x, pose.pos_y, pose.pos_z},
 								  {pose.orient_x, pose.orient_y, pose.orient_z, pose.orient_w}};

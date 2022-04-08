@@ -52,8 +52,8 @@ load_data() {
 		ILLIXR::abort();
 	}
 	std::string illixr_data = std::string{illixr_data_c_str};
-	imu_data imu_loaded {load_euroc_mav_imu(illixr_data)};
-	cam_data cam_loaded {load_euroc_mav_cam(illixr_data)};
+	imu_data imu_loaded {load_tum_rgbd_imu(illixr_data)};
+	cam_data cam_loaded {load_tum_rgbd_cam(illixr_data)};
 	std::cout << illixr_data << std::endl;
 	static constexpr double nano = 1e-9;
 	std::map<ullong, sensor_types> data;
