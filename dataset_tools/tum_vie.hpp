@@ -80,3 +80,32 @@ cam_data load_tum_vie_cam(const std::string& dataset_path) {
     }
     return data;
 }
+
+pose_data load_tum_vie_pose(const std::string& dataset_path) {
+	const std::string pose_subpath {"/mocap_data.txt"};
+	std::ifstream pose_file {dataset_path + pose_subpath};
+	if (!pose_file.good()) {
+		std::cerr << dataset_path
+				  << pose_subpath
+				  <<  " is not a good path"
+				  << std::endl;
+        ILLIXR::abort();
+	}
+	static constexpr double micro {1e-6};
+	pose_data data;
+    std::string tmp;
+    while (std::getline(pose_file, tmp)) {
+        pose_element elem;
+        pose_file >> elem.time;
+        elem.time *= micro;
+        pose_file >> elem.pos_x;
+        pose_file >> elem.pos_y;
+        pose_file >> elem.pos_z;
+        pose_file >> elem.orient_x;
+        pose_file >> elem.orient_y;
+        pose_file >> elem.orient_z;
+		pose_file >> elem.orient_w;
+        data.emplace_back(std::move(elem));
+    }
+	return data;
+}

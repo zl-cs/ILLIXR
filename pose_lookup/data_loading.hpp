@@ -10,6 +10,7 @@
 #include <eigen3/Eigen/Dense>
 
 #include "../dataset_tools/euroc_mav.hpp"
+#include "../dataset_tools/tum_vie.hpp"
 #include "common/error_util.hpp"
 
 
