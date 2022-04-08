@@ -9,9 +9,10 @@
 #include <opencv2/imgproc.hpp>
 #include <eigen3/Eigen/Dense>
 
-#include "../dataset_tools/dataset.hpp"
-#include "../dataset_tools/euroc_mav.hpp"
-#include "../dataset_tools/tum_vie.hpp"
+#include "common/dataset_tools/euroc_mav.hpp"
+#include "common/dataset_tools/tum_vie.hpp"
+#include "common/dataset_tools/tum_rgbd.hpp"
+#include "common/error_util.hpp"
 
 
 typedef unsigned long long ullong;

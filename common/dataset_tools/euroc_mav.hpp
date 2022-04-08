@@ -5,7 +5,7 @@
 
 #include "dataset.hpp"
 #include "csv_iterator.hpp"
-#include "common/error_util.hpp"
+#include "../error_util.hpp"
 
 imu_data load_euroc_mav_imu(const std::string& dataset_path) {
 	const std::string imu0_subpath = "/imu0/data.csv";
