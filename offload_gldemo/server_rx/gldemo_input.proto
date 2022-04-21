@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package gldemo_input_proto;
+
+message Vec3f {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}
+
+message Quaternionf {
+    float w = 1;
+    Vec3f vec = 2;
+}
+
+message Pose {
+    fixed64 time = 1;
+    Vec3f position = 2;
+    Quaternionf orientation = 3;
+}
+
