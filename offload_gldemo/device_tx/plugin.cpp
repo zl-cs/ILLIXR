@@ -33,14 +33,11 @@ public:
 		, sb{pb->lookup_impl<switchboard>()}
 		, pp{pb->lookup_impl<pose_prediction>()}
 		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_type>>("vsync_estimate")}
-		, pose_file("pose.txt")
 	{ 
 		eCAL::Initialize(0, NULL, "GLdemo Offloading Device-side Writer");
 		publisher = eCAL::protobuf::CPublisher<gldemo_input_proto::Pose>("gldemo_input");
 	}
-	~client_writer() {
-		pose_file.close(); 
-	}
+	~client_writer() { }
 
 	// Essentially, a crude equivalent of XRWaitFrame.
 	// Should wait on the clent side on the server side? 
@@ -143,7 +140,6 @@ private:
 	time_type lastFrameTime;
 	std::vector<pose_type> poses; 
 
-	std::ofstream pose_file; 
 	eCAL::protobuf::CPublisher<gldemo_input_proto::Pose> publisher;
 
 public:
