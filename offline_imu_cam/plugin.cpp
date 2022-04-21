@@ -7,6 +7,7 @@
 #include "common/global_module_defs.hpp"
 #include <cassert>
 #include "common/relative_clock.hpp"
+#include "common/stoplight.hpp"
 
 using namespace ILLIXR;
 
@@ -24,6 +25,7 @@ public:
 		: threadloop{name_, pb_}
 		, _m_sensor_data{load_data()}
 		, _m_sensor_data_it{_m_sensor_data.cbegin()}
+		, _m_sl{pb->lookup_impl<Stoplight>()}
 		, _m_sb{pb->lookup_impl<switchboard>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_imu_cam{_m_sb->get_writer<imu_cam_type>("imu_cam")}
@@ -100,16 +102,23 @@ protected:
             }
         ));
 
+		if (cam0.has_value() && cam1.has_value() && counter < 5) {
+			_m_sl->wait_for_ready();
+			counter++;
+		}
+
 		RAC_ERRNO_MSG("offline_imu_cam at bottom of iteration");
 	}
 
 private:
 	const std::map<ullong, sensor_types> _m_sensor_data;
 	std::map<ullong, sensor_types>::const_iterator _m_sensor_data_it;
+	const std::shared_ptr<Stoplight> _m_sl;
 	const std::shared_ptr<switchboard> _m_sb;
 	std::shared_ptr<const RelativeClock> _m_clock;
 	switchboard::writer<imu_cam_type> _m_imu_cam;
 
+	int counter = 0;
 	// Timestamp of the first IMU value from the dataset
 	ullong dataset_first_time;
 	// Current IMU timestamp

@@ -2,6 +2,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
+#include "common/stoplight.hpp"
 
 #include <ecal/ecal.h>
 #include <ecal/msg/protobuf/subscriber.h>
@@ -14,12 +15,13 @@ class offload_reader : public plugin {
 public:
     offload_reader(std::string name_, phonebook* pb_)
 		: plugin{name_, pb_}
+		, sl{pb->lookup_impl<Stoplight>()}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_pose{sb->get_writer<pose_type>("slow_pose")}
 		, _m_imu_integrator_input{sb->get_writer<imu_integrator_input>("imu_integrator_input")}
     { 
 		pose_type datum_pose_tmp{
-            ILLIXR::time_type{},
+            ILLIXR::time_point{},
             Eigen::Vector3f{0, 0, 0},
             Eigen::Quaternionf{1, 0, 0, 0}
         };
@@ -38,10 +40,16 @@ public:
 
 
 private:
-	void ReceiveVioOutput(const vio_output_proto::VIOOutput& vio_output) {		
+	void ReceiveVioOutput(const vio_output_proto::VIOOutput& vio_output) {
+		if (counter < 5) {
+			sl->signal_ready();
+			counter++;
+			return;
+		}
+		
 		vio_output_proto::SlowPose slow_pose = vio_output.slow_pose();
 		pose_type datum_pose_tmp{
-			ILLIXR::time_type{std::chrono::nanoseconds{slow_pose.timestamp()}},
+			ILLIXR::time_point{std::chrono::nanoseconds{slow_pose.timestamp()}},
 			Eigen::Vector3f{
 				static_cast<float>(slow_pose.position().x()), 
 				static_cast<float>(slow_pose.position().y()), 
@@ -59,8 +67,8 @@ private:
 		vio_output_proto::IMUIntInput imu_int_input = vio_output.imu_int_input();
 
 		imu_integrator_input datum_imu_int_tmp{
-			static_cast<double>(imu_int_input.last_cam_integration_time()),
-			imu_int_input.t_offset(),
+			ILLIXR::time_point{duration(std::chrono::nanoseconds{imu_int_input.last_cam_integration_time()})},
+			duration(std::chrono::milliseconds{imu_int_input.t_offset()}),
 			imu_params{
 				imu_int_input.imu_params().gyro_noise(),
 				imu_int_input.imu_params().acc_noise(),
@@ -86,6 +94,8 @@ private:
         _m_imu_integrator_input.put(std::move(datum_imu_int));
 	}
 
+	int counter = 0;
+	const std::shared_ptr<Stoplight> sl;
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<pose_type> _m_pose;
 	switchboard::writer<imu_integrator_input> _m_imu_integrator_input;

@@ -2,6 +2,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
+#include "common/stoplight.hpp"
 
 #include <ecal/ecal.h>
 #include <ecal/msg/protobuf/publisher.h>
@@ -16,6 +17,7 @@ public:
     offload_writer(std::string name_, phonebook* pb_)
 		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
+		, sl{pb->lookup_impl<Stoplight>()}
     { 
 		// Initialize eCAL and create a protobuf publisher
 		eCAL::Initialize(0, NULL, "VIO Offloading Sensor Data Writer");
@@ -40,11 +42,11 @@ public:
             return;
         }
 
-		assert(datum->dataset_time > previous_timestamp);
-		previous_timestamp = datum->dataset_time;
+		assert(datum->time.time_since_epoch().count() > previous_timestamp);
+		previous_timestamp = datum->time.time_since_epoch().count();
 
 		vio_input_proto::IMUCamData* imu_cam_data = data_buffer->add_imu_cam_data();
-		imu_cam_data->set_timestamp(datum->dataset_time);
+		imu_cam_data->set_timestamp(datum->time.time_since_epoch().count());
 
 		vio_input_proto::Vec3* angular_vel = new vio_input_proto::Vec3();
 		angular_vel->set_x(datum->angular_v.x());
@@ -83,10 +85,12 @@ public:
 
 private:
 	int num = 0;
+	int counter = 0;
 	double previous_timestamp = 0;
 	vio_input_proto::IMUCamVec* data_buffer = new vio_input_proto::IMUCamVec();
 
     const std::shared_ptr<switchboard> sb;
+	const std::shared_ptr<Stoplight> sl;
 	eCAL::protobuf::CPublisher<vio_input_proto::IMUCamVec> publisher;
 };
 
