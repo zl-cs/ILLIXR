@@ -1,3 +1,0 @@
-/home/qinjunj/Research/ILLIXR_qinjun/offload_gldemo/device_tx/build/Release/CMakeFiles/plugin.dir
-/home/qinjunj/Research/ILLIXR_qinjun/offload_gldemo/device_tx/build/Release/CMakeFiles/edit_cache.dir
-/home/qinjunj/Research/ILLIXR_qinjun/offload_gldemo/device_tx/build/Release/CMakeFiles/rebuild_cache.dir
