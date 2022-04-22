@@ -18,9 +18,8 @@
 
 using namespace ILLIXR;
 
-static constexpr std::chrono::nanoseconds vsync_period {std::size_t(NANO_SEC/60)};
-static constexpr std::chrono::milliseconds VSYNC_DELAY_TIME {std::size_t{2}};
-
+static constexpr duration VSYNC_PERIOD {freq2period(60.0)};
+static constexpr duration VSYNC_DELAY_TIME {std::chrono::milliseconds{2}};
 class client_writer : public threadloop {
 public:
 
@@ -51,11 +50,11 @@ public:
 		if (next_vsync == nullptr) {
 			// If no vsync data available, just sleep for roughly a vsync period.
 			// We'll get synced back up later.
-			std::this_thread::sleep_for(vsync_period);
+			std::this_thread::sleep_for(VSYNC_PERIOD);
 			return;
 		}
 
-		bool hasRenderedThisInterval = (now - lastFrameTime) < vsync_period;
+		bool hasRenderedThisInterval = (now - lastFrameTime) < VSYNC_PERIOD;
 
 		// If less than one frame interval has passed since we last rendered...
 		if (hasRenderedThisInterval)
@@ -68,13 +67,13 @@ public:
 			// by a vsync period, so it's always in the future.
 			while(wait_time < now)
 			{
-				wait_time += vsync_period;
+				wait_time += VSYNC_PERIOD;
 			}
 
 			// Perform the sleep.
 			// TODO: Consider using Monado-style sleeping, where we nanosleep for
 			// most of the wait, and then spin-wait for the rest?
-			std::this_thread::sleep_until(wait_time);
+			std::this_thread::sleep_for(wait_time-now);
 		} else {
 			// render immediately 
 		}
@@ -94,13 +93,13 @@ public:
 			wait_vsync();
 
 			const fast_pose_type fast_pose = pp->get_fast_pose();
-			_m_fast_pose.put(_m_fast_pose.allocate<fast_pose_type>(
-				fast_pose
-			)); 
-			auto fast_pose_sample_time = _m_clock.now();
-			_m_fast_pose_sample_time.put(_m_fast_pose_sample_time.allocate<switchboard::event_wrapper<time_point>>(
-				fast_pose_sample_time
-			)); 
+			// _m_fast_pose.put(_m_fast_pose.allocate<fast_pose_type>(
+			// 	fast_pose
+			// )); 
+			// auto fast_pose_sample_time = _m_clock.now();
+			// _m_fast_pose_sample_time.put(_m_fast_pose_sample_time.allocate<switchboard::event_wrapper<time_point>>(
+			// 	fast_pose_sample_time
+			// )); 
 			pose_type pose = fast_pose.pose;
 
 			// TODO SEND POSE TO THE SERVER SIDE 
@@ -127,7 +126,7 @@ public:
             
 			poses.push_back(pose); 
 
-			lastFrameTime = _m_clock.now();
+			lastFrameTime = _m_clock->now();
 		}
 	}
 
