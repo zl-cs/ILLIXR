@@ -193,6 +193,17 @@ namespace ILLIXR {
         { }
 	};
 
+	struct frame_from_gldemo : public switchboard::event {
+		std::array<GLuint, 2> texture_handles; // Does not change between swaps in swapchain
+		std::array<GLuint, 2> swap_indices; // Which element of the swapchain
+		frame_from_gldemo() {}
+		frame_from_gldemo(std::array<GLuint, 2>&& texture_handles_, 
+		               	  std::array<GLuint, 2>&& swap_indices_)
+			: texture_handles{std::move(texture_handles_)}
+			, swap_indices{std::move(swap_indices_)}
+		{ }
+	};
+
 	struct hologram_input : public switchboard::event {
 		int seq;
 		hologram_input() { }
