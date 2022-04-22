@@ -30,7 +30,7 @@ public:
 		, pp{pb->lookup_impl<pose_prediction>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_fast_pose{sb->get_writer<fast_pose_type>("fast_pose")}
-		, _m_fast_pose_sample_time{sb->get_reader<switchboard::event_wrapper<time_point>>("fast_pose_sample_time")}
+		, _m_fast_pose_sample_time{sb->get_writer<switchboard::event_wrapper<time_point>>("fast_pose_sample_time")}
 		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
 	{ 
 		eCAL::Initialize(0, NULL, "GLdemo Offloading Device-side Writer");
@@ -136,7 +136,6 @@ private:
 	const std::shared_ptr<pose_prediction> pp;
 	const std::shared_ptr<const RelativeClock> _m_clock;
 	const switchboard::writer<fast_pose_type> _m_fast_pose; 
-	const switchboard::writer<fast_pose_type> _m_fast_pose;
 	const switchboard::writer<switchboard::event_wrapper<time_point>> _m_fast_pose_sample_time;
 	const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
 
