@@ -25,8 +25,20 @@ public:
 
 private:
     void ReceiveGLdemoInput(const gldemo_input_proto::Pose& gldemo_input) {
-		std::cout << "Received one pose_to_gldemo\n"; 
-	} // TODO 
+		std::cout << "Received one pose_to_gldemo\n";
+		_m_pose.put(_m_pose.allocate<pose_type>(
+			pose_type{
+				std::chrono::system_clock::now(), // FIXME not used
+				Eigen::Vector3f{gldemo_input.position().x(), 
+								gldemo_input.position().y(), 
+								gldemo_input.position().z()},
+				Eigen::Quaternionf{gldemo_input.orientation().w(), 
+									gldemo_input.orientation().vec().x(), 
+									gldemo_input.orientation().vec().y(), 
+									gldemo_input.orientation().vec().z()}
+			}
+		));
+	} 
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<pose_type> _m_pose;
 	eCAL::protobuf::CSubscriber<gldemo_input_proto::Pose> subscriber;

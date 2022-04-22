@@ -20,11 +20,6 @@ using namespace ILLIXR;
 static constexpr std::chrono::nanoseconds vsync_period {std::size_t(NANO_SEC/60)};
 static constexpr std::chrono::milliseconds VSYNC_DELAY_TIME {std::size_t{2}};
 
-std::ostream & operator<<(std::ostream & stream, const pose_type & pose) {
-				stream << pose.position << std::endl << pose.orientation.toRotationMatrix() << std::endl;
-				return stream;
-}
-
 class client_writer : public threadloop {
 public:
 
@@ -120,7 +115,6 @@ public:
 
             // auto fast_pose_sample_time = std::chrono::high_resolution_clock::now();
 			poses.push_back(pose); 
-			pose_file << pose; 
 
 			lastFrameTime = std::chrono::system_clock::now();
 		}
