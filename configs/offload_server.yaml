@@ -3,6 +3,9 @@ plugin_groups:
   - plugin_group:
       - path: ground_truth_slam/
       - path: offload_gldemo/server_rx/
+      - path: offload_gldemo/server_tx/
+      - path: gldemo_
+      # - path: gldemo
       # - path: debugview/
       # - path: offload_data/
   - !include "core_plugins.yaml"

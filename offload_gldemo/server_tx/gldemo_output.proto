@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package gldemo_output_proto;
+
+message count{
+    int32 num = 1; 
+}

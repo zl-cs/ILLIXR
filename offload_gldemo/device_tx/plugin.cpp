@@ -8,6 +8,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/pose_prediction.hpp"
+#include "common/relative_clock.hpp"
 
 #include <ecal/ecal.h>
 #include <ecal/msg/protobuf/publisher.h>
@@ -27,7 +28,10 @@ public:
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, pp{pb->lookup_impl<pose_prediction>()}
-		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_type>>("vsync_estimate")}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
+		, _m_fast_pose{sb->get_writer<fast_pose_type>("fast_pose")}
+		, _m_fast_pose_sample_time{sb->get_reader<switchboard::event_wrapper<time_point>>("fast_pose_sample_time")}
+		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
 	{ 
 		eCAL::Initialize(0, NULL, "GLdemo Offloading Device-side Writer");
 		publisher = eCAL::protobuf::CPublisher<gldemo_input_proto::Pose>("gldemo_input");
@@ -39,10 +43,10 @@ public:
 	void wait_vsync()
 	{
 		using namespace std::chrono_literals;
-		switchboard::ptr<const switchboard::event_wrapper<time_type>> next_vsync = _m_vsync.get_ro_nullable();
-		time_type now = std::chrono::system_clock::now();
+		switchboard::ptr<const switchboard::event_wrapper<time_point>> next_vsync = _m_vsync.get_ro_nullable();
+		time_point now = _m_clock->now();
 
-		time_type wait_time;
+		time_point wait_time;
 
 		if (next_vsync == nullptr) {
 			// If no vsync data available, just sleep for roughly a vsync period.
@@ -90,6 +94,13 @@ public:
 			wait_vsync();
 
 			const fast_pose_type fast_pose = pp->get_fast_pose();
+			_m_fast_pose.put(_m_fast_pose.allocate<fast_pose_type>(
+				fast_pose
+			)); 
+			auto fast_pose_sample_time = _m_clock.now();
+			_m_fast_pose_sample_time.put(_m_fast_pose_sample_time.allocate<switchboard::event_wrapper<time_point>>(
+				fast_pose_sample_time
+			)); 
 			pose_type pose = fast_pose.pose;
 
 			// TODO SEND POSE TO THE SERVER SIDE 
@@ -113,17 +124,21 @@ public:
 			publisher.Send(*pose_to_gldemo);
 			delete pose_to_gldemo; 
 
-            // auto fast_pose_sample_time = std::chrono::high_resolution_clock::now();
+            
 			poses.push_back(pose); 
 
-			lastFrameTime = std::chrono::system_clock::now();
+			lastFrameTime = _m_clock.now();
 		}
 	}
 
 private:
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
-	const switchboard::reader<switchboard::event_wrapper<time_type>> _m_vsync;
+	const std::shared_ptr<const RelativeClock> _m_clock;
+	const switchboard::writer<fast_pose_type> _m_fast_pose; 
+	const switchboard::writer<fast_pose_type> _m_fast_pose;
+	const switchboard::writer<switchboard::event_wrapper<time_point>> _m_fast_pose_sample_time;
+	const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
 
 	// Switchboard plug for application eye buffer.
 	// We're not "writing" the actual buffer data,
@@ -131,7 +146,7 @@ private:
 	// correct eye/framebuffer in the "swapchain".
 	// switchboard::writer<rendered_frame> _m_eyebuffer;
 
-	time_type lastFrameTime;
+	time_point lastFrameTime;
 	std::vector<pose_type> poses; 
 
 	eCAL::protobuf::CPublisher<gldemo_input_proto::Pose> publisher;
