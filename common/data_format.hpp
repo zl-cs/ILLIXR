@@ -170,6 +170,20 @@ namespace ILLIXR {
 		time_point predict_target_time; // Time that prediction targeted.
 	} fast_pose_type;
 
+	// struct fast_pose_type : public switchboard::event {
+	// 	pose_type pose;
+	// 	time_point predict_computed_time; // Time at which the prediction was computed
+	// 	time_point predict_target_time;
+	// 	fast_pose_type() { }
+	// 	fast_pose_type(pose_type pose_,
+	// 					time_point predict_computed_time_,
+	// 					time_point predict_target_time_)
+	// 		: pose{pose_}
+	// 		, predict_computed_time{predict_computed_time_}
+	// 		, predict_target_time{predict_target_time_}
+	// 	{ }
+	// }; 
+
 	// Using arrays as a swapchain
 	// Array of left eyes, array of right eyes
 	// This more closely matches the format used by Monado
