@@ -3,6 +3,7 @@ plugin_groups:
   - plugin_group:
       - path: ground_truth_slam/
       - path: offload_gldemo/device_tx/
+      - path: offload_gldemo/device_rx/
       # - path: debugview/
       # - path: offload_data/
   - !include "core_plugins.yaml"

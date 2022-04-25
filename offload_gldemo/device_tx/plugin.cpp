@@ -28,8 +28,7 @@ public:
 		, sb{pb->lookup_impl<switchboard>()}
 		, pp{pb->lookup_impl<pose_prediction>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
-		, _m_fast_pose{sb->get_writer<fast_pose_type>("fast_pose")}
-		, _m_fast_pose_sample_time{sb->get_writer<switchboard::event_wrapper<time_point>>("fast_pose_sample_time")}
+		, _m_fast_pose{sb->get_writer<switchboard::event_wrapper<fast_pose_type>>("fast_pose")}
 		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
 	{ 
 		eCAL::Initialize(0, NULL, "GLdemo Offloading Device-side Writer");
@@ -93,9 +92,13 @@ public:
 			wait_vsync();
 
 			const fast_pose_type fast_pose = pp->get_fast_pose();
-			// _m_fast_pose.put(_m_fast_pose.allocate<fast_pose_type>(
-			// 	fast_pose
-			// )); 
+			_m_fast_pose.put(_m_fast_pose.allocate<switchboard::event_wrapper<fast_pose_type>>( // FIXME fast_pose_type is not inherited from switchboard::event 
+				fast_pose_type{
+					fast_pose.pose,
+					fast_pose.predict_computed_time,
+					fast_pose.predict_target_time
+				}
+			)); 
 			// auto fast_pose_sample_time = _m_clock.now();
 			// _m_fast_pose_sample_time.put(_m_fast_pose_sample_time.allocate<switchboard::event_wrapper<time_point>>(
 			// 	fast_pose_sample_time
@@ -126,7 +129,8 @@ public:
             
 			poses.push_back(pose); 
 
-			lastFrameTime = _m_clock->now();
+			lastFrameTime = _m_clock->now(); 
+			// FIXME not exactly the lastFrameTime because the rendering has not finished; Can be used to estimate the offloading time
 		}
 	}
 
@@ -134,8 +138,7 @@ private:
 	const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<pose_prediction> pp;
 	const std::shared_ptr<const RelativeClock> _m_clock;
-	const switchboard::writer<fast_pose_type> _m_fast_pose; 
-	const switchboard::writer<switchboard::event_wrapper<time_point>> _m_fast_pose_sample_time;
+	switchboard::writer<switchboard::event_wrapper<fast_pose_type>> _m_fast_pose; 
 	const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
 
 	// Switchboard plug for application eye buffer.

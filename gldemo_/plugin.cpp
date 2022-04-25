@@ -31,101 +31,41 @@ static constexpr duration VSYNC_DELAY_TIME {std::chrono::milliseconds{2}};
 // left eyes, and eyeTextures[1] is a swapchain of right eyes
 
 
-class gldemo_ : public plugin {
+class gldemo : public threadloop {
 public:
 	// Public constructor, create_component passes Switchboard handles ("plugs")
 	// to this constructor. In turn, the constructor fills in the private
 	// references to the switchboard plugs, so the component can read the
 	// data whenever it needs to.
 
-	gldemo_(std::string name_, phonebook* pb_)
-		: plugin{name_, pb_}
+	gldemo(std::string name_, phonebook* pb_)
+		: threadloop{name_, pb_}
 		, xwin{new xlib_gl_extended_window{1, 1, pb->lookup_impl<xlib_gl_extended_window>()->glc}}
 		, sb{pb->lookup_impl<switchboard>()}
 		//, xwin{pb->lookup_impl<xlib_gl_extended_window>()}
-		// , pp{pb->lookup_impl<pose_prediction>()}
+		, pp{pb->lookup_impl<pose_prediction>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
-		// , _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
-		// , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}	
+		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
+		, _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}	
 		, _m_frame{sb->get_writer<frame_from_gldemo>("frame")}
-		, _m_pose{sb->get_reader<pose_type>("pose_to_gldemo")}
+		, _m_pose{sb->get_buffered_reader<pose_type>("pose_to_gldemo")}
 	{ 
-		sb->schedule<pose_type>(id, "pose_to_gldemo", [&](switchboard::ptr<const pose_type> pose, size_t) {
-            callback(pose);
-        });
+
 	}
 
-	// Essentially, a crude equivalent of XRWaitFrame.
-// 	void wait_vsync()
-// 	{
-// 		using namespace std::chrono_literals;
-// 		switchboard::ptr<const switchboard::event_wrapper<time_point>> next_vsync = _m_vsync.get_ro_nullable();
-// 		time_point now = _m_clock->now();
+	void _p_thread_setup() override {
+		RAC_ERRNO_MSG("gldemo at start of _p_thread_setup");
 
-// 		time_point wait_time;
+		lastTime = _m_clock->now();
 
-// 		if (next_vsync == nullptr) {
-// 			// If no vsync data available, just sleep for roughly a vsync period.
-// 			// We'll get synced back up later.
-// 			std::this_thread::sleep_for(VSYNC_PERIOD);
-// 			return;
-// 		}
+		// Note: glXMakeContextCurrent must be called from the thread which will be using it.
+        [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
+		assert(gl_result && "glXMakeCurrent should not fail");
 
-// #ifndef NDEBUG
-// 		if (log_count > LOG_PERIOD) {
-// 			double vsync_in = duration2double<std::milli>(**next_vsync - now);
-//             std::cout << "\033[1;32m[GL DEMO APP]\033[0m First vsync is in " << vsync_in << "ms" << std::endl;
-// 		}
-// #endif
-		
-// 		bool hasRenderedThisInterval = (now - lastTime) < VSYNC_PERIOD;
+		RAC_ERRNO_MSG("gldemo at end of _p_thread_setup");
+	}
 
-// 		// If less than one frame interval has passed since we last rendered...
-// 		if (hasRenderedThisInterval)
-// 		{
-// 			// We'll wait until the next vsync, plus a small delay time.
-// 			// Delay time helps with some inaccuracies in scheduling.
-// 			wait_time = **next_vsync + VSYNC_DELAY_TIME;
-
-// 			// If our sleep target is in the past, bump it forward
-// 			// by a vsync period, so it's always in the future.
-// 			while(wait_time < now)
-// 			{
-// 				wait_time += VSYNC_PERIOD;
-// 			}
-
-// #ifndef NDEBUG
-// 			if (log_count > LOG_PERIOD) {
-// 				double wait_in = duration2double<std::milli>(wait_time - now);
-//                 std::cout << "\033[1;32m[GL DEMO APP]\033[0m Waiting until next vsync, in " << wait_in << "ms" << std::endl;
-// 			}
-// #endif
-// 			// Perform the sleep.
-// 			// TODO: Consider using Monado-style sleeping, where we nanosleep for
-// 			// most of the wait, and then spin-wait for the rest?
-// 			std::this_thread::sleep_for(wait_time - now);
-// 		} else {
-// #ifndef NDEBUG
-// 			if (log_count > LOG_PERIOD) {
-//                 std::cout << "\033[1;32m[GL DEMO APP]\033[0m We haven't rendered yet, rendering immediately." << std::endl;
-// 			}
-// #endif
-// 		}
-// 	}
-
-// 	void _p_thread_setup() override {
-// 		RAC_ERRNO_MSG("gldemo at start of _p_thread_setup");
-
-// 		lastTime = _m_clock->now();
-
-// 		// Note: glXMakeContextCurrent must be called from the thread which will be using it.
-//         [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
-// 		assert(gl_result && "glXMakeCurrent should not fail");
-
-// 		RAC_ERRNO_MSG("gldemo at end of _p_thread_setup");
-// 	}
-
-	void callback(switchboard::ptr<const pose_type> pose) {
+	void _p_one_iteration() override {
 		{
 			// Essentially, XRWaitFrame.
 			// wait_vsync();
@@ -150,6 +90,8 @@ public:
 
 			// const fast_pose_type fast_pose = pp->get_fast_pose();
 			// pose_type pose = fast_pose.pose;
+			auto pose = _m_pose.dequeue();
+			if (pose == nullptr) return; 
 
 			Eigen::Matrix3f head_rotation_matrix = pose->orientation.toRotationMatrix();
 
@@ -218,18 +160,7 @@ public:
 					std::array<GLuint, 2>{ eyeTextures[0], eyeTextures[1] },
 					std::array<GLuint, 2>{ which_buffer, which_buffer },
 				}
-			)); 
-
-			/// Publish our submitted frame handle to Switchboard!
-            // _m_eyebuffer.put(_m_eyebuffer.allocate<rendered_frame>(rendered_frame{
-            //     // Somehow, C++ won't let me construct this object if I remove the `rendered_frame{` and `}`.
-			// 	// `allocate<rendered_frame>(...)` _should_ forward the arguments to rendered_frame's constructor, but I guess not.
-            //     std::array<GLuint, 2>{ eyeTextures[0], eyeTextures[1] },
-            //     std::array<GLuint, 2>{ which_buffer, which_buffer },
-            //     fast_pose,
-            //     fast_pose.predict_computed_time,
-            //     lastTime
-			// }));
+			));
 
 			which_buffer = !which_buffer;
 		}
@@ -253,17 +184,17 @@ public:
 private:
 	const std::unique_ptr<const xlib_gl_extended_window> xwin;
 	const std::shared_ptr<switchboard> sb;
-	// const std::shared_ptr<pose_prediction> pp;
+	const std::shared_ptr<pose_prediction> pp;
 	const std::shared_ptr<const RelativeClock> _m_clock;
-	// const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
+	const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
 
 	// Switchboard plug for application eye buffer.
 	// We're not "writing" the actual buffer data,
 	// we're just atomically writing the handle to the
 	// correct eye/framebuffer in the "swapchain".
-	// switchboard::writer<rendered_frame> _m_eyebuffer;
+	switchboard::writer<rendered_frame> _m_eyebuffer;
 	switchboard::writer<frame_from_gldemo> _m_frame;
-	switchboard::reader<pose_type> _m_pose; 
+	switchboard::buffered_reader<pose_type> _m_pose; 
 
 	GLuint eyeTextures[2];
 	GLuint eyeTextureFBO;
@@ -419,11 +350,11 @@ public:
 
 		// Effectively, last vsync was at zero.
 		// Try to run gldemo right away.
-		// threadloop::start();
+		threadloop::start();
 
 		RAC_ERRNO_MSG("gldemo at end of start()");
 	}
 
 };
 
-PLUGIN_MAIN(gldemo_)
+PLUGIN_MAIN(gldemo)
