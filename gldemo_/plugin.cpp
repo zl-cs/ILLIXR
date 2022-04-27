@@ -17,6 +17,9 @@
 #include "common/global_module_defs.hpp"
 #include "common/error_util.hpp"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "common/gl_util/lib/stb_image_write.h"
+
 using namespace ILLIXR;
 
 static constexpr int   EYE_TEXTURE_WIDTH   = ILLIXR::FB_WIDTH;
@@ -31,14 +34,14 @@ static constexpr duration VSYNC_DELAY_TIME {std::chrono::milliseconds{2}};
 // left eyes, and eyeTextures[1] is a swapchain of right eyes
 
 
-class gldemo : public threadloop {
+class gldemo_ : public threadloop {
 public:
 	// Public constructor, create_component passes Switchboard handles ("plugs")
 	// to this constructor. In turn, the constructor fills in the private
 	// references to the switchboard plugs, so the component can read the
 	// data whenever it needs to.
 
-	gldemo(std::string name_, phonebook* pb_)
+	gldemo_(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
 		, xwin{new xlib_gl_extended_window{1, 1, pb->lookup_impl<xlib_gl_extended_window>()->glc}}
 		, sb{pb->lookup_impl<switchboard>()}
@@ -155,12 +158,30 @@ public:
 #endif
 			lastTime = _m_clock->now();
 
+			GLubyte* images[2]; // FIXME
+
+			// copy the texture image from the GPU to the CPU
+			for (auto eye_idx = 0; eye_idx < 2; eye_idx++) {
+				glBindTexture(GL_TEXTURE_2D, eyeTextures[eye_idx]);
+				images[eye_idx] = readTextureImage();
+			}
+
 			_m_frame.put(_m_frame.allocate<frame_from_gldemo>(
 				frame_from_gldemo{
-					std::array<GLuint, 2>{ eyeTextures[0], eyeTextures[1] },
+					images[0],
+					images[1],
 					std::array<GLuint, 2>{ which_buffer, which_buffer },
 				}
 			));
+
+			// dump the images
+			std::string image_name = dump_dir + std::to_string(dump_idx) + ".png";
+			// Write image
+			is_success = stbi_write_png(image_name.c_str(), ILLIXR::FB_WIDTH, ILLIXR::FB_HEIGHT, 3, images[0], ILLIXR::FB_WIDTH * 3); // what should be the stride? 
+			if (!is_success)
+			{
+                ILLIXR::abort("Image dump failed !!! ");
+			}
 
 			which_buffer = !which_buffer;
 		}
@@ -217,6 +238,72 @@ private:
 	Eigen::Matrix4f basicProjection;
 
 	time_point lastTime;
+
+	int dump_idx = 0; 
+	bool is_success;
+	std::string dump_dir = "metrics/offload_gldemo/";
+
+	// PBO buffer for reading texture image
+	GLuint PBO_buffer;
+	GLenum err;
+
+	GLubyte* readTextureImage(){
+
+		GLubyte* pixels = new GLubyte[EYE_TEXTURE_WIDTH * EYE_TEXTURE_HEIGHT * 3];
+
+		// Start timer
+		// startGetTexTime = std::chrono::high_resolution_clock::now();
+
+		// Enable PBO buffer
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO_buffer);
+		err = glGetError();
+		if (err){
+			std::cerr << "Timewarp: glBindBuffer to PBO_buffer failed" << std::endl;
+		}
+
+		// Read texture image to PBO buffer
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, (GLvoid*)0);
+		err = glGetError();
+		if (err){
+			std::cerr << "Timewarp: glGetTexImage failed" << std::endl;
+		}
+
+		// Transfer texture image from GPU to Pinned Memory(CPU)
+		GLubyte *ptr = (GLubyte*)glMapNamedBuffer(PBO_buffer, GL_READ_ONLY);
+		err = glGetError();
+		if (err){
+			std::cerr << "Timewarp: glMapNamedBuffer failed" << std::endl;
+		}
+
+		// Copy texture to CPU memory
+		memcpy(pixels, ptr, EYE_TEXTURE_WIDTH * EYE_TEXTURE_HEIGHT * 3);
+
+		// Unmap the buffer
+		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+		err = glGetError();
+		if (err){
+			std::cerr << "Timewarp: glUnmapBuffer failed" << std::endl;
+		}
+
+		// Unbind the buffer
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+		err = glGetError();
+		if (err){
+			std::cerr << "Timewarp: glBindBuffer to 0 failed" << std::endl;
+		}
+
+		// Terminate timer
+		// endGetTexTime = std::chrono::high_resolution_clock::now();
+
+		// Record the image collection time
+		// offload_time = std::chrono::duration_cast<std::chrono::milliseconds>(endGetTexTime - startGetTexTime).count();
+
+// #ifndef NDEBUG
+// 		std::cout << "Texture image collecting time: " << offload_time << std::endl;
+// #endif
+
+		return pixels;
+	}
 
 	int createSharedEyebuffer(GLuint* texture_handle){
 
@@ -343,6 +430,11 @@ public:
 		// Construct a basic perspective projection
 		math_util::projection_fov( &basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f );
 
+		// for offloading, reading texture images
+		glGenBuffers(1, &PBO_buffer);
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO_buffer);
+        glBufferData(GL_PIXEL_PACK_BUFFER, EYE_TEXTURE_WIDTH * EYE_TEXTURE_HEIGHT * 3, 0, GL_STREAM_DRAW);
+
 		RAC_ERRNO_MSG("gldemo before glXMakeCurrent");
         [[maybe_unused]] const bool gl_result_1 = static_cast<bool>(glXMakeCurrent(xwin->dpy, None, nullptr));
 		assert(gl_result_1 && "glXMakeCurrent should not fail");
@@ -357,4 +449,4 @@ public:
 
 };
 
-PLUGIN_MAIN(gldemo)
+PLUGIN_MAIN(gldemo_)

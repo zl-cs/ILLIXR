@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package gldemo_output_proto;
 
-message texture_handles {
-    uint32 left = 1; 
-    uint32 right = 2;
+message image {
+    bytes pixels = 1; 
+    uint32 size = 2; 
 }
 
 message swap_indices {
@@ -13,6 +13,7 @@ message swap_indices {
 }
 
 message Rendered_frame {
-    texture_handles th = 1;
-    swap_indices si = 2;
+    image left = 1;
+    image right = 2;
+    swap_indices si = 3;
 }

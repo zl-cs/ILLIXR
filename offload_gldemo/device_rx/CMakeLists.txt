@@ -7,6 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(eCAL REQUIRED)
 find_package(Protobuf REQUIRED)
+find_package(ZLIB REQUIRED)
+# GLEW
+find_package(GLEW REQUIRED)
 
 add_library(plugin SHARED plugin.cpp)
 
@@ -19,4 +22,6 @@ target_include_directories(plugin PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${PROJECT_NAME}
   eCAL::core
   protobuf::libprotobuf
+  ZLIB::ZLIB
+  GLEW::GLEW
 )
