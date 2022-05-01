@@ -4,6 +4,7 @@
  * @file
  * @brief A simple, commented, (almost) single file OpenXR example
  * @author Christoph Haag <christoph.haag@collabora.com>
+ * @author ILLIXR <illixr@cs.illinois.edu>
  */
 
 #include <stdio.h>
@@ -28,10 +29,17 @@
 
 #else
 #error Only Linux/XLib supported for now
-#endif
+#endif // __linux__
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
+
+// ILLIXR
+#include "common/threadloop.hpp"
+#include "common/switchboard.hpp"
+#include "common/data_format.hpp"
+
+using namespace ILLIXR;
 
 #define degrees_to_radians(angle_degrees) ((angle_degrees)*M_PI / 180.0)
 #define radians_to_degrees(angle_radians) ((angle_radians)*180.0 / M_PI)
@@ -40,10 +48,16 @@
 static XrPosef identity_pose = {.orientation = {.x = 0, .y = 0, .z = 0, .w = 1.0},
                                 .position = {.x = 0, .y = 0, .z = 0}};
 
-#define HAND_LEFT_INDEX 0
-#define HAND_RIGHT_INDEX 1
-#define HAND_COUNT 2
+static constexpr int HAND_LEFT_INDEX = 0;
+static constexpr int HAND_RIGHT_INDEX = 1;
+static constexpr int HAND_COUNT = 2;
 
+class openxrdemo : public threadloop {
+public:
+    openxrdemo(std::string name_, phonebook *pb_)
+        : threadloop(name_, pb_)
+    { }
+};
 
 
 // =============================================================================
