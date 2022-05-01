@@ -439,7 +439,7 @@ get_swapchain_format(XrInstance instance,
 		return -1;
 
 	printf("Runtime supports %d swapchain formats\n", swapchain_format_count);
-	int64_t* swapchain_formats = malloc(sizeof(int64_t) * swapchain_format_count);
+	int64_t* swapchain_formats = (int64_t*) malloc(sizeof(int64_t) * swapchain_format_count);
 	result = xrEnumerateSwapchainFormats(session, swapchain_format_count, &swapchain_format_count,
 	                                     swapchain_formats);
 	if (!xr_check(instance, result, "Failed to enumerate swapchain formats"))
@@ -476,7 +476,7 @@ print_api_layers()
 	if (count == 0)
 		return;
 
-	XrApiLayerProperties* props = malloc(count * sizeof(XrApiLayerProperties));
+	XrApiLayerProperties* props = (XrApiLayerProperties*) malloc(count * sizeof(XrApiLayerProperties));
 	for (uint32_t i = 0; i < count; i++) {
 		props[i].type = XR_TYPE_API_LAYER_PROPERTIES;
 		props[i].next = NULL;
@@ -601,7 +601,7 @@ main(int argc, char** argv)
 		return 1;
 
 
-	XrExtensionProperties* ext_props = malloc(sizeof(XrExtensionProperties) * ext_count);
+	XrExtensionProperties* ext_props = (XrExtensionProperties*) malloc(sizeof(XrExtensionProperties) * ext_count);
 	for (uint16_t i = 0; i < ext_count; i++) {
 		// we usually have to fill in the type (for validation) and set
 		// next to NULL (or a pointer to an extension specific struct)
@@ -636,7 +636,7 @@ main(int argc, char** argv)
 
 
 	// --- Create XrInstance
-	int enabled_ext_count = 1;
+	uint32_t enabled_ext_count = 1;
 	const char* enabled_exts[1] = {XR_KHR_OPENGL_ENABLE_EXTENSION_NAME};
 	// same can be done for API layers, but API layers can also be enabled by env var
 
@@ -700,7 +700,7 @@ main(int argc, char** argv)
 	if (!xr_check(instance, result, "Failed to get view configuration view count!"))
 		return 1;
 
-	viewconfig_views = malloc(sizeof(XrViewConfigurationView) * view_count);
+	viewconfig_views = (XrViewConfigurationView*) malloc(sizeof(XrViewConfigurationView) * view_count);
 	for (uint32_t i = 0; i < view_count; i++) {
 		viewconfig_views[i].type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
 		viewconfig_views[i].next = NULL;
@@ -798,9 +798,9 @@ main(int argc, char** argv)
 	// --- Create swapchain for main VR rendering
 	{
 		// In the frame loop we render into OpenGL textures we receive from the runtime here.
-		swapchains = malloc(sizeof(XrSwapchain) * view_count);
-		swapchain_lengths = malloc(sizeof(uint32_t) * view_count);
-		images = malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
+		swapchains = (XrSwapchain*) malloc(sizeof(XrSwapchain) * view_count);
+		swapchain_lengths = (uint32_t *) malloc(sizeof(uint32_t) * view_count);
+		images = (XrSwapchainImageOpenGLKHR**) malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
 		for (uint32_t i = 0; i < view_count; i++) {
 			XrSwapchainCreateInfo swapchain_create_info = {
 			    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
@@ -826,7 +826,7 @@ main(int argc, char** argv)
 			if (!xr_check(instance, result, "Failed to enumerate swapchains"))
 				return 1;
 
-			images[i] = malloc(sizeof(XrSwapchainImageOpenGLKHR) * swapchain_lengths[i]);
+			images[i] = (XrSwapchainImageOpenGLKHR*) malloc(sizeof(XrSwapchainImageOpenGLKHR) * swapchain_lengths[i]);
 			for (uint32_t j = 0; j < swapchain_lengths[i]; j++) {
 				images[i][j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
 				images[i][j].next = NULL;
@@ -842,9 +842,9 @@ main(int argc, char** argv)
 	// --- Create swapchain for depth buffers if supported
 	{
 		if (depth.supported) {
-			depth_swapchains = malloc(sizeof(XrSwapchain) * view_count);
-			depth_swapchain_lengths = malloc(sizeof(uint32_t) * view_count);
-			depth_images = malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
+			depth_swapchains = (XrSwapchain*) malloc(sizeof(XrSwapchain) * view_count);
+			depth_swapchain_lengths = (uint32_t*) malloc(sizeof(uint32_t) * view_count);
+			depth_images = (XrSwapchainImageOpenGLKHR**) malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
 			for (uint32_t i = 0; i < view_count; i++) {
 				XrSwapchainCreateInfo swapchain_create_info = {
 				    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
@@ -870,7 +870,7 @@ main(int argc, char** argv)
 					return 1;
 
 				// these are wrappers for the actual OpenGL texture id
-				depth_images[i] = malloc(sizeof(XrSwapchainImageOpenGLKHR) * depth_swapchain_lengths[i]);
+				depth_images[i] = (XrSwapchainImageOpenGLKHR*) malloc(sizeof(XrSwapchainImageOpenGLKHR) * depth_swapchain_lengths[i]);
 				for (uint32_t j = 0; j < depth_swapchain_lengths[i]; j++) {
 					depth_images[i][j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
 					depth_images[i][j].next = NULL;
@@ -1473,7 +1473,7 @@ main(int argc, char** argv)
 		    .views = projection_views,
 		};
 
-		int submitted_layer_count = 1;
+		uint32_t submitted_layer_count = 1;
 		const XrCompositionLayerBaseHeader* submitted_layers[1] = {
 		    (const XrCompositionLayerBaseHeader* const) & projection_layer};
 
@@ -1652,9 +1652,9 @@ init_gl(uint32_t view_count,
 	 * For this, we create one framebuffer per OpenGL texture.
 	 * This is not mandated by OpenXR, other ways to render to textures will work too.
 	 */
-	*framebuffers = malloc(sizeof(GLuint*) * view_count);
+	*framebuffers = (GLuint**) malloc(sizeof(GLuint*) * view_count);
 	for (uint32_t i = 0; i < view_count; i++) {
-		(*framebuffers)[i] = malloc(sizeof(GLuint) * swapchain_lengths[i]);
+		(*framebuffers)[i] = (GLuint*) malloc(sizeof(GLuint) * swapchain_lengths[i]);
 		glGenFramebuffers(swapchain_lengths[i], (*framebuffers)[i]);
 	}
 
