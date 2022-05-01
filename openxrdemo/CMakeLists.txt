@@ -12,7 +12,7 @@ find_package(OpenGL REQUIRED)
 INCLUDE(FindPkgConfig)
 PKG_SEARCH_MODULE(SDL2 REQUIRED sdl2)
 
-add_executable(plugin plugin.cpp)
+add_library(plugin SHARED plugin.cpp)
 
 # First try openxr.pc from OpenXR SDK
 include(FindPkgConfig)
@@ -45,6 +45,3 @@ if(MSVC)
 else(MSVC)
   target_compile_options(plugin PRIVATE -pedantic -Wall -Wextra -Wno-unused-parameter -std=c++17 -g -O3)
 endif(MSVC)
-
-
-install(TARGETS plugin RUNTIME DESTINATION bin)
