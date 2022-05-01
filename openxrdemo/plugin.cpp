@@ -38,8 +38,7 @@
 #include "common/threadloop.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
-
-using namespace ILLIXR;
+#include "common/shader_util.hpp"
 
 #define degrees_to_radians(angle_degrees) ((angle_degrees)*M_PI / 180.0)
 #define radians_to_degrees(angle_radians) ((angle_radians)*180.0 / M_PI)
@@ -51,14 +50,6 @@ static XrPosef identity_pose = {.orientation = {.x = 0, .y = 0, .z = 0, .w = 1.0
 static constexpr int HAND_LEFT_INDEX = 0;
 static constexpr int HAND_RIGHT_INDEX = 1;
 static constexpr int HAND_COUNT = 2;
-
-class openxrdemo : public threadloop {
-public:
-    openxrdemo(std::string name_, phonebook *pb_)
-        : threadloop(name_, pb_)
-    { }
-};
-
 
 // =============================================================================
 // math code adapted from
@@ -322,47 +313,6 @@ XrMatrix4x4f_CreateModelMatrix(XrMatrix4x4f* result,
 }
 // =============================================================================
 
-
-
-// =============================================================================
-// OpenGL rendering code at the end of the file
-// =============================================================================
-#ifdef __linux__
-bool
-init_sdl_window(Display** xDisplay,
-                uint32_t* visualid,
-                GLXFBConfig* glxFBConfig,
-                GLXDrawable* glxDrawable,
-                GLXContext* glxContext,
-                int w,
-                int h);
-
-int
-init_gl(uint32_t view_count,
-        uint32_t* swapchain_lengths,
-        GLuint*** framebuffers,
-        GLuint* shader_program_id,
-        GLuint* VAO);
-
-void
-render_frame(int w,
-             int h,
-             GLuint shader_program_id,
-             GLuint VAO,
-             XrTime predictedDisplayTime,
-             int view_index,
-             XrSpaceLocation* hand_locations,
-             XrMatrix4x4f projectionmatrix,
-             XrMatrix4x4f viewmatrix,
-             GLuint framebuffer,
-             GLuint image,
-             bool depth_supported,
-             GLuint depthbuffer);
-#endif
-// =============================================================================
-
-
-
 // true if XrResult is a success code, else print error message and return false
 bool
 xr_check(XrInstance instance, XrResult result, const char* format, ...)
@@ -523,1026 +473,6 @@ load_extension_function_pointers(XrInstance instance)
 	return true;
 }
 
-int
-main(int argc, char** argv)
-{
-	// Changing to HANDHELD_DISPLAY or a future form factor may work, but has not been tested.
-	XrFormFactor form_factor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-
-	// Changing the form_factor may require changing the view_type too.
-	XrViewConfigurationType view_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-
-	// Typically STAGE for room scale/standing, LOCAL for seated
-	XrReferenceSpaceType play_space_type = XR_REFERENCE_SPACE_TYPE_LOCAL;
-	XrSpace play_space = XR_NULL_HANDLE;
-
-	// the instance handle can be thought of as the basic connection to the OpenXR runtime
-	XrInstance instance = XR_NULL_HANDLE;
-	// the system represents an (opaque) set of XR devices in use, managed by the runtime
-	XrSystemId system_id = XR_NULL_SYSTEM_ID;
-	// the session deals with the renderloop submitting frames to the runtime
-	XrSession session = XR_NULL_HANDLE;
-
-	// each graphics API requires the use of a specialized struct
-	XrGraphicsBindingOpenGLXlibKHR graphics_binding_gl;
-
-	// each physical Display/Eye is described by a view.
-	// view_count usually depends on the form_factor / view_type.
-	// dynamically allocating all view related structs instead of assuming 2
-	// hopefully allows this app to scale easily to different view_counts.
-	uint32_t view_count = 0;
-	// the viewconfiguration views contain information like resolution about each view
-	XrViewConfigurationView* viewconfig_views = NULL;
-
-	// array of view_count containers for submitting swapchains with rendered VR frames
-	XrCompositionLayerProjectionView* projection_views = NULL;
-	// array of view_count views, filled by the runtime with current HMD display pose
-	XrView* views = NULL;
-
-	// array of view_count handles for swapchains.
-	// it is possible to use imageRect to render all views to different areas of the
-	// same texture, but in this example we use one swapchain per view
-	XrSwapchain* swapchains = NULL;
-	// array of view_count ints, storing the length of swapchains
-	uint32_t* swapchain_lengths = NULL;
-	// array of view_count array of swapchain_length containers holding an OpenGL texture
-	// that is allocated by the runtime
-	XrSwapchainImageOpenGLKHR** images = NULL;
-
-	// depth swapchain equivalent to the VR color swapchains
-	XrSwapchain* depth_swapchains = NULL;
-	uint32_t* depth_swapchain_lengths = NULL;
-	XrSwapchainImageOpenGLKHR** depth_images = NULL;
-
-	XrPath hand_paths[HAND_COUNT];
-
-	struct
-	{
-		// supporting depth layers is *optional* for runtimes
-		bool supported;
-		XrCompositionLayerDepthInfoKHR* infos;
-	} depth;
-
-	struct
-	{
-		// To render into a texture we need a framebuffer (one per texture to make it easy)
-		GLuint** framebuffers;
-
-		float near_z;
-		float far_z;
-
-		GLuint shader_program_id;
-		GLuint VAO;
-	} gl_rendering;
-	gl_rendering.near_z = 0.01f;
-	gl_rendering.far_z = 100.0f;
-
-
-	// reuse this variable for all our OpenXR return codes
-	XrResult result = XR_SUCCESS;
-
-	print_api_layers();
-
-	// xrEnumerate*() functions are usually called once with CapacityInput = 0.
-	// The function will write the required amount into CountOutput. We then have
-	// to allocate an array to hold CountOutput elements and call the function
-	// with CountOutput as CapacityInput.
-	uint32_t ext_count = 0;
-	result = xrEnumerateInstanceExtensionProperties(NULL, 0, &ext_count, NULL);
-
-	/* TODO: instance null will not be able to convert XrResult to string */
-	if (!xr_check(NULL, result, "Failed to enumerate number of extension properties"))
-		return 1;
-
-
-	XrExtensionProperties* ext_props = (XrExtensionProperties*) malloc(sizeof(XrExtensionProperties) * ext_count);
-	for (uint16_t i = 0; i < ext_count; i++) {
-		// we usually have to fill in the type (for validation) and set
-		// next to NULL (or a pointer to an extension specific struct)
-		ext_props[i].type = XR_TYPE_EXTENSION_PROPERTIES;
-		ext_props[i].next = NULL;
-	}
-
-	result = xrEnumerateInstanceExtensionProperties(NULL, ext_count, &ext_count, ext_props);
-	if (!xr_check(NULL, result, "Failed to enumerate extension properties"))
-		return 1;
-
-	bool opengl_supported = false;
-
-	printf("Runtime supports %d extensions\n", ext_count);
-	for (uint32_t i = 0; i < ext_count; i++) {
-		printf("\t%s v%d\n", ext_props[i].extensionName, ext_props[i].extensionVersion);
-		if (strcmp(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, ext_props[i].extensionName) == 0) {
-			opengl_supported = true;
-		}
-
-		if (strcmp(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME, ext_props[i].extensionName) == 0) {
-			depth.supported = true;
-		}
-	}
-	free(ext_props);
-
-	// A graphics extension like OpenGL is required to draw anything in VR
-	if (!opengl_supported) {
-		printf("Runtime does not support OpenGL extension!\n");
-		return 1;
-	}
-
-
-	// --- Create XrInstance
-	uint32_t enabled_ext_count = 1;
-	const char* enabled_exts[1] = {XR_KHR_OPENGL_ENABLE_EXTENSION_NAME};
-	// same can be done for API layers, but API layers can also be enabled by env var
-
-	XrInstanceCreateInfo instance_create_info = {
-	    .type = XR_TYPE_INSTANCE_CREATE_INFO,
-	    .next = NULL,
-	    .createFlags = 0,
-	    .enabledExtensionCount = enabled_ext_count,
-	    .enabledExtensionNames = enabled_exts,
-	    .enabledApiLayerCount = 0,
-	    .enabledApiLayerNames = NULL,
-	    .applicationInfo =
-	        {
-	            // some compilers have trouble with char* initialization
-	            .applicationName = "",
-	            .engineName = "",
-	            .applicationVersion = 1,
-	            .engineVersion = 0,
-	            .apiVersion = XR_CURRENT_API_VERSION,
-	        },
-	};
-	strncpy(instance_create_info.applicationInfo.applicationName, "OpenXR OpenGL Example",
-	        XR_MAX_APPLICATION_NAME_SIZE);
-	strncpy(instance_create_info.applicationInfo.engineName, "Custom", XR_MAX_ENGINE_NAME_SIZE);
-
-	result = xrCreateInstance(&instance_create_info, &instance);
-	if (!xr_check(NULL, result, "Failed to create XR instance."))
-		return 1;
-
-	if (!load_extension_function_pointers(instance))
-		return 1;
-
-	// Optionally get runtime name and version
-	print_instance_properties(instance);
-
-	// --- Get XrSystemId
-	XrSystemGetInfo system_get_info = {
-	    .type = XR_TYPE_SYSTEM_GET_INFO, .formFactor = form_factor, .next = NULL};
-
-	result = xrGetSystem(instance, &system_get_info, &system_id);
-	if (!xr_check(instance, result, "Failed to get system for HMD form factor."))
-		return 1;
-
-	printf("Successfully got XrSystem with id %lu for HMD form factor\n", system_id);
-
-
-	{
-		XrSystemProperties system_props = {
-		    .type = XR_TYPE_SYSTEM_PROPERTIES,
-		    .next = NULL,
-		};
-
-		result = xrGetSystemProperties(instance, system_id, &system_props);
-		if (!xr_check(instance, result, "Failed to get System properties"))
-			return 1;
-
-		print_system_properties(&system_props);
-	}
-
-	result = xrEnumerateViewConfigurationViews(instance, system_id, view_type, 0, &view_count, NULL);
-	if (!xr_check(instance, result, "Failed to get view configuration view count!"))
-		return 1;
-
-	viewconfig_views = (XrViewConfigurationView*) malloc(sizeof(XrViewConfigurationView) * view_count);
-	for (uint32_t i = 0; i < view_count; i++) {
-		viewconfig_views[i].type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
-		viewconfig_views[i].next = NULL;
-	}
-
-	result = xrEnumerateViewConfigurationViews(instance, system_id, view_type, view_count,
-	                                           &view_count, viewconfig_views);
-	if (!xr_check(instance, result, "Failed to enumerate view configuration views!"))
-		return 1;
-	print_viewconfig_view_info(view_count, viewconfig_views);
-
-
-	// OpenXR requires checking graphics requirements before creating a session.
-	XrGraphicsRequirementsOpenGLKHR opengl_reqs = {.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR,
-	                                               .next = NULL};
-
-	// this function pointer was loaded with xrGetInstanceProcAddr
-	result = pfnGetOpenGLGraphicsRequirementsKHR(instance, system_id, &opengl_reqs);
-	if (!xr_check(instance, result, "Failed to get OpenGL graphics requirements!"))
-		return 1;
-
-	/* Checking opengl_reqs.minApiVersionSupported and opengl_reqs.maxApiVersionSupported
-	 * is not very useful, compatibility will depend on the OpenGL implementation and the
-	 * OpenXR runtime much more than the OpenGL version.
-	 * Other APIs have more useful verifiable requirements. */
-
-
-	// --- Create session
-	graphics_binding_gl = (XrGraphicsBindingOpenGLXlibKHR){
-	    .type = XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR,
-	};
-
-	// create SDL window the size of the left eye & fill GL graphics binding info
-	if (!init_sdl_window(&graphics_binding_gl.xDisplay, &graphics_binding_gl.visualid,
-	                     &graphics_binding_gl.glxFBConfig, &graphics_binding_gl.glxDrawable,
-	                     &graphics_binding_gl.glxContext,
-	                     viewconfig_views[0].recommendedImageRectWidth,
-	                     viewconfig_views[0].recommendedImageRectHeight)) {
-		printf("GLX init failed!\n");
-		return 1;
-	}
-
-	printf("Using OpenGL version: %s\n", glGetString(GL_VERSION));
-	printf("Using OpenGL Renderer: %s\n", glGetString(GL_RENDERER));
-
-	XrSessionCreateInfo session_create_info = {
-	    .type = XR_TYPE_SESSION_CREATE_INFO, .next = &graphics_binding_gl, .systemId = system_id};
-
-	result = xrCreateSession(instance, &session_create_info, &session);
-	if (!xr_check(instance, result, "Failed to create session"))
-		return 1;
-
-	printf("Successfully created a session with OpenGL!\n");
-
-	/* Many runtimes support at least STAGE and LOCAL but not all do.
-	 * Sophisticated apps might check with xrEnumerateReferenceSpaces() if the
-	 * chosen one is supported and try another one if not.
-	 * Here we will get an error from xrCreateReferenceSpace() and exit. */
-	XrReferenceSpaceCreateInfo play_space_create_info = {.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-	                                                     .next = NULL,
-	                                                     .referenceSpaceType = play_space_type,
-	                                                     .poseInReferenceSpace = identity_pose};
-
-	result = xrCreateReferenceSpace(session, &play_space_create_info, &play_space);
-	if (!xr_check(instance, result, "Failed to create play space!"))
-		return 1;
-
-	// --- Create Swapchains
-	uint32_t swapchain_format_count;
-	result = xrEnumerateSwapchainFormats(session, 0, &swapchain_format_count, NULL);
-	if (!xr_check(instance, result, "Failed to get number of supported swapchain formats"))
-		return 1;
-
-	printf("Runtime supports %d swapchain formats\n", swapchain_format_count);
-	int64_t swapchain_formats[swapchain_format_count];
-	result = xrEnumerateSwapchainFormats(session, swapchain_format_count, &swapchain_format_count,
-	                                     swapchain_formats);
-	if (!xr_check(instance, result, "Failed to enumerate swapchain formats"))
-		return 1;
-
-	// SRGB is usually a better choice than linear
-	// a more sophisticated approach would iterate supported swapchain formats and choose from them
-	int64_t color_format = get_swapchain_format(instance, session, GL_SRGB8_ALPHA8_EXT, true);
-
-	// GL_DEPTH_COMPONENT16 is a good bet
-	// SteamVR 1.16.4 supports GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32
-	// but NOT GL_DEPTH_COMPONENT32F
-	int64_t depth_format = get_swapchain_format(instance, session, GL_DEPTH_COMPONENT16, false);
-	if (depth_format < 0) {
-		printf("Preferred depth format GL_DEPTH_COMPONENT16 not supported, disabling depth\n");
-		depth.supported = false;
-	}
-
-
-	// --- Create swapchain for main VR rendering
-	{
-		// In the frame loop we render into OpenGL textures we receive from the runtime here.
-		swapchains = (XrSwapchain*) malloc(sizeof(XrSwapchain) * view_count);
-		swapchain_lengths = (uint32_t *) malloc(sizeof(uint32_t) * view_count);
-		images = (XrSwapchainImageOpenGLKHR**) malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
-		for (uint32_t i = 0; i < view_count; i++) {
-			XrSwapchainCreateInfo swapchain_create_info = {
-			    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-			    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
-			    .createFlags = 0,
-			    .format = color_format,
-			    .sampleCount = viewconfig_views[i].recommendedSwapchainSampleCount,
-			    .width = viewconfig_views[i].recommendedImageRectWidth,
-			    .height = viewconfig_views[i].recommendedImageRectHeight,
-			    .faceCount = 1,
-			    .arraySize = 1,
-			    .mipCount = 1,
-			    .next = NULL,
-			};
-
-			result = xrCreateSwapchain(session, &swapchain_create_info, &swapchains[i]);
-			if (!xr_check(instance, result, "Failed to create swapchain %d!", i))
-				return 1;
-
-			// The runtime controls how many textures we have to be able to render to
-			// (e.g. "triple buffering")
-			result = xrEnumerateSwapchainImages(swapchains[i], 0, &swapchain_lengths[i], NULL);
-			if (!xr_check(instance, result, "Failed to enumerate swapchains"))
-				return 1;
-
-			images[i] = (XrSwapchainImageOpenGLKHR*) malloc(sizeof(XrSwapchainImageOpenGLKHR) * swapchain_lengths[i]);
-			for (uint32_t j = 0; j < swapchain_lengths[i]; j++) {
-				images[i][j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
-				images[i][j].next = NULL;
-			}
-			result =
-			    xrEnumerateSwapchainImages(swapchains[i], swapchain_lengths[i], &swapchain_lengths[i],
-			                               (XrSwapchainImageBaseHeader*)images[i]);
-			if (!xr_check(instance, result, "Failed to enumerate swapchain images"))
-				return 1;
-		}
-	}
-
-	// --- Create swapchain for depth buffers if supported
-	{
-		if (depth.supported) {
-			depth_swapchains = (XrSwapchain*) malloc(sizeof(XrSwapchain) * view_count);
-			depth_swapchain_lengths = (uint32_t*) malloc(sizeof(uint32_t) * view_count);
-			depth_images = (XrSwapchainImageOpenGLKHR**) malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
-			for (uint32_t i = 0; i < view_count; i++) {
-				XrSwapchainCreateInfo swapchain_create_info = {
-				    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-				    .usageFlags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-				    .createFlags = 0,
-				    .format = depth_format,
-				    .sampleCount = viewconfig_views[i].recommendedSwapchainSampleCount,
-				    .width = viewconfig_views[i].recommendedImageRectWidth,
-				    .height = viewconfig_views[i].recommendedImageRectHeight,
-				    .faceCount = 1,
-				    .arraySize = 1,
-				    .mipCount = 1,
-				    .next = NULL,
-				};
-
-				result = xrCreateSwapchain(session, &swapchain_create_info, &depth_swapchains[i]);
-				if (!xr_check(instance, result, "Failed to create swapchain %d!", i))
-					return 1;
-
-				result =
-				    xrEnumerateSwapchainImages(depth_swapchains[i], 0, &depth_swapchain_lengths[i], NULL);
-				if (!xr_check(instance, result, "Failed to enumerate swapchains"))
-					return 1;
-
-				// these are wrappers for the actual OpenGL texture id
-				depth_images[i] = (XrSwapchainImageOpenGLKHR*) malloc(sizeof(XrSwapchainImageOpenGLKHR) * depth_swapchain_lengths[i]);
-				for (uint32_t j = 0; j < depth_swapchain_lengths[i]; j++) {
-					depth_images[i][j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
-					depth_images[i][j].next = NULL;
-				}
-				result = xrEnumerateSwapchainImages(depth_swapchains[i], depth_swapchain_lengths[i],
-				                                    &depth_swapchain_lengths[i],
-				                                    (XrSwapchainImageBaseHeader*)depth_images[i]);
-				if (!xr_check(instance, result, "Failed to enumerate swapchain images"))
-					return 1;
-			}
-		}
-	}
-
-
-	// Do not allocate these every frame to save some resources
-	views = (XrView*)malloc(sizeof(XrView) * view_count);
-	for (uint32_t i = 0; i < view_count; i++) {
-		views[i].type = XR_TYPE_VIEW;
-		views[i].next = NULL;
-	}
-
-	projection_views = (XrCompositionLayerProjectionView*)malloc(
-	    sizeof(XrCompositionLayerProjectionView) * view_count);
-	for (uint32_t i = 0; i < view_count; i++) {
-		projection_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-		projection_views[i].next = NULL;
-
-		projection_views[i].subImage.swapchain = swapchains[i];
-		projection_views[i].subImage.imageArrayIndex = 0;
-		projection_views[i].subImage.imageRect.offset.x = 0;
-		projection_views[i].subImage.imageRect.offset.y = 0;
-		projection_views[i].subImage.imageRect.extent.width =
-		    viewconfig_views[i].recommendedImageRectWidth;
-		projection_views[i].subImage.imageRect.extent.height =
-		    viewconfig_views[i].recommendedImageRectHeight;
-
-		// projection_views[i].{pose, fov} have to be filled every frame in frame loop
-	};
-
-
-	if (depth.supported) {
-		depth.infos = (XrCompositionLayerDepthInfoKHR*)malloc(sizeof(XrCompositionLayerDepthInfoKHR) *
-		                                                      view_count);
-		for (uint32_t i = 0; i < view_count; i++) {
-			depth.infos[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
-			depth.infos[i].next = NULL;
-			depth.infos[i].minDepth = 0.f;
-			depth.infos[i].maxDepth = 1.f;
-			depth.infos[i].nearZ = gl_rendering.near_z;
-			depth.infos[i].farZ = gl_rendering.far_z;
-
-			depth.infos[i].subImage.swapchain = depth_swapchains[i];
-			depth.infos[i].subImage.imageArrayIndex = 0;
-			depth.infos[i].subImage.imageRect.offset.x = 0;
-			depth.infos[i].subImage.imageRect.offset.y = 0;
-			depth.infos[i].subImage.imageRect.extent.width =
-			    viewconfig_views[i].recommendedImageRectWidth;
-			depth.infos[i].subImage.imageRect.extent.height =
-			    viewconfig_views[i].recommendedImageRectHeight;
-
-			// depth is chained to projection, not submitted as separate layer
-			projection_views[i].next = &depth.infos[i];
-		};
-	}
-
-
-	// --- Set up input (actions)
-
-	xrStringToPath(instance, "/user/hand/left", &hand_paths[HAND_LEFT_INDEX]);
-	xrStringToPath(instance, "/user/hand/right", &hand_paths[HAND_RIGHT_INDEX]);
-
-	XrPath select_click_path[HAND_COUNT];
-	xrStringToPath(instance, "/user/hand/left/input/select/click",
-	               &select_click_path[HAND_LEFT_INDEX]);
-	xrStringToPath(instance, "/user/hand/right/input/select/click",
-	               &select_click_path[HAND_RIGHT_INDEX]);
-
-	XrPath trigger_value_path[HAND_COUNT];
-	xrStringToPath(instance, "/user/hand/left/input/trigger/value",
-	               &trigger_value_path[HAND_LEFT_INDEX]);
-	xrStringToPath(instance, "/user/hand/right/input/trigger/value",
-	               &trigger_value_path[HAND_RIGHT_INDEX]);
-
-	XrPath thumbstick_y_path[HAND_COUNT];
-	xrStringToPath(instance, "/user/hand/left/input/thumbstick/y",
-	               &thumbstick_y_path[HAND_LEFT_INDEX]);
-	xrStringToPath(instance, "/user/hand/right/input/thumbstick/y",
-	               &thumbstick_y_path[HAND_RIGHT_INDEX]);
-
-	XrPath grip_pose_path[HAND_COUNT];
-	xrStringToPath(instance, "/user/hand/left/input/grip/pose", &grip_pose_path[HAND_LEFT_INDEX]);
-	xrStringToPath(instance, "/user/hand/right/input/grip/pose", &grip_pose_path[HAND_RIGHT_INDEX]);
-
-	XrPath haptic_path[HAND_COUNT];
-	xrStringToPath(instance, "/user/hand/left/output/haptic", &haptic_path[HAND_LEFT_INDEX]);
-	xrStringToPath(instance, "/user/hand/right/output/haptic", &haptic_path[HAND_RIGHT_INDEX]);
-
-
-	XrActionSetCreateInfo gameplay_actionset_info = {
-	    .type = XR_TYPE_ACTION_SET_CREATE_INFO, .next = NULL, .priority = 0};
-	strcpy(gameplay_actionset_info.actionSetName, "gameplay_actionset");
-	strcpy(gameplay_actionset_info.localizedActionSetName, "Gameplay Actions");
-
-	XrActionSet gameplay_actionset;
-	result = xrCreateActionSet(instance, &gameplay_actionset_info, &gameplay_actionset);
-	if (!xr_check(instance, result, "failed to create actionset"))
-		return 1;
-
-	XrAction hand_pose_action;
-	{
-		XrActionCreateInfo action_info = {.type = XR_TYPE_ACTION_CREATE_INFO,
-		                                  .next = NULL,
-		                                  .actionType = XR_ACTION_TYPE_POSE_INPUT,
-		                                  .countSubactionPaths = HAND_COUNT,
-		                                  .subactionPaths = hand_paths};
-		strcpy(action_info.actionName, "handpose");
-		strcpy(action_info.localizedActionName, "Hand Pose");
-
-		result = xrCreateAction(gameplay_actionset, &action_info, &hand_pose_action);
-		if (!xr_check(instance, result, "failed to create hand pose action"))
-			return 1;
-	}
-	// poses can't be queried directly, we need to create a space for each
-	XrSpace hand_pose_spaces[HAND_COUNT];
-	for (int hand = 0; hand < HAND_COUNT; hand++) {
-		XrActionSpaceCreateInfo action_space_info = {.type = XR_TYPE_ACTION_SPACE_CREATE_INFO,
-		                                             .next = NULL,
-		                                             .action = hand_pose_action,
-		                                             .poseInActionSpace = identity_pose,
-		                                             .subactionPath = hand_paths[hand]};
-
-		result = xrCreateActionSpace(session, &action_space_info, &hand_pose_spaces[hand]);
-		if (!xr_check(instance, result, "failed to create hand %d pose space", hand))
-			return 1;
-	}
-
-	// Grabbing objects is not actually implemented in this demo, it only gives some  haptic feebdack.
-	XrAction grab_action_float;
-	{
-		XrActionCreateInfo action_info = {.type = XR_TYPE_ACTION_CREATE_INFO,
-		                                  .next = NULL,
-		                                  .actionType = XR_ACTION_TYPE_FLOAT_INPUT,
-		                                  .countSubactionPaths = HAND_COUNT,
-		                                  .subactionPaths = hand_paths};
-		strcpy(action_info.actionName, "grabobjectfloat");
-		strcpy(action_info.localizedActionName, "Grab Object");
-
-		result = xrCreateAction(gameplay_actionset, &action_info, &grab_action_float);
-		if (!xr_check(instance, result, "failed to create grab action"))
-			return 1;
-	}
-
-	XrAction haptic_action;
-	{
-		XrActionCreateInfo action_info = {.type = XR_TYPE_ACTION_CREATE_INFO,
-		                                  .next = NULL,
-		                                  .actionType = XR_ACTION_TYPE_VIBRATION_OUTPUT,
-		                                  .countSubactionPaths = HAND_COUNT,
-		                                  .subactionPaths = hand_paths};
-		strcpy(action_info.actionName, "haptic");
-		strcpy(action_info.localizedActionName, "Haptic Vibration");
-		result = xrCreateAction(gameplay_actionset, &action_info, &haptic_action);
-		if (!xr_check(instance, result, "failed to create haptic action"))
-			return 1;
-	}
-
-
-	// suggest actions for simple controller
-	{
-		XrPath interaction_profile_path;
-		result = xrStringToPath(instance, "/interaction_profiles/khr/simple_controller",
-		                        &interaction_profile_path);
-		if (!xr_check(instance, result, "failed to get interaction profile"))
-			return 1;
-
-		const XrActionSuggestedBinding bindings[] = {
-		    {.action = hand_pose_action, .binding = grip_pose_path[HAND_LEFT_INDEX]},
-		    {.action = hand_pose_action, .binding = grip_pose_path[HAND_RIGHT_INDEX]},
-		    // boolean input select/click will be converted to float that is either 0 or 1
-		    {.action = grab_action_float, .binding = select_click_path[HAND_LEFT_INDEX]},
-		    {.action = grab_action_float, .binding = select_click_path[HAND_RIGHT_INDEX]},
-		    {.action = haptic_action, .binding = haptic_path[HAND_LEFT_INDEX]},
-		    {.action = haptic_action, .binding = haptic_path[HAND_RIGHT_INDEX]},
-		};
-
-		const XrInteractionProfileSuggestedBinding suggested_bindings = {
-		    .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
-		    .next = NULL,
-		    .interactionProfile = interaction_profile_path,
-		    .countSuggestedBindings = sizeof(bindings) / sizeof(bindings[0]),
-		    .suggestedBindings = bindings};
-
-		xrSuggestInteractionProfileBindings(instance, &suggested_bindings);
-		if (!xr_check(instance, result, "failed to suggest bindings"))
-			return 1;
-	}
-
-	// suggest actions for valve index controller
-	{
-		XrPath interaction_profile_path;
-		result = xrStringToPath(instance, "/interaction_profiles/valve/index_controller",
-		                        &interaction_profile_path);
-		if (!xr_check(instance, result, "failed to get interaction profile"))
-			return 1;
-
-		const XrActionSuggestedBinding bindings[] = {
-		    {.action = hand_pose_action, .binding = grip_pose_path[HAND_LEFT_INDEX]},
-		    {.action = hand_pose_action, .binding = grip_pose_path[HAND_RIGHT_INDEX]},
-		    {.action = grab_action_float, .binding = trigger_value_path[HAND_LEFT_INDEX]},
-		    {.action = grab_action_float, .binding = trigger_value_path[HAND_RIGHT_INDEX]},
-		    {.action = haptic_action, .binding = haptic_path[HAND_LEFT_INDEX]},
-		    {.action = haptic_action, .binding = haptic_path[HAND_RIGHT_INDEX]},
-		};
-
-		const XrInteractionProfileSuggestedBinding suggested_bindings = {
-		    .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
-		    .next = NULL,
-		    .interactionProfile = interaction_profile_path,
-		    .countSuggestedBindings = sizeof(bindings) / sizeof(bindings[0]),
-		    .suggestedBindings = bindings};
-
-		xrSuggestInteractionProfileBindings(instance, &suggested_bindings);
-		if (!xr_check(instance, result, "failed to suggest bindings"))
-			return 1;
-	}
-
-
-	// TODO: should not be necessary, but is for SteamVR 1.16.4 (but not 1.15.x)
-	glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable,
-	               graphics_binding_gl.glxContext);
-
-	// Set up rendering (compile shaders, ...) before starting the session
-	if (init_gl(view_count, swapchain_lengths, &gl_rendering.framebuffers,
-	            &gl_rendering.shader_program_id, &gl_rendering.VAO) != 0) {
-		printf("OpenGl setup failed!\n");
-		return 1;
-	}
-
-	XrSessionActionSetsAttachInfo actionset_attach_info = {
-	    .type = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
-	    .next = NULL,
-	    .countActionSets = 1,
-	    .actionSets = &gameplay_actionset};
-	result = xrAttachSessionActionSets(session, &actionset_attach_info);
-	if (!xr_check(instance, result, "failed to attach action set"))
-		return 1;
-
-	XrSessionState state = XR_SESSION_STATE_UNKNOWN;
-
-	bool quit_mainloop = false;
-	bool session_running = false; // to avoid beginning an already running session
-	bool run_framecycle = false;  // for some session states skip the frame cycle
-	while (!quit_mainloop) {
-
-		// --- Poll SDL for events so we can exit with esc
-		SDL_Event sdl_event;
-		while (SDL_PollEvent(&sdl_event)) {
-			if (sdl_event.type == SDL_QUIT ||
-			    (sdl_event.type == SDL_KEYDOWN && sdl_event.key.keysym.sym == SDLK_ESCAPE)) {
-				printf("Requesting exit...\n");
-				xrRequestExitSession(session);
-			}
-		}
-
-
-		// --- Handle runtime Events
-		// we do this before xrWaitFrame() so we can go idle or
-		// break out of the main render loop as early as possible and don't have to
-		// uselessly render or submit one. Calling xrWaitFrame commits you to
-		// calling xrBeginFrame eventually.
-		XrEventDataBuffer runtime_event = {.type = XR_TYPE_EVENT_DATA_BUFFER, .next = NULL};
-		XrResult poll_result = xrPollEvent(instance, &runtime_event);
-		while (poll_result == XR_SUCCESS) {
-			switch (runtime_event.type) {
-			case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING: {
-				XrEventDataInstanceLossPending* event = (XrEventDataInstanceLossPending*)&runtime_event;
-				printf("EVENT: instance loss pending at %lu! Destroying instance.\n", event->lossTime);
-				quit_mainloop = true;
-				continue;
-			}
-			case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
-				XrEventDataSessionStateChanged* event = (XrEventDataSessionStateChanged*)&runtime_event;
-				printf("EVENT: session state changed from %d to %d\n", state, event->state);
-				state = event->state;
-
-				/*
-				 * react to session state changes, see OpenXR spec 9.3 diagram. What we need to react to:
-				 *
-				 * * READY -> xrBeginSession STOPPING -> xrEndSession (note that the same session can be restarted)
-				 * * EXITING -> xrDestroySession (EXITING only happens after we went through STOPPING and called xrEndSession)
-				 *
-				 * After exiting it is still possible to create a new session but we don't do that here.
-				 *
-				 * * IDLE -> don't run render loop, but keep polling for events
-				 * * SYNCHRONIZED, VISIBLE, FOCUSED -> run render loop
-				 */
-				switch (state) {
-				// skip render loop, keep polling
-				case XR_SESSION_STATE_MAX_ENUM: // must be a bug
-				case XR_SESSION_STATE_IDLE:
-				case XR_SESSION_STATE_UNKNOWN: {
-					run_framecycle = false;
-
-					break; // state handling switch
-				}
-
-				// do nothing, run render loop normally
-				case XR_SESSION_STATE_FOCUSED:
-				case XR_SESSION_STATE_SYNCHRONIZED:
-				case XR_SESSION_STATE_VISIBLE: {
-					run_framecycle = true;
-
-					break; // state handling switch
-				}
-
-				// begin session and then run render loop
-				case XR_SESSION_STATE_READY: {
-					// start session only if it is not running, i.e. not when we already called xrBeginSession
-					// but the runtime did not switch to the next state yet
-					if (!session_running) {
-						XrSessionBeginInfo session_begin_info = {.type = XR_TYPE_SESSION_BEGIN_INFO,
-						                                         .next = NULL,
-						                                         .primaryViewConfigurationType = view_type};
-						result = xrBeginSession(session, &session_begin_info);
-						if (!xr_check(instance, result, "Failed to begin session!"))
-							return 1;
-						printf("Session started!\n");
-						session_running = true;
-					}
-					// after beginning the session, run render loop
-					run_framecycle = true;
-
-					break; // state handling switch
-				}
-
-				// end session, skip render loop, keep polling for next state change
-				case XR_SESSION_STATE_STOPPING: {
-					// end session only if it is running, i.e. not when we already called xrEndSession but the
-					// runtime did not switch to the next state yet
-					if (session_running) {
-						result = xrEndSession(session);
-						if (!xr_check(instance, result, "Failed to end session!"))
-							return 1;
-						session_running = false;
-					}
-					// after ending the session, don't run render loop
-					run_framecycle = false;
-
-					break; // state handling switch
-				}
-
-				// destroy session, skip render loop, exit render loop and quit
-				case XR_SESSION_STATE_LOSS_PENDING:
-				case XR_SESSION_STATE_EXITING:
-					result = xrDestroySession(session);
-					if (!xr_check(instance, result, "Failed to destroy session!"))
-						return 1;
-					quit_mainloop = true;
-					run_framecycle = false;
-
-					break; // state handling switch
-				}
-				break; // session event handling switch
-			}
-			case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
-				printf("EVENT: interaction profile changed!\n");
-				XrEventDataInteractionProfileChanged* event =
-				    (XrEventDataInteractionProfileChanged*)&runtime_event;
-				(void)event;
-
-				XrInteractionProfileState state = {.type = XR_TYPE_INTERACTION_PROFILE_STATE};
-
-				for (int i = 0; i < HAND_COUNT; i++) {
-					XrResult res = xrGetCurrentInteractionProfile(session, hand_paths[i], &state);
-					if (!xr_check(instance, res, "Failed to get interaction profile for %d", i))
-						continue;
-
-					XrPath prof = state.interactionProfile;
-
-					uint32_t strl;
-					char profile_str[XR_MAX_PATH_LENGTH];
-					res = xrPathToString(instance, prof, XR_MAX_PATH_LENGTH, &strl, profile_str);
-					if (!xr_check(instance, res, "Failed to get interaction profile path str for %d", i))
-						continue;
-
-					printf("Event: Interaction profile changed for %d: %s\n", i, profile_str);
-				}
-				break;
-			}
-			default: printf("Unhandled event (type %d)\n", runtime_event.type);
-			}
-
-			runtime_event.type = XR_TYPE_EVENT_DATA_BUFFER;
-			poll_result = xrPollEvent(instance, &runtime_event);
-		}
-		if (poll_result == XR_EVENT_UNAVAILABLE) {
-			// processed all events in the queue
-		} else {
-			printf("Failed to poll events!\n");
-			break;
-		}
-
-		if (!run_framecycle) {
-			continue;
-		}
-
-
-		// --- Wait for our turn to do head-pose dependent computation and render a frame
-		XrFrameState frame_state = {.type = XR_TYPE_FRAME_STATE, .next = NULL};
-		XrFrameWaitInfo frame_wait_info = {.type = XR_TYPE_FRAME_WAIT_INFO, .next = NULL};
-		result = xrWaitFrame(session, &frame_wait_info, &frame_state);
-		if (!xr_check(instance, result, "xrWaitFrame() was not successful, exiting..."))
-			break;
-
-
-
-		// --- Create projection matrices and view matrices for each eye
-		XrViewLocateInfo view_locate_info = {.type = XR_TYPE_VIEW_LOCATE_INFO,
-		                                     .next = NULL,
-		                                     .viewConfigurationType =
-		                                         XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-		                                     .displayTime = frame_state.predictedDisplayTime,
-		                                     .space = play_space};
-
-		XrViewState view_state = {.type = XR_TYPE_VIEW_STATE, .next = NULL};
-		result = xrLocateViews(session, &view_locate_info, &view_state, view_count, &view_count, views);
-		if (!xr_check(instance, result, "Could not locate views"))
-			break;
-
-		//! @todo Move this action processing to before xrWaitFrame, probably.
-		const XrActiveActionSet active_actionsets[] = {
-		    {.actionSet = gameplay_actionset, .subactionPath = XR_NULL_PATH}};
-
-		XrActionsSyncInfo actions_sync_info = {
-		    .type = XR_TYPE_ACTIONS_SYNC_INFO,
-		    .countActiveActionSets = sizeof(active_actionsets) / sizeof(active_actionsets[0]),
-		    .activeActionSets = active_actionsets,
-		};
-		result = xrSyncActions(session, &actions_sync_info);
-		xr_check(instance, result, "failed to sync actions!");
-
-		// query each value / location with a subaction path != XR_NULL_PATH
-		// resulting in individual values per hand/.
-		XrActionStateFloat grab_value[HAND_COUNT];
-		XrSpaceLocation hand_locations[HAND_COUNT];
-
-		for (int i = 0; i < HAND_COUNT; i++) {
-			XrActionStatePose hand_pose_state = {.type = XR_TYPE_ACTION_STATE_POSE, .next = NULL};
-			{
-				XrActionStateGetInfo get_info = {.type = XR_TYPE_ACTION_STATE_GET_INFO,
-				                                 .next = NULL,
-				                                 .action = hand_pose_action,
-				                                 .subactionPath = hand_paths[i]};
-				result = xrGetActionStatePose(session, &get_info, &hand_pose_state);
-				xr_check(instance, result, "failed to get pose value!");
-			}
-			// printf("Hand pose %d active: %d\n", i, poseState.isActive);
-
-			hand_locations[i].type = XR_TYPE_SPACE_LOCATION;
-			hand_locations[i].next = NULL;
-
-			result = xrLocateSpace(hand_pose_spaces[i], play_space, frame_state.predictedDisplayTime,
-			                       &hand_locations[i]);
-			xr_check(instance, result, "failed to locate space %d!", i);
-
-			/*
-			printf("Pose %d valid %d: %f %f %f %f, %f %f %f\n", i,
-			spaceLocationValid[i], spaceLocation[0].pose.orientation.x,
-			spaceLocation[0].pose.orientation.y, spaceLocation[0].pose.orientation.z,
-			spaceLocation[0].pose.orientation.w, spaceLocation[0].pose.position.x,
-			spaceLocation[0].pose.position.y, spaceLocation[0].pose.position.z
-			);
-			*/
-
-			grab_value[i].type = XR_TYPE_ACTION_STATE_FLOAT;
-			grab_value[i].next = NULL;
-			{
-				XrActionStateGetInfo get_info = {.type = XR_TYPE_ACTION_STATE_GET_INFO,
-				                                 .next = NULL,
-				                                 .action = grab_action_float,
-				                                 .subactionPath = hand_paths[i]};
-
-				result = xrGetActionStateFloat(session, &get_info, &grab_value[i]);
-				xr_check(instance, result, "failed to get grab value!");
-			}
-
-			// printf("Grab %d active %d, current %f, changed %d\n", i,
-			// grabValue[i].isActive, grabValue[i].currentState,
-			// grabValue[i].changedSinceLastSync);
-
-			if (grab_value[i].isActive && grab_value[i].currentState > 0.75) {
-				XrHapticVibration vibration = {.type = XR_TYPE_HAPTIC_VIBRATION,
-				                               .next = NULL,
-				                               .amplitude = 0.5,
-				                               .duration = XR_MIN_HAPTIC_DURATION,
-				                               .frequency = XR_FREQUENCY_UNSPECIFIED};
-
-				XrHapticActionInfo haptic_action_info = {.type = XR_TYPE_HAPTIC_ACTION_INFO,
-				                                         .next = NULL,
-				                                         .action = haptic_action,
-				                                         .subactionPath = hand_paths[i]};
-				result = xrApplyHapticFeedback(session, &haptic_action_info,
-				                               (const XrHapticBaseHeader*)&vibration);
-				xr_check(instance, result, "failed to apply haptic feedback!");
-				// printf("Sent haptic output to hand %d\n", i);
-			}
-		};
-
-		// --- Begin frame
-		XrFrameBeginInfo frame_begin_info = {.type = XR_TYPE_FRAME_BEGIN_INFO, .next = NULL};
-
-		result = xrBeginFrame(session, &frame_begin_info);
-		if (!xr_check(instance, result, "failed to begin frame!"))
-			break;
-
-
-		// render each eye and fill projection_views with the result
-		for (uint32_t i = 0; i < view_count; i++) {
-
-			if (!frame_state.shouldRender) {
-				printf("shouldRender = false, Skipping rendering work\n");
-				continue;
-			}
-
-			XrMatrix4x4f projection_matrix;
-			XrMatrix4x4f_CreateProjectionFov(&projection_matrix, GRAPHICS_OPENGL, views[i].fov,
-			                                 gl_rendering.near_z, gl_rendering.far_z);
-
-			XrMatrix4x4f view_matrix;
-			XrMatrix4x4f_CreateViewMatrix(&view_matrix, &views[i].pose.position,
-			                              &views[i].pose.orientation);
-
-			XrSwapchainImageAcquireInfo acquire_info = {.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
-			                                            .next = NULL};
-			uint32_t acquired_index;
-			result = xrAcquireSwapchainImage(swapchains[i], &acquire_info, &acquired_index);
-			if (!xr_check(instance, result, "failed to acquire swapchain image!"))
-				break;
-
-			XrSwapchainImageWaitInfo wait_info = {
-			    .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO, .next = NULL, .timeout = 1000};
-			result = xrWaitSwapchainImage(swapchains[i], &wait_info);
-			if (!xr_check(instance, result, "failed to wait for swapchain image!"))
-				break;
-
-			uint32_t depth_acquired_index = UINT32_MAX;
-			if (depth.supported) {
-				XrSwapchainImageAcquireInfo depth_acquire_info = {
-				    .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO, .next = NULL};
-				result = xrAcquireSwapchainImage(depth_swapchains[i], &depth_acquire_info,
-				                                 &depth_acquired_index);
-				if (!xr_check(instance, result, "failed to acquire swapchain image!"))
-					break;
-
-				XrSwapchainImageWaitInfo depth_wait_info = {
-				    .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO, .next = NULL, .timeout = 1000};
-				result = xrWaitSwapchainImage(depth_swapchains[i], &depth_wait_info);
-				if (!xr_check(instance, result, "failed to wait for swapchain image!"))
-					break;
-			}
-
-			projection_views[i].pose = views[i].pose;
-			projection_views[i].fov = views[i].fov;
-
-			GLuint depth_image = depth.supported ? depth_images[i][depth_acquired_index].image : 0;
-
-			int w = viewconfig_views[i].recommendedImageRectWidth;
-			int h = viewconfig_views[i].recommendedImageRectHeight;
-
-			// TODO: should not be necessary, but is for SteamVR 1.16.4 (but not 1.15.x)
-			glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable,
-			               graphics_binding_gl.glxContext);
-
-			render_frame(w, h, gl_rendering.shader_program_id, gl_rendering.VAO,
-			             frame_state.predictedDisplayTime, i, hand_locations, projection_matrix,
-			             view_matrix, gl_rendering.framebuffers[i][acquired_index],
-			             images[i][acquired_index].image, depth.supported, depth_image);
-
-			XrSwapchainImageReleaseInfo release_info = {.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO,
-			                                            .next = NULL};
-			result = xrReleaseSwapchainImage(swapchains[i], &release_info);
-			if (!xr_check(instance, result, "failed to release swapchain image!"))
-				break;
-
-			if (depth.supported) {
-				XrSwapchainImageReleaseInfo depth_release_info = {
-				    .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO, .next = NULL};
-				result = xrReleaseSwapchainImage(depth_swapchains[i], &depth_release_info);
-				if (!xr_check(instance, result, "failed to release swapchain image!"))
-					break;
-			}
-		}
-
-		XrCompositionLayerProjection projection_layer = {
-		    .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
-		    .next = NULL,
-		    .layerFlags = 0,
-		    .space = play_space,
-		    .viewCount = view_count,
-		    .views = projection_views,
-		};
-
-		uint32_t submitted_layer_count = 1;
-		const XrCompositionLayerBaseHeader* submitted_layers[1] = {
-		    (const XrCompositionLayerBaseHeader* const) & projection_layer};
-
-		if ((view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0) {
-			printf("submitting 0 layers because orientation is invalid\n");
-			submitted_layer_count = 0;
-		}
-
-		if (!frame_state.shouldRender) {
-			printf("submitting 0 layers because shouldRender = false\n");
-			submitted_layer_count = 0;
-		}
-
-		XrFrameEndInfo frameEndInfo = {.type = XR_TYPE_FRAME_END_INFO,
-		                               .displayTime = frame_state.predictedDisplayTime,
-		                               .layerCount = submitted_layer_count,
-		                               .layers = submitted_layers,
-		                               .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
-		                               .next = NULL};
-		result = xrEndFrame(session, &frameEndInfo);
-		if (!xr_check(instance, result, "failed to end frame!"))
-			break;
-	}
-
-
-	// --- Clean up after render loop quits
-
-	for (uint32_t i = 0; i < view_count; i++) {
-		free(images[i]);
-		if (depth.supported) {
-			free(depth_images[i]);
-		}
-
-		glDeleteFramebuffers(swapchain_lengths[i], gl_rendering.framebuffers[i]);
-		free(gl_rendering.framebuffers[i]);
-	}
-	xrDestroyInstance(instance);
-
-	free(viewconfig_views);
-	free(projection_views);
-	free(views);
-	free(swapchains);
-	free(depth_swapchains);
-	free(images);
-	free(depth_images);
-	free(gl_rendering.framebuffers);
-	free(swapchain_lengths);
-	free(depth_swapchain_lengths);
-
-	free(depth.infos);
-
-	printf("Cleaned up!\n");
-}
-
-
 // =============================================================================
 // OpenGL rendering code
 // =============================================================================
@@ -1556,20 +486,6 @@ static SDL_GLContext gl_context;
 
 // don't need a gl loader for just one function, just load it ourselves'
 PFNGLBLITNAMEDFRAMEBUFFERPROC _glBlitNamedFramebuffer;
-
-void GLAPIENTRY
-MessageCallback(GLenum source,
-                GLenum type,
-                GLuint id,
-                GLenum severity,
-                GLsizei length,
-                const GLchar* message,
-                const void* userParam)
-{
-	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-	        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), type, severity, message);
-}
-
 
 #ifdef __linux__
 bool
@@ -1890,4 +806,1036 @@ render_frame(int w,
 	}
 }
 
-#endif
+#endif // __linux__
+
+using namespace ILLIXR;
+
+class openxrdemo : public threadloop {
+public:
+    openxrdemo(std::string name_, phonebook *pb_)
+        : threadloop(name_, pb_)
+    {
+        gl_rendering.near_z = 0.01f;
+        gl_rendering.far_z = 100.0f;
+
+        print_api_layers();
+
+        // xrEnumerate*() functions are usually called once with CapacityInput = 0.
+        // The function will write the required amount into CountOutput. We then have
+        // to allocate an array to hold CountOutput elements and call the function
+        // with CountOutput as CapacityInput.
+        uint32_t ext_count = 0;
+        result = xrEnumerateInstanceExtensionProperties(NULL, 0, &ext_count, NULL);
+
+        /* TODO: instance null will not be able to convert XrResult to string */
+        if (!xr_check(NULL, result, "Failed to enumerate number of extension properties"))
+            ILLIXR::abort("");
+
+
+        XrExtensionProperties* ext_props = (XrExtensionProperties*) malloc(sizeof(XrExtensionProperties) * ext_count);
+        for (uint16_t i = 0; i < ext_count; i++) {
+            // we usually have to fill in the type (for validation) and set
+            // next to NULL (or a pointer to an extension specific struct)
+            ext_props[i].type = XR_TYPE_EXTENSION_PROPERTIES;
+            ext_props[i].next = NULL;
+        }
+
+        result = xrEnumerateInstanceExtensionProperties(NULL, ext_count, &ext_count, ext_props);
+        if (!xr_check(NULL, result, "Failed to enumerate extension properties"))
+            ILLIXR::abort("");
+
+        bool opengl_supported = false;
+
+        printf("Runtime supports %d extensions\n", ext_count);
+        for (uint32_t i = 0; i < ext_count; i++) {
+            printf("\t%s v%d\n", ext_props[i].extensionName, ext_props[i].extensionVersion);
+            if (strcmp(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, ext_props[i].extensionName) == 0) {
+                opengl_supported = true;
+            }
+
+            if (strcmp(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME, ext_props[i].extensionName) == 0) {
+                depth.supported = true;
+            }
+        }
+        free(ext_props);
+
+        // A graphics extension like OpenGL is required to draw anything in VR
+        if (!opengl_supported) {
+            ILLIXR::abort("Runtime does not support OpenGL extension!");
+        }
+
+
+        // --- Create XrInstance
+        uint32_t enabled_ext_count = 1;
+        const char* enabled_exts[1] = {XR_KHR_OPENGL_ENABLE_EXTENSION_NAME};
+        // same can be done for API layers, but API layers can also be enabled by env var
+
+        XrInstanceCreateInfo instance_create_info = {
+            .type = XR_TYPE_INSTANCE_CREATE_INFO,
+            .next = NULL,
+            .createFlags = 0,
+            .enabledExtensionCount = enabled_ext_count,
+            .enabledExtensionNames = enabled_exts,
+            .enabledApiLayerCount = 0,
+            .enabledApiLayerNames = NULL,
+            .applicationInfo =
+                {
+                    // some compilers have trouble with char* initialization
+                    .applicationName = "",
+                    .engineName = "",
+                    .applicationVersion = 1,
+                    .engineVersion = 0,
+                    .apiVersion = XR_CURRENT_API_VERSION,
+                },
+        };
+        strncpy(instance_create_info.applicationInfo.applicationName, "OpenXR OpenGL Example",
+                XR_MAX_APPLICATION_NAME_SIZE);
+        strncpy(instance_create_info.applicationInfo.engineName, "Custom", XR_MAX_ENGINE_NAME_SIZE);
+
+        result = xrCreateInstance(&instance_create_info, &instance);
+        if (!xr_check(NULL, result, "Failed to create XR instance."))
+            ILLIXR::abort("");
+
+        if (!load_extension_function_pointers(instance))
+            ILLIXR::abort("");
+
+        // Optionally get runtime name and version
+        print_instance_properties(instance);
+
+        // --- Get XrSystemId
+        XrSystemGetInfo system_get_info = {
+            .type = XR_TYPE_SYSTEM_GET_INFO, .formFactor = form_factor, .next = NULL};
+
+        result = xrGetSystem(instance, &system_get_info, &system_id);
+        if (!xr_check(instance, result, "Failed to get system for HMD form factor."))
+            ILLIXR::abort("");
+
+        printf("Successfully got XrSystem with id %lu for HMD form factor\n", system_id);
+
+
+        {
+            XrSystemProperties system_props = {
+                .type = XR_TYPE_SYSTEM_PROPERTIES,
+                .next = NULL,
+            };
+
+            result = xrGetSystemProperties(instance, system_id, &system_props);
+            if (!xr_check(instance, result, "Failed to get System properties"))
+                ILLIXR::abort("");
+
+            print_system_properties(&system_props);
+        }
+
+        result = xrEnumerateViewConfigurationViews(instance, system_id, view_type, 0, &view_count, NULL);
+        if (!xr_check(instance, result, "Failed to get view configuration view count!"))
+            ILLIXR::abort("");
+
+        viewconfig_views = (XrViewConfigurationView*) malloc(sizeof(XrViewConfigurationView) * view_count);
+        for (uint32_t i = 0; i < view_count; i++) {
+            viewconfig_views[i].type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
+            viewconfig_views[i].next = NULL;
+        }
+
+        result = xrEnumerateViewConfigurationViews(instance, system_id, view_type, view_count,
+                                                   &view_count, viewconfig_views);
+        if (!xr_check(instance, result, "Failed to enumerate view configuration views!"))
+            ILLIXR::abort("");
+        print_viewconfig_view_info(view_count, viewconfig_views);
+
+
+        // OpenXR requires checking graphics requirements before creating a session.
+        XrGraphicsRequirementsOpenGLKHR opengl_reqs = {.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR,
+                                                       .next = NULL};
+
+        // this function pointer was loaded with xrGetInstanceProcAddr
+        result = pfnGetOpenGLGraphicsRequirementsKHR(instance, system_id, &opengl_reqs);
+        if (!xr_check(instance, result, "Failed to get OpenGL graphics requirements!"))
+            ILLIXR::abort("");
+
+        /* Checking opengl_reqs.minApiVersionSupported and opengl_reqs.maxApiVersionSupported
+         * is not very useful, compatibility will depend on the OpenGL implementation and the
+         * OpenXR runtime much more than the OpenGL version.
+         * Other APIs have more useful verifiable requirements. */
+
+
+        // --- Create session
+        graphics_binding_gl = (XrGraphicsBindingOpenGLXlibKHR){
+            .type = XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR,
+        };
+
+        // create SDL window the size of the left eye & fill GL graphics binding info
+        if (!init_sdl_window(&graphics_binding_gl.xDisplay, &graphics_binding_gl.visualid,
+                             &graphics_binding_gl.glxFBConfig, &graphics_binding_gl.glxDrawable,
+                             &graphics_binding_gl.glxContext,
+                             viewconfig_views[0].recommendedImageRectWidth,
+                             viewconfig_views[0].recommendedImageRectHeight)) {
+            ILLIXR::abort("GLX init failed!");
+        }
+
+        printf("Using OpenGL version: %s\n", glGetString(GL_VERSION));
+        printf("Using OpenGL Renderer: %s\n", glGetString(GL_RENDERER));
+
+        XrSessionCreateInfo session_create_info = {
+            .type = XR_TYPE_SESSION_CREATE_INFO, .next = &graphics_binding_gl, .systemId = system_id};
+
+        result = xrCreateSession(instance, &session_create_info, &session);
+        if (!xr_check(instance, result, "Failed to create session"))
+            ILLIXR::abort("");
+
+        printf("Successfully created a session with OpenGL!\n");
+
+        /* Many runtimes support at least STAGE and LOCAL but not all do.
+         * Sophisticated apps might check with xrEnumerateReferenceSpaces() if the
+         * chosen one is supported and try another one if not.
+         * Here we will get an error from xrCreateReferenceSpace() and exit. */
+        XrReferenceSpaceCreateInfo play_space_create_info = {.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
+                                                             .next = NULL,
+                                                             .referenceSpaceType = play_space_type,
+                                                             .poseInReferenceSpace = identity_pose};
+
+        result = xrCreateReferenceSpace(session, &play_space_create_info, &play_space);
+        if (!xr_check(instance, result, "Failed to create play space!"))
+            ILLIXR::abort("");
+
+        // --- Create Swapchains
+        uint32_t swapchain_format_count;
+        result = xrEnumerateSwapchainFormats(session, 0, &swapchain_format_count, NULL);
+        if (!xr_check(instance, result, "Failed to get number of supported swapchain formats"))
+            ILLIXR::abort("");
+
+        printf("Runtime supports %d swapchain formats\n", swapchain_format_count);
+        int64_t swapchain_formats[swapchain_format_count];
+        result = xrEnumerateSwapchainFormats(session, swapchain_format_count, &swapchain_format_count,
+                                             swapchain_formats);
+        if (!xr_check(instance, result, "Failed to enumerate swapchain formats"))
+            ILLIXR::abort("");
+
+        // SRGB is usually a better choice than linear
+        // a more sophisticated approach would iterate supported swapchain formats and choose from them
+        int64_t color_format = get_swapchain_format(instance, session, GL_SRGB8_ALPHA8_EXT, true);
+
+        // GL_DEPTH_COMPONENT16 is a good bet
+        // SteamVR 1.16.4 supports GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32
+        // but NOT GL_DEPTH_COMPONENT32F
+        int64_t depth_format = get_swapchain_format(instance, session, GL_DEPTH_COMPONENT16, false);
+        if (depth_format < 0) {
+            printf("Preferred depth format GL_DEPTH_COMPONENT16 not supported, disabling depth\n");
+            depth.supported = false;
+        }
+
+
+        // --- Create swapchain for main VR rendering
+        {
+            // In the frame loop we render into OpenGL textures we receive from the runtime here.
+            swapchains = (XrSwapchain*) malloc(sizeof(XrSwapchain) * view_count);
+            swapchain_lengths = (uint32_t *) malloc(sizeof(uint32_t) * view_count);
+            images = (XrSwapchainImageOpenGLKHR**) malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
+            for (uint32_t i = 0; i < view_count; i++) {
+                XrSwapchainCreateInfo swapchain_create_info = {
+                    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+                    .createFlags = 0,
+                    .format = color_format,
+                    .sampleCount = viewconfig_views[i].recommendedSwapchainSampleCount,
+                    .width = viewconfig_views[i].recommendedImageRectWidth,
+                    .height = viewconfig_views[i].recommendedImageRectHeight,
+                    .faceCount = 1,
+                    .arraySize = 1,
+                    .mipCount = 1,
+                    .next = NULL,
+                };
+
+                result = xrCreateSwapchain(session, &swapchain_create_info, &swapchains[i]);
+                if (!xr_check(instance, result, "Failed to create swapchain %d!", i))
+                    ILLIXR::abort("");
+
+                // The runtime controls how many textures we have to be able to render to
+                // (e.g. "triple buffering")
+                result = xrEnumerateSwapchainImages(swapchains[i], 0, &swapchain_lengths[i], NULL);
+                if (!xr_check(instance, result, "Failed to enumerate swapchains"))
+                    ILLIXR::abort("");
+
+                images[i] = (XrSwapchainImageOpenGLKHR*) malloc(sizeof(XrSwapchainImageOpenGLKHR) * swapchain_lengths[i]);
+                for (uint32_t j = 0; j < swapchain_lengths[i]; j++) {
+                    images[i][j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
+                    images[i][j].next = NULL;
+                }
+                result =
+                    xrEnumerateSwapchainImages(swapchains[i], swapchain_lengths[i], &swapchain_lengths[i],
+                                               (XrSwapchainImageBaseHeader*)images[i]);
+                if (!xr_check(instance, result, "Failed to enumerate swapchain images"))
+                    ILLIXR::abort("");
+            }
+        }
+
+        // --- Create swapchain for depth buffers if supported
+        {
+            if (depth.supported) {
+                depth_swapchains = (XrSwapchain*) malloc(sizeof(XrSwapchain) * view_count);
+                depth_swapchain_lengths = (uint32_t*) malloc(sizeof(uint32_t) * view_count);
+                depth_images = (XrSwapchainImageOpenGLKHR**) malloc(sizeof(XrSwapchainImageOpenGLKHR*) * view_count);
+                for (uint32_t i = 0; i < view_count; i++) {
+                    XrSwapchainCreateInfo swapchain_create_info = {
+                        .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+                        .usageFlags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        .createFlags = 0,
+                        .format = depth_format,
+                        .sampleCount = viewconfig_views[i].recommendedSwapchainSampleCount,
+                        .width = viewconfig_views[i].recommendedImageRectWidth,
+                        .height = viewconfig_views[i].recommendedImageRectHeight,
+                        .faceCount = 1,
+                        .arraySize = 1,
+                        .mipCount = 1,
+                        .next = NULL,
+                    };
+
+                    result = xrCreateSwapchain(session, &swapchain_create_info, &depth_swapchains[i]);
+                    if (!xr_check(instance, result, "Failed to create swapchain %d!", i))
+                        ILLIXR::abort("");
+
+                    result =
+                        xrEnumerateSwapchainImages(depth_swapchains[i], 0, &depth_swapchain_lengths[i], NULL);
+                    if (!xr_check(instance, result, "Failed to enumerate swapchains"))
+                        ILLIXR::abort("");
+
+                    // these are wrappers for the actual OpenGL texture id
+                    depth_images[i] = (XrSwapchainImageOpenGLKHR*) malloc(sizeof(XrSwapchainImageOpenGLKHR) * depth_swapchain_lengths[i]);
+                    for (uint32_t j = 0; j < depth_swapchain_lengths[i]; j++) {
+                        depth_images[i][j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
+                        depth_images[i][j].next = NULL;
+                    }
+                    result = xrEnumerateSwapchainImages(depth_swapchains[i], depth_swapchain_lengths[i],
+                                                        &depth_swapchain_lengths[i],
+                                                        (XrSwapchainImageBaseHeader*)depth_images[i]);
+                    if (!xr_check(instance, result, "Failed to enumerate swapchain images"))
+                        ILLIXR::abort("");
+                }
+            }
+        }
+
+
+        // Do not allocate these every frame to save some resources
+        views = (XrView*)malloc(sizeof(XrView) * view_count);
+        for (uint32_t i = 0; i < view_count; i++) {
+            views[i].type = XR_TYPE_VIEW;
+            views[i].next = NULL;
+        }
+
+        projection_views = (XrCompositionLayerProjectionView*)malloc(
+            sizeof(XrCompositionLayerProjectionView) * view_count);
+        for (uint32_t i = 0; i < view_count; i++) {
+            projection_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
+            projection_views[i].next = NULL;
+
+            projection_views[i].subImage.swapchain = swapchains[i];
+            projection_views[i].subImage.imageArrayIndex = 0;
+            projection_views[i].subImage.imageRect.offset.x = 0;
+            projection_views[i].subImage.imageRect.offset.y = 0;
+            projection_views[i].subImage.imageRect.extent.width =
+                viewconfig_views[i].recommendedImageRectWidth;
+            projection_views[i].subImage.imageRect.extent.height =
+                viewconfig_views[i].recommendedImageRectHeight;
+
+            // projection_views[i].{pose, fov} have to be filled every frame in frame loop
+        };
+
+
+        if (depth.supported) {
+            depth.infos = (XrCompositionLayerDepthInfoKHR*)malloc(sizeof(XrCompositionLayerDepthInfoKHR) *
+                                                                  view_count);
+            for (uint32_t i = 0; i < view_count; i++) {
+                depth.infos[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
+                depth.infos[i].next = NULL;
+                depth.infos[i].minDepth = 0.f;
+                depth.infos[i].maxDepth = 1.f;
+                depth.infos[i].nearZ = gl_rendering.near_z;
+                depth.infos[i].farZ = gl_rendering.far_z;
+
+                depth.infos[i].subImage.swapchain = depth_swapchains[i];
+                depth.infos[i].subImage.imageArrayIndex = 0;
+                depth.infos[i].subImage.imageRect.offset.x = 0;
+                depth.infos[i].subImage.imageRect.offset.y = 0;
+                depth.infos[i].subImage.imageRect.extent.width =
+                    viewconfig_views[i].recommendedImageRectWidth;
+                depth.infos[i].subImage.imageRect.extent.height =
+                    viewconfig_views[i].recommendedImageRectHeight;
+
+                // depth is chained to projection, not submitted as separate layer
+                projection_views[i].next = &depth.infos[i];
+            };
+        }
+
+
+        // --- Set up input (actions)
+
+        xrStringToPath(instance, "/user/hand/left", &hand_paths[HAND_LEFT_INDEX]);
+        xrStringToPath(instance, "/user/hand/right", &hand_paths[HAND_RIGHT_INDEX]);
+
+        XrPath select_click_path[HAND_COUNT];
+        xrStringToPath(instance, "/user/hand/left/input/select/click",
+                       &select_click_path[HAND_LEFT_INDEX]);
+        xrStringToPath(instance, "/user/hand/right/input/select/click",
+                       &select_click_path[HAND_RIGHT_INDEX]);
+
+        XrPath trigger_value_path[HAND_COUNT];
+        xrStringToPath(instance, "/user/hand/left/input/trigger/value",
+                       &trigger_value_path[HAND_LEFT_INDEX]);
+        xrStringToPath(instance, "/user/hand/right/input/trigger/value",
+                       &trigger_value_path[HAND_RIGHT_INDEX]);
+
+        XrPath thumbstick_y_path[HAND_COUNT];
+        xrStringToPath(instance, "/user/hand/left/input/thumbstick/y",
+                       &thumbstick_y_path[HAND_LEFT_INDEX]);
+        xrStringToPath(instance, "/user/hand/right/input/thumbstick/y",
+                       &thumbstick_y_path[HAND_RIGHT_INDEX]);
+
+        XrPath grip_pose_path[HAND_COUNT];
+        xrStringToPath(instance, "/user/hand/left/input/grip/pose", &grip_pose_path[HAND_LEFT_INDEX]);
+        xrStringToPath(instance, "/user/hand/right/input/grip/pose", &grip_pose_path[HAND_RIGHT_INDEX]);
+
+        XrPath haptic_path[HAND_COUNT];
+        xrStringToPath(instance, "/user/hand/left/output/haptic", &haptic_path[HAND_LEFT_INDEX]);
+        xrStringToPath(instance, "/user/hand/right/output/haptic", &haptic_path[HAND_RIGHT_INDEX]);
+
+
+        XrActionSetCreateInfo gameplay_actionset_info = {
+            .type = XR_TYPE_ACTION_SET_CREATE_INFO, .next = NULL, .priority = 0};
+        strcpy(gameplay_actionset_info.actionSetName, "gameplay_actionset");
+        strcpy(gameplay_actionset_info.localizedActionSetName, "Gameplay Actions");
+
+        result = xrCreateActionSet(instance, &gameplay_actionset_info, &gameplay_actionset);
+        if (!xr_check(instance, result, "failed to create actionset"))
+            ILLIXR::abort("");
+
+        {
+            XrActionCreateInfo action_info = {.type = XR_TYPE_ACTION_CREATE_INFO,
+                                              .next = NULL,
+                                              .actionType = XR_ACTION_TYPE_POSE_INPUT,
+                                              .countSubactionPaths = HAND_COUNT,
+                                              .subactionPaths = hand_paths};
+            strcpy(action_info.actionName, "handpose");
+            strcpy(action_info.localizedActionName, "Hand Pose");
+
+            result = xrCreateAction(gameplay_actionset, &action_info, &hand_pose_action);
+            if (!xr_check(instance, result, "failed to create hand pose action"))
+                ILLIXR::abort("");
+        }
+        // poses can't be queried directly, we need to create a space for each
+        for (int hand = 0; hand < HAND_COUNT; hand++) {
+            XrActionSpaceCreateInfo action_space_info = {.type = XR_TYPE_ACTION_SPACE_CREATE_INFO,
+                                                         .next = NULL,
+                                                         .action = hand_pose_action,
+                                                         .poseInActionSpace = identity_pose,
+                                                         .subactionPath = hand_paths[hand]};
+
+            result = xrCreateActionSpace(session, &action_space_info, &hand_pose_spaces[hand]);
+            if (!xr_check(instance, result, "failed to create hand %d pose space", hand))
+                ILLIXR::abort("");
+        }
+
+        // Grabbing objects is not actually implemented in this demo, it only gives some  haptic feebdack.
+        {
+            XrActionCreateInfo action_info = {.type = XR_TYPE_ACTION_CREATE_INFO,
+                                              .next = NULL,
+                                              .actionType = XR_ACTION_TYPE_FLOAT_INPUT,
+                                              .countSubactionPaths = HAND_COUNT,
+                                              .subactionPaths = hand_paths};
+            strcpy(action_info.actionName, "grabobjectfloat");
+            strcpy(action_info.localizedActionName, "Grab Object");
+
+            result = xrCreateAction(gameplay_actionset, &action_info, &grab_action_float);
+            if (!xr_check(instance, result, "failed to create grab action"))
+                ILLIXR::abort("");
+        }
+
+        {
+            XrActionCreateInfo action_info = {.type = XR_TYPE_ACTION_CREATE_INFO,
+                                              .next = NULL,
+                                              .actionType = XR_ACTION_TYPE_VIBRATION_OUTPUT,
+                                              .countSubactionPaths = HAND_COUNT,
+                                              .subactionPaths = hand_paths};
+            strcpy(action_info.actionName, "haptic");
+            strcpy(action_info.localizedActionName, "Haptic Vibration");
+            result = xrCreateAction(gameplay_actionset, &action_info, &haptic_action);
+            if (!xr_check(instance, result, "failed to create haptic action"))
+                ILLIXR::abort("");
+        }
+
+
+        // suggest actions for simple controller
+        {
+            XrPath interaction_profile_path;
+            result = xrStringToPath(instance, "/interaction_profiles/khr/simple_controller",
+                                    &interaction_profile_path);
+            if (!xr_check(instance, result, "failed to get interaction profile"))
+                ILLIXR::abort("");
+
+            const XrActionSuggestedBinding bindings[] = {
+                {.action = hand_pose_action, .binding = grip_pose_path[HAND_LEFT_INDEX]},
+                {.action = hand_pose_action, .binding = grip_pose_path[HAND_RIGHT_INDEX]},
+                // boolean input select/click will be converted to float that is either 0 or 1
+                {.action = grab_action_float, .binding = select_click_path[HAND_LEFT_INDEX]},
+                {.action = grab_action_float, .binding = select_click_path[HAND_RIGHT_INDEX]},
+                {.action = haptic_action, .binding = haptic_path[HAND_LEFT_INDEX]},
+                {.action = haptic_action, .binding = haptic_path[HAND_RIGHT_INDEX]},
+            };
+
+            const XrInteractionProfileSuggestedBinding suggested_bindings = {
+                .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+                .next = NULL,
+                .interactionProfile = interaction_profile_path,
+                .countSuggestedBindings = sizeof(bindings) / sizeof(bindings[0]),
+                .suggestedBindings = bindings};
+
+            xrSuggestInteractionProfileBindings(instance, &suggested_bindings);
+            if (!xr_check(instance, result, "failed to suggest bindings"))
+                ILLIXR::abort("");
+        }
+
+        // suggest actions for valve index controller
+        {
+            XrPath interaction_profile_path;
+            result = xrStringToPath(instance, "/interaction_profiles/valve/index_controller",
+                                    &interaction_profile_path);
+            if (!xr_check(instance, result, "failed to get interaction profile"))
+                ILLIXR::abort("");
+
+            const XrActionSuggestedBinding bindings[] = {
+                {.action = hand_pose_action, .binding = grip_pose_path[HAND_LEFT_INDEX]},
+                {.action = hand_pose_action, .binding = grip_pose_path[HAND_RIGHT_INDEX]},
+                {.action = grab_action_float, .binding = trigger_value_path[HAND_LEFT_INDEX]},
+                {.action = grab_action_float, .binding = trigger_value_path[HAND_RIGHT_INDEX]},
+                {.action = haptic_action, .binding = haptic_path[HAND_LEFT_INDEX]},
+                {.action = haptic_action, .binding = haptic_path[HAND_RIGHT_INDEX]},
+            };
+
+            const XrInteractionProfileSuggestedBinding suggested_bindings = {
+                .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+                .next = NULL,
+                .interactionProfile = interaction_profile_path,
+                .countSuggestedBindings = sizeof(bindings) / sizeof(bindings[0]),
+                .suggestedBindings = bindings};
+
+            xrSuggestInteractionProfileBindings(instance, &suggested_bindings);
+            if (!xr_check(instance, result, "failed to suggest bindings"))
+                ILLIXR::abort("");
+        }
+
+        XrSessionActionSetsAttachInfo actionset_attach_info = {
+            .type = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
+            .next = NULL,
+            .countActionSets = 1,
+            .actionSets = &gameplay_actionset};
+        result = xrAttachSessionActionSets(session, &actionset_attach_info);
+        if (!xr_check(instance, result, "failed to attach action set"))
+            ILLIXR::abort("");
+    }
+
+    // This code can't be in the constructor because it needs to be called from
+    // the plugin's thread, not the main thread
+    virtual void _p_thread_setup() override {
+        glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable,
+                       graphics_binding_gl.glxContext);
+
+        // Steven: set up HVVR instead
+        // Set up rendering (compile shaders, ...) before starting the session
+        if (init_gl(view_count, swapchain_lengths, &gl_rendering.framebuffers,
+                    &gl_rendering.shader_program_id, &gl_rendering.VAO) != 0) {
+            printf("OpenGl setup failed!\n");
+            ILLIXR::abort("");
+        }
+    }
+
+    // This is an odd implementation in that, unlike other threadloops, it will
+    // never return until the application finishes or crashes
+    virtual void _p_one_iteration() override {
+        glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable,
+                       graphics_binding_gl.glxContext);
+
+        XrSessionState state = XR_SESSION_STATE_UNKNOWN;
+
+        bool quit_mainloop = false;
+        bool session_running = false; // to avoid beginning an already running session
+        bool run_framecycle = false;  // for some session states skip the frame cycle
+        while (!quit_mainloop) {
+
+            // --- Poll SDL for events so we can exit with esc
+            SDL_Event sdl_event;
+            while (SDL_PollEvent(&sdl_event)) {
+                if (sdl_event.type == SDL_QUIT ||
+                    (sdl_event.type == SDL_KEYDOWN && sdl_event.key.keysym.sym == SDLK_ESCAPE)) {
+                    printf("Requesting exit...\n");
+                    xrRequestExitSession(session);
+                }
+            }
+
+
+            // --- Handle runtime Events
+            // we do this before xrWaitFrame() so we can go idle or
+            // break out of the main render loop as early as possible and don't have to
+            // uselessly render or submit one. Calling xrWaitFrame commits you to
+            // calling xrBeginFrame eventually.
+            XrEventDataBuffer runtime_event = {.type = XR_TYPE_EVENT_DATA_BUFFER, .next = NULL};
+            XrResult poll_result = xrPollEvent(instance, &runtime_event);
+            while (poll_result == XR_SUCCESS) {
+                switch (runtime_event.type) {
+                case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING: {
+                    XrEventDataInstanceLossPending* event = (XrEventDataInstanceLossPending*)&runtime_event;
+                    printf("EVENT: instance loss pending at %lu! Destroying instance.\n", event->lossTime);
+                    quit_mainloop = true;
+                    continue;
+                }
+                case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
+                    XrEventDataSessionStateChanged* event = (XrEventDataSessionStateChanged*)&runtime_event;
+                    printf("EVENT: session state changed from %d to %d\n", state, event->state);
+                    state = event->state;
+
+                    /*
+                     * react to session state changes, see OpenXR spec 9.3 diagram. What we need to react to:
+                     *
+                     * * READY -> xrBeginSession STOPPING -> xrEndSession (note that the same session can be restarted)
+                     * * EXITING -> xrDestroySession (EXITING only happens after we went through STOPPING and called xrEndSession)
+                     *
+                     * After exiting it is still possible to create a new session but we don't do that here.
+                     *
+                     * * IDLE -> don't run render loop, but keep polling for events
+                     * * SYNCHRONIZED, VISIBLE, FOCUSED -> run render loop
+                     */
+                    switch (state) {
+                    // skip render loop, keep polling
+                    case XR_SESSION_STATE_MAX_ENUM: // must be a bug
+                    case XR_SESSION_STATE_IDLE:
+                    case XR_SESSION_STATE_UNKNOWN: {
+                        run_framecycle = false;
+
+                        break; // state handling switch
+                    }
+
+                    // do nothing, run render loop normally
+                    case XR_SESSION_STATE_FOCUSED:
+                    case XR_SESSION_STATE_SYNCHRONIZED:
+                    case XR_SESSION_STATE_VISIBLE: {
+                        run_framecycle = true;
+
+                        break; // state handling switch
+                    }
+
+                    // begin session and then run render loop
+                    case XR_SESSION_STATE_READY: {
+                        // start session only if it is not running, i.e. not when we already called xrBeginSession
+                        // but the runtime did not switch to the next state yet
+                        if (!session_running) {
+                            XrSessionBeginInfo session_begin_info = {.type = XR_TYPE_SESSION_BEGIN_INFO,
+                                                                     .next = NULL,
+                                                                     .primaryViewConfigurationType = view_type};
+                            result = xrBeginSession(session, &session_begin_info);
+                            if (!xr_check(instance, result, "Failed to begin session!"))
+                                ILLIXR::abort("");
+                            printf("Session started!\n");
+                            session_running = true;
+                        }
+                        // after beginning the session, run render loop
+                        run_framecycle = true;
+
+                        break; // state handling switch
+                    }
+
+                    // end session, skip render loop, keep polling for next state change
+                    case XR_SESSION_STATE_STOPPING: {
+                        // end session only if it is running, i.e. not when we already called xrEndSession but the
+                        // runtime did not switch to the next state yet
+                        if (session_running) {
+                            result = xrEndSession(session);
+                            if (!xr_check(instance, result, "Failed to end session!"))
+                                ILLIXR::abort("");
+                            session_running = false;
+                        }
+                        // after ending the session, don't run render loop
+                        run_framecycle = false;
+
+                        break; // state handling switch
+                    }
+
+                    // destroy session, skip render loop, exit render loop and quit
+                    case XR_SESSION_STATE_LOSS_PENDING:
+                    case XR_SESSION_STATE_EXITING:
+                        result = xrDestroySession(session);
+                        if (!xr_check(instance, result, "Failed to destroy session!"))
+                            ILLIXR::abort("");
+                        quit_mainloop = true;
+                        run_framecycle = false;
+
+                        break; // state handling switch
+                    }
+                    break; // session event handling switch
+                }
+                case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
+                    printf("EVENT: interaction profile changed!\n");
+                    XrEventDataInteractionProfileChanged* event =
+                        (XrEventDataInteractionProfileChanged*)&runtime_event;
+                    (void)event;
+
+                    XrInteractionProfileState state = {.type = XR_TYPE_INTERACTION_PROFILE_STATE};
+
+                    for (int i = 0; i < HAND_COUNT; i++) {
+                        XrResult res = xrGetCurrentInteractionProfile(session, hand_paths[i], &state);
+                        if (!xr_check(instance, res, "Failed to get interaction profile for %d", i))
+                            continue;
+
+                        XrPath prof = state.interactionProfile;
+
+                        uint32_t strl;
+                        char profile_str[XR_MAX_PATH_LENGTH];
+                        res = xrPathToString(instance, prof, XR_MAX_PATH_LENGTH, &strl, profile_str);
+                        if (!xr_check(instance, res, "Failed to get interaction profile path str for %d", i))
+                            continue;
+
+                        printf("Event: Interaction profile changed for %d: %s\n", i, profile_str);
+                    }
+                    break;
+                }
+                default: printf("Unhandled event (type %d)\n", runtime_event.type);
+                }
+
+                runtime_event.type = XR_TYPE_EVENT_DATA_BUFFER;
+                poll_result = xrPollEvent(instance, &runtime_event);
+            }
+            if (poll_result == XR_EVENT_UNAVAILABLE) {
+                // processed all events in the queue
+            } else {
+                ILLIXR::abort("Failed to poll events!");
+            }
+
+            if (!run_framecycle) {
+                continue;
+            }
+
+
+            // --- Wait for our turn to do head-pose dependent computation and render a frame
+            XrFrameState frame_state = {.type = XR_TYPE_FRAME_STATE, .next = NULL};
+            XrFrameWaitInfo frame_wait_info = {.type = XR_TYPE_FRAME_WAIT_INFO, .next = NULL};
+            result = xrWaitFrame(session, &frame_wait_info, &frame_state);
+            if (!xr_check(instance, result, "xrWaitFrame() was not successful, exiting..."))
+                ILLIXR::abort();
+
+
+
+            // --- Create projection matrices and view matrices for each eye
+            XrViewLocateInfo view_locate_info = {.type = XR_TYPE_VIEW_LOCATE_INFO,
+                                                 .next = NULL,
+                                                 .viewConfigurationType =
+                                                     XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+                                                 .displayTime = frame_state.predictedDisplayTime,
+                                                 .space = play_space};
+
+            XrViewState view_state = {.type = XR_TYPE_VIEW_STATE, .next = NULL};
+            result = xrLocateViews(session, &view_locate_info, &view_state, view_count, &view_count, views);
+            if (!xr_check(instance, result, "Could not locate views"))
+                ILLIXR::abort();
+
+            //! @todo Move this action processing to before xrWaitFrame, probably.
+            const XrActiveActionSet active_actionsets[] = {
+                {.actionSet = gameplay_actionset, .subactionPath = XR_NULL_PATH}};
+
+            XrActionsSyncInfo actions_sync_info = {
+                .type = XR_TYPE_ACTIONS_SYNC_INFO,
+                .countActiveActionSets = sizeof(active_actionsets) / sizeof(active_actionsets[0]),
+                .activeActionSets = active_actionsets,
+            };
+            result = xrSyncActions(session, &actions_sync_info);
+            xr_check(instance, result, "failed to sync actions!");
+
+            // query each value / location with a subaction path != XR_NULL_PATH
+            // resulting in individual values per hand/.
+            XrActionStateFloat grab_value[HAND_COUNT];
+            XrSpaceLocation hand_locations[HAND_COUNT];
+
+            for (int i = 0; i < HAND_COUNT; i++) {
+                XrActionStatePose hand_pose_state = {.type = XR_TYPE_ACTION_STATE_POSE, .next = NULL};
+                {
+                    XrActionStateGetInfo get_info = {.type = XR_TYPE_ACTION_STATE_GET_INFO,
+                                                     .next = NULL,
+                                                     .action = hand_pose_action,
+                                                     .subactionPath = hand_paths[i]};
+                    result = xrGetActionStatePose(session, &get_info, &hand_pose_state);
+                    xr_check(instance, result, "failed to get pose value!");
+                }
+                // printf("Hand pose %d active: %d\n", i, poseState.isActive);
+
+                hand_locations[i].type = XR_TYPE_SPACE_LOCATION;
+                hand_locations[i].next = NULL;
+
+                result = xrLocateSpace(hand_pose_spaces[i], play_space, frame_state.predictedDisplayTime,
+                                       &hand_locations[i]);
+                xr_check(instance, result, "failed to locate space %d!", i);
+
+                /*
+                printf("Pose %d valid %d: %f %f %f %f, %f %f %f\n", i,
+                spaceLocationValid[i], spaceLocation[0].pose.orientation.x,
+                spaceLocation[0].pose.orientation.y, spaceLocation[0].pose.orientation.z,
+                spaceLocation[0].pose.orientation.w, spaceLocation[0].pose.position.x,
+                spaceLocation[0].pose.position.y, spaceLocation[0].pose.position.z
+                );
+                */
+
+                grab_value[i].type = XR_TYPE_ACTION_STATE_FLOAT;
+                grab_value[i].next = NULL;
+                {
+                    XrActionStateGetInfo get_info = {.type = XR_TYPE_ACTION_STATE_GET_INFO,
+                                                     .next = NULL,
+                                                     .action = grab_action_float,
+                                                     .subactionPath = hand_paths[i]};
+
+                    result = xrGetActionStateFloat(session, &get_info, &grab_value[i]);
+                    xr_check(instance, result, "failed to get grab value!");
+                }
+
+                // printf("Grab %d active %d, current %f, changed %d\n", i,
+                // grabValue[i].isActive, grabValue[i].currentState,
+                // grabValue[i].changedSinceLastSync);
+
+                if (grab_value[i].isActive && grab_value[i].currentState > 0.75) {
+                    XrHapticVibration vibration = {.type = XR_TYPE_HAPTIC_VIBRATION,
+                                                   .next = NULL,
+                                                   .amplitude = 0.5,
+                                                   .duration = XR_MIN_HAPTIC_DURATION,
+                                                   .frequency = XR_FREQUENCY_UNSPECIFIED};
+
+                    XrHapticActionInfo haptic_action_info = {.type = XR_TYPE_HAPTIC_ACTION_INFO,
+                                                             .next = NULL,
+                                                             .action = haptic_action,
+                                                             .subactionPath = hand_paths[i]};
+                    result = xrApplyHapticFeedback(session, &haptic_action_info,
+                                                   (const XrHapticBaseHeader*)&vibration);
+                    xr_check(instance, result, "failed to apply haptic feedback!");
+                    // printf("Sent haptic output to hand %d\n", i);
+                }
+            };
+
+            // --- Begin frame
+            XrFrameBeginInfo frame_begin_info = {.type = XR_TYPE_FRAME_BEGIN_INFO, .next = NULL};
+
+            result = xrBeginFrame(session, &frame_begin_info);
+            if (!xr_check(instance, result, "failed to begin frame!"))
+                ILLIXR::abort();
+
+
+            // render each eye and fill projection_views with the result
+            for (uint32_t i = 0; i < view_count; i++) {
+
+                if (!frame_state.shouldRender) {
+                    printf("shouldRender = false, Skipping rendering work\n");
+                    continue;
+                }
+
+                XrMatrix4x4f projection_matrix;
+                XrMatrix4x4f_CreateProjectionFov(&projection_matrix, GRAPHICS_OPENGL, views[i].fov,
+                                                 gl_rendering.near_z, gl_rendering.far_z);
+
+                XrMatrix4x4f view_matrix;
+                XrMatrix4x4f_CreateViewMatrix(&view_matrix, &views[i].pose.position,
+                                              &views[i].pose.orientation);
+
+                XrSwapchainImageAcquireInfo acquire_info = {.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
+                                                            .next = NULL};
+                uint32_t acquired_index;
+                result = xrAcquireSwapchainImage(swapchains[i], &acquire_info, &acquired_index);
+                if (!xr_check(instance, result, "failed to acquire swapchain image!"))
+                    ILLIXR::abort();
+
+                XrSwapchainImageWaitInfo wait_info = {
+                    .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO, .next = NULL, .timeout = 1000};
+                result = xrWaitSwapchainImage(swapchains[i], &wait_info);
+                if (!xr_check(instance, result, "failed to wait for swapchain image!"))
+                    ILLIXR::abort();
+
+                uint32_t depth_acquired_index = UINT32_MAX;
+                if (depth.supported) {
+                    XrSwapchainImageAcquireInfo depth_acquire_info = {
+                        .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO, .next = NULL};
+                    result = xrAcquireSwapchainImage(depth_swapchains[i], &depth_acquire_info,
+                                                     &depth_acquired_index);
+                    if (!xr_check(instance, result, "failed to acquire swapchain image!"))
+                        ILLIXR::abort();
+
+                    XrSwapchainImageWaitInfo depth_wait_info = {
+                        .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO, .next = NULL, .timeout = 1000};
+                    result = xrWaitSwapchainImage(depth_swapchains[i], &depth_wait_info);
+                    if (!xr_check(instance, result, "failed to wait for swapchain image!"))
+                        ILLIXR::abort();
+                }
+
+                projection_views[i].pose = views[i].pose;
+                projection_views[i].fov = views[i].fov;
+
+                GLuint depth_image = depth.supported ? depth_images[i][depth_acquired_index].image : 0;
+
+                int w = viewconfig_views[i].recommendedImageRectWidth;
+                int h = viewconfig_views[i].recommendedImageRectHeight;
+
+                // Steven: render a frame using HVVR instead
+                render_frame(w, h, gl_rendering.shader_program_id, gl_rendering.VAO,
+                             frame_state.predictedDisplayTime, i, hand_locations, projection_matrix,
+                             view_matrix, gl_rendering.framebuffers[i][acquired_index],
+                             images[i][acquired_index].image, depth.supported, depth_image);
+
+                XrSwapchainImageReleaseInfo release_info = {.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO,
+                                                            .next = NULL};
+                result = xrReleaseSwapchainImage(swapchains[i], &release_info);
+                if (!xr_check(instance, result, "failed to release swapchain image!"))
+                    ILLIXR::abort();
+
+                if (depth.supported) {
+                    XrSwapchainImageReleaseInfo depth_release_info = {
+                        .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO, .next = NULL};
+                    result = xrReleaseSwapchainImage(depth_swapchains[i], &depth_release_info);
+                    if (!xr_check(instance, result, "failed to release swapchain image!"))
+                        ILLIXR::abort();
+                }
+            }
+
+            XrCompositionLayerProjection projection_layer = {
+                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
+                .next = NULL,
+                .layerFlags = 0,
+                .space = play_space,
+                .viewCount = view_count,
+                .views = projection_views,
+            };
+
+            uint32_t submitted_layer_count = 1;
+            const XrCompositionLayerBaseHeader* submitted_layers[1] = {
+                (const XrCompositionLayerBaseHeader* const) & projection_layer};
+
+            if ((view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0) {
+                printf("submitting 0 layers because orientation is invalid\n");
+                submitted_layer_count = 0;
+            }
+
+            if (!frame_state.shouldRender) {
+                printf("submitting 0 layers because shouldRender = false\n");
+                submitted_layer_count = 0;
+            }
+
+            XrFrameEndInfo frameEndInfo = {.type = XR_TYPE_FRAME_END_INFO,
+                                           .displayTime = frame_state.predictedDisplayTime,
+                                           .layerCount = submitted_layer_count,
+                                           .layers = submitted_layers,
+                                           .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
+                                           .next = NULL};
+            result = xrEndFrame(session, &frameEndInfo);
+            if (!xr_check(instance, result, "failed to end frame!"))
+                ILLIXR::abort();
+        }
+    }
+
+    virtual ~openxrdemo() override {
+        for (uint32_t i = 0; i < view_count; i++) {
+            free(images[i]);
+            if (depth.supported) {
+                free(depth_images[i]);
+            }
+
+            glDeleteFramebuffers(swapchain_lengths[i], gl_rendering.framebuffers[i]);
+            free(gl_rendering.framebuffers[i]);
+        }
+        xrDestroyInstance(instance);
+
+        free(viewconfig_views);
+        free(projection_views);
+        free(views);
+        free(swapchains);
+        free(depth_swapchains);
+        free(images);
+        free(depth_images);
+        free(gl_rendering.framebuffers);
+        free(swapchain_lengths);
+        free(depth_swapchain_lengths);
+
+        free(depth.infos);
+    }
+
+private:
+    // Changing to HANDHELD_DISPLAY or a future form factor may work, but has not been tested.
+    XrFormFactor form_factor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
+
+    // Changing the form_factor may require changing the view_type too.
+    XrViewConfigurationType view_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+
+    // Typically STAGE for room scale/standing, LOCAL for seated
+    XrReferenceSpaceType play_space_type = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    XrSpace play_space = XR_NULL_HANDLE;
+
+    // the instance handle can be thought of as the basic connection to the OpenXR runtime
+    XrInstance instance = XR_NULL_HANDLE;
+    // the system represents an (opaque) set of XR devices in use, managed by the runtime
+    XrSystemId system_id = XR_NULL_SYSTEM_ID;
+    // the session deals with the renderloop submitting frames to the runtime
+    XrSession session = XR_NULL_HANDLE;
+
+    // each graphics API requires the use of a specialized struct
+    XrGraphicsBindingOpenGLXlibKHR graphics_binding_gl;
+
+    // each physical Display/Eye is described by a view.
+    // view_count usually depends on the form_factor / view_type.
+    // dynamically allocating all view related structs instead of assuming 2
+    // hopefully allows this app to scale easily to different view_counts.
+    uint32_t view_count = 0;
+    // the viewconfiguration views contain information like resolution about each view
+    XrViewConfigurationView* viewconfig_views = NULL;
+
+    // array of view_count containers for submitting swapchains with rendered VR frames
+    XrCompositionLayerProjectionView* projection_views = NULL;
+    // array of view_count views, filled by the runtime with current HMD display pose
+    XrView* views = NULL;
+
+    // array of view_count handles for swapchains.
+    // it is possible to use imageRect to render all views to different areas of the
+    // same texture, but in this example we use one swapchain per view
+    XrSwapchain* swapchains = NULL;
+    // array of view_count ints, storing the length of swapchains
+    uint32_t* swapchain_lengths = NULL;
+    // array of view_count array of swapchain_length containers holding an OpenGL texture
+    // that is allocated by the runtime
+    XrSwapchainImageOpenGLKHR** images = NULL;
+
+    // depth swapchain equivalent to the VR color swapchains
+    XrSwapchain* depth_swapchains = NULL;
+    uint32_t* depth_swapchain_lengths = NULL;
+    XrSwapchainImageOpenGLKHR** depth_images = NULL;
+
+    XrPath hand_paths[HAND_COUNT];
+
+    // actions
+    XrActionSet gameplay_actionset;
+    XrAction hand_pose_action;
+    XrAction haptic_action;
+    XrAction grab_action_float;
+
+    // spaces to query poses
+    XrSpace hand_pose_spaces[HAND_COUNT];
+
+    struct
+    {
+    // supporting depth layers is *optional* for runtimes
+    bool supported;
+    XrCompositionLayerDepthInfoKHR* infos;
+    } depth;
+
+    struct
+    {
+    // To render into a texture we need a framebuffer (one per texture to make it easy)
+    GLuint** framebuffers;
+
+    float near_z;
+    float far_z;
+
+    GLuint shader_program_id;
+    GLuint VAO;
+    } gl_rendering;
+
+    // reuse this variable for all our OpenXR return codes
+    XrResult result = XR_SUCCESS;
+};
+
+PLUGIN_MAIN(openxrdemo)
