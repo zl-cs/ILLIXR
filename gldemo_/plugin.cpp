@@ -4,6 +4,7 @@
 #include <thread>
 #include <cmath>
 #include <array>
+#include <numeric> 
 #include <GL/glew.h>
 #include "common/threadloop.hpp"
 #include "common/switchboard.hpp"
@@ -17,7 +18,14 @@
 #include "common/global_module_defs.hpp"
 #include "common/error_util.hpp"
 
+#include <iomanip>
+#include <fstream>
+#include <numeric>
+#include <boost/filesystem.hpp>
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #include "common/gl_util/lib/stb_image_write.h"
 
 using namespace ILLIXR;
@@ -52,8 +60,16 @@ public:
 		, _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}	
 		, _m_frame{sb->get_writer<frame_from_gldemo>("frame")}
 		, _m_pose{sb->get_buffered_reader<pose_type>("pose_to_gldemo")}
+		, enable_dump(false)
 	{ 
 
+	}
+
+	virtual void stop() override {
+		timer_file << "Rendering takes " << std::reduce(durationRendering.begin(), durationRendering.end(), 0) / durationRendering.size() << " ns on average\n"; 
+		timer_file << "Copying textures (GPU->CPU) takes " << std::reduce(durationCopy.begin(), durationCopy.end(), 0) / durationCopy.size() << " ns on average\n";
+
+		threadloop::stop();
 	}
 
 	void _p_thread_setup() override {
@@ -72,6 +88,8 @@ public:
 		{
 			// Essentially, XRWaitFrame.
 			// wait_vsync();
+
+			startRenderTime = _m_clock->now(); 
 
 			glUseProgram(demoShaderProgram);
 			glBindFramebuffer(GL_FRAMEBUFFER, eyeTextureFBO);
@@ -93,8 +111,12 @@ public:
 
 			// const fast_pose_type fast_pose = pp->get_fast_pose();
 			// pose_type pose = fast_pose.pose;
+			std::cout << "POSE QUEUE SIZE: " << _m_pose.size() << "\n"; 
 			auto pose = _m_pose.dequeue();
-			if (pose == nullptr) return; 
+			if (pose == nullptr) return;
+			
+			// pose_file << "position: " << pose->position.x() << "\t" << pose->position.y() << "\t" << pose->position.z() << "\n";
+			// pose_file << "orientation: " << pose->orientation.w() << "\t" << pose->orientation.x() << "\t" << pose->orientation.y() << "\t" << pose->orientation.z() << "\n"; 
 
 			Eigen::Matrix3f head_rotation_matrix = pose->orientation.toRotationMatrix();
 
@@ -145,6 +167,10 @@ public:
 
 			glFinish();
 
+			endRenderTime = _m_clock->now();
+			durationRendering.push_back((endRenderTime-startRenderTime).count()); 
+			timer_file << (endRenderTime-startRenderTime).count() << "\n"; 
+
 #ifndef NDEBUG
 			const double frame_duration_s = duration2double(_m_clock->now() - lastTime);
             const double fps = 1.0 / frame_duration_s;
@@ -158,6 +184,8 @@ public:
 #endif
 			lastTime = _m_clock->now();
 
+			startCopyTime = _m_clock->now();
+
 			GLubyte* images[2]; // FIXME
 
 			// copy the texture image from the GPU to the CPU
@@ -165,6 +193,10 @@ public:
 				glBindTexture(GL_TEXTURE_2D, eyeTextures[eye_idx]);
 				images[eye_idx] = readTextureImage();
 			}
+
+			endCopyTime = _m_clock->now();
+			durationCopy.push_back((endCopyTime-startCopyTime).count()); 
+			timer_copy_file << (endCopyTime-startCopyTime).count() << "\n"; 
 
 			_m_frame.put(_m_frame.allocate<frame_from_gldemo>(
 				frame_from_gldemo{
@@ -174,13 +206,15 @@ public:
 				}
 			));
 
-			// dump the images
-			std::string image_name = dump_dir + std::to_string(dump_idx) + ".png";
-			// Write image
-			is_success = stbi_write_png(image_name.c_str(), ILLIXR::FB_WIDTH, ILLIXR::FB_HEIGHT, 3, images[0], ILLIXR::FB_WIDTH * 3); // what should be the stride? 
-			if (!is_success)
-			{
-                ILLIXR::abort("Image dump failed !!! ");
+			if (enable_dump) {
+				// dump the images
+				std::string image_name = dump_dir + std::to_string(dump_idx++) + ".png";
+				// Write image
+				is_success = stbi_write_png(image_name.c_str(), ILLIXR::FB_WIDTH, ILLIXR::FB_HEIGHT, 3, images[0], 0); // what should be the stride? 
+				if (!is_success)
+				{
+					ILLIXR::abort("Image dump failed !!! ");
+				} 
 			}
 
 			which_buffer = !which_buffer;
@@ -217,6 +251,10 @@ private:
 	switchboard::writer<frame_from_gldemo> _m_frame;
 	switchboard::buffered_reader<pose_type> _m_pose; 
 
+	// int itr; // FIXME for dubuging, print received pose
+	// std::string pose_name = "metrics/offloaded_poses.txt";
+	// std::ofstream pose_file;
+
 	GLuint eyeTextures[2];
 	GLuint eyeTextureFBO;
 	GLuint eyeTextureDepthTarget;
@@ -239,9 +277,20 @@ private:
 
 	time_point lastTime;
 
+	bool enable_dump; 
 	int dump_idx = 0; 
 	bool is_success;
 	std::string dump_dir = "metrics/offload_gldemo/";
+
+	// to record timing
+	time_point startRenderTime, endRenderTime; 
+	std::vector<_clock_rep> durationRendering;
+	time_point startCopyTime, endCopyTime; 
+	std::vector<_clock_rep> durationCopy;
+	std::string timer_file_name = "metrics/render_time.txt";
+	std::ofstream timer_file;
+	std::string timer_copy_name = "metrics/copy_time.txt";
+	std::ofstream timer_copy_file;
 
 	// PBO buffer for reading texture image
 	GLuint PBO_buffer;
@@ -439,6 +488,17 @@ public:
         [[maybe_unused]] const bool gl_result_1 = static_cast<bool>(glXMakeCurrent(xwin->dpy, None, nullptr));
 		assert(gl_result_1 && "glXMakeCurrent should not fail");
 		RAC_ERRNO_MSG("gldemo after glXMakeCurrent");
+
+		// pose_file.open("metrics/offloaded_pose.txt"); 
+		timer_file.open(timer_file_name); 
+		timer_copy_file.open(timer_copy_name); 
+
+		if (enable_dump) {
+			boost::filesystem::path p(dump_dir);
+			boost::filesystem::remove_all(p);
+			boost::filesystem::create_directories(p);
+			stbi_flip_vertically_on_write(true);
+		}
 
 		// Effectively, last vsync was at zero.
 		// Try to run gldemo right away.

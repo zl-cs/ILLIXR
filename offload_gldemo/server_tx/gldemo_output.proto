@@ -3,7 +3,7 @@ syntax = "proto3";
 package gldemo_output_proto;
 
 message image {
-    bytes pixels = 1; 
+    bytes pixels = 1; // uncompressed size 2560x1440x3 bytes compressed size:
     uint32 size = 2; 
 }
 

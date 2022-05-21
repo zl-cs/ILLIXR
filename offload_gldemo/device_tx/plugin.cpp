@@ -105,28 +105,35 @@ public:
 			// )); 
 			pose_type pose = fast_pose.pose;
 
-			// TODO SEND POSE TO THE SERVER SIDE 
+			// pose_file << "position: " << pose.position.x() << "\t" << pose.position.y() << "\t" << pose.position.z() << "\n";
+			// pose_file << "oritentation: " << pose.orientation.w() << "\t" << pose.orientation.x() << "\t" << pose.orientation.y() << "\t" << pose.orientation.z() << "\n";
+
+			time_point startSendPose = _m_clock->now(); 
+
+			// SEND POSE TO THE SERVER SIDE 
 			gldemo_input_proto::Vec3f* position = new gldemo_input_proto::Vec3f(); 
-			position->set_x(pose.position(0));
-			position->set_y(pose.position(1));
-			position->set_z(pose.position(2));
+			position->set_x(pose.position.x());
+			position->set_y(pose.position.y());
+			position->set_z(pose.position.z());
 
 			gldemo_input_proto::Quaternionf* orientation = new gldemo_input_proto::Quaternionf();
 			orientation->set_w(pose.orientation.w()); 
-			Eigen::Vector3f rot = pose.orientation.vec();
 			gldemo_input_proto::Vec3f* rotation = new gldemo_input_proto::Vec3f();
-			rotation->set_x(rot(0));
-			rotation->set_y(rot(1));
-			rotation->set_z(rot(2)); 
+			rotation->set_x(pose.orientation.x());
+			rotation->set_y(pose.orientation.y());
+			rotation->set_z(pose.orientation.z()); 
 			orientation->set_allocated_vec(rotation); 
 
 			gldemo_input_proto::Pose* pose_to_gldemo = new gldemo_input_proto::Pose(); 
+			// pose_to_gldemo->set_time(pose.sensor_time.time_since_epoch().count()); // no need to transfer it
 			pose_to_gldemo->set_allocated_position(position);
 			pose_to_gldemo->set_allocated_orientation(orientation); 
 			publisher.Send(*pose_to_gldemo);
 			delete pose_to_gldemo; 
 
-            
+			time_point endSendPose = _m_clock->now();
+			send_pose_file << (endSendPose-startSendPose).count() << "\n"; 
+
 			poses.push_back(pose); 
 
 			lastFrameTime = _m_clock->now(); 
@@ -140,6 +147,12 @@ private:
 	const std::shared_ptr<const RelativeClock> _m_clock;
 	switchboard::writer<switchboard::event_wrapper<fast_pose_type>> _m_fast_pose; 
 	const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
+
+	std::string pose_name = "metrics/offloaded_poses_server.txt";
+	std::ofstream pose_file;
+	std::string send_pose_name = "metrics/send_pose.txt";
+	std::ofstream send_pose_file;
+
 
 	// Switchboard plug for application eye buffer.
 	// We're not "writing" the actual buffer data,
@@ -158,6 +171,8 @@ public:
 // 	// Dummy "application" overrides _p_start to control its own lifecycle/scheduling.
 	virtual void start() override {
 		RAC_ERRNO_MSG("gldemo at start of start function");
+		pose_file.open(pose_name); 
+		send_pose_file.open(send_pose_name); 
 		threadloop::start();
 
 		RAC_ERRNO_MSG("gldemo at end of start()");

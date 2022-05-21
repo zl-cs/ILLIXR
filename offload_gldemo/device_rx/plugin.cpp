@@ -1,11 +1,15 @@
+#include <iostream>
+#include <fstream>
+
+#include <ecal/ecal.h>
+#include <ecal/msg/protobuf/subscriber.h>
+
 #include <GL/glew.h>
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
-
-#include <ecal/ecal.h>
-#include <ecal/msg/protobuf/subscriber.h>
+#include "common/extended_window.hpp"
 
 #include <zlib.h>
 
@@ -20,6 +24,8 @@ class client_reader : public plugin {
 public:
     client_reader(std::string name_, phonebook* pb_)
 		: plugin{name_, pb_}
+		, xwin{new xlib_gl_extended_window{1, 1, pb->lookup_impl<xlib_gl_extended_window>()->glc}}
+		// , xwin{pb->lookup_impl<xlib_gl_extended_window>()}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}
@@ -32,11 +38,33 @@ public:
 		subscriber.AddReceiveCallback(
 		std::bind(&client_reader::ReceiveGLdemoOutput, this, std::placeholders::_2));
 
-		createSharedEyebuffer(&eyetextures[0]);
-		createSharedEyebuffer(&eyetextures[1]);
 	}
 
+	virtual void start() override {
+		[[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
+		assert(gl_result && "glXMakeCurrent should not fail");
+
+		// Init and verify GLEW
+		const GLenum glew_err = glewInit();
+		if (glew_err != GLEW_OK) {
+            std::cerr << "[client_reader] GLEW Error: " << glewGetErrorString(glew_err) << std::endl;
+            ILLIXR::abort("[client_reader] Failed to initialize GLEW");
+		}
+		RAC_ERRNO_MSG("gldemo after glewInit");
+
+		createSharedEyebuffer(&eyetextures[0]);
+		createSharedEyebuffer(&eyetextures[1]);
+
+		[[maybe_unused]] const bool gl_result_1 = static_cast<bool>(glXMakeCurrent(xwin->dpy, None, nullptr));
+		assert(gl_result_1 && "glXMakeCurrent should not fail");
+
+		uncompression_file.open(uncompression_name); 
+
+		plugin::start(); 
+	};
+
 private:
+	const std::unique_ptr<const xlib_gl_extended_window> xwin;
 	const std::shared_ptr<switchboard> sb; 
 	const std::shared_ptr<const RelativeClock> _m_clock;
     switchboard::writer<rendered_frame> _m_eyebuffer; 
@@ -48,6 +76,10 @@ private:
 	unsigned char* outbuff[2] = {nullptr};
 
 	GLuint eyetextures[2];
+
+	std::string uncompression_name = "metrics/uncompression.txt";
+	std::ofstream uncompression_file;
+	time_point startUncompressionTime, endUncompressionTime; 
 
 	int createSharedEyebuffer(GLuint* texture_handle){
 
@@ -62,7 +94,7 @@ private:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+		// glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
 
 		glBindTexture(GL_TEXTURE_2D, 0); // unbind texture, will rebind later
 
@@ -77,10 +109,14 @@ private:
 	}
 
     void ReceiveGLdemoOutput(const gldemo_output_proto::Rendered_frame& frame) {
+		[[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
+		assert(gl_result && "glXMakeCurrent should not fail");
+
 		std::cout << "Received one rendered_frame\n";
 		auto fast_pose = _m_fast_pose.dequeue(); 
 		if (fast_pose == nullptr) return;
 
+		startUncompressionTime = _m_clock->now();
 		// uncompress the texture images
 		for (int eye_idx = 0; eye_idx < 2; eye_idx++) {
 			if (outbuff[eye_idx] != nullptr) { free(outbuff[eye_idx]); outbuff[eye_idx] = nullptr; } 
@@ -93,8 +129,10 @@ private:
 			}
 			// copy texture image from CPU to GPU
 			glBindTexture(GL_TEXTURE_2D, eyetextures[eye_idx]);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE, outbuff[eye_idx]);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, outbuff[eye_idx]);
 		}
+		endUncompressionTime = _m_clock->now(); 
+		uncompression_file << (endUncompressionTime-startUncompressionTime).count() << "\n"; 
 
 		// GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
 		// glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);

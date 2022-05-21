@@ -64,7 +64,7 @@ public:
 		  // In production systems, this is certainly a good thing, but it makes the system harder to analyze.
 		, disable_warp{ILLIXR::str_to_bool(ILLIXR::getenv_or("ILLIXR_TIMEWARP_DISABLE", "False"))}
 		, enable_offload{ILLIXR::str_to_bool(ILLIXR::getenv_or("ILLIXR_OFFLOAD_ENABLE", "False"))}
-	{ }
+	{ mtp_file.open(mtp_file_name); }
 
 private:
 	const std::shared_ptr<switchboard> sb;
@@ -165,6 +165,10 @@ private:
 	GLenum err;
 
 	duration offload_duration;
+
+	std::string mtp_file_name = "metrics/mtp.txt";
+	std::ofstream mtp_file;
+
 
 	GLubyte* readTextureImage(){
 
@@ -509,6 +513,7 @@ public:
 		glDepthFunc(GL_LEQUAL);
 
         switchboard::ptr<const rendered_frame> most_recent_frame = _m_eyebuffer.get_ro();
+		std::cout << "**TIMEWARP - Received a frame\n"; // FIXME
 
 		// Use the timewarp program
 		glUseProgram(timewarpShaderProgram);
@@ -644,6 +649,7 @@ public:
 		}
 
 		glEndQuery(GL_TIME_ELAPSED);
+		mtp_file << (_m_clock->now() - most_recent_frame->render_pose.pose.sensor_time).count() << "\n"; 
 
 #ifndef NDEBUG
 		const duration time_since_render = _m_clock->now() - most_recent_frame->render_time;
