@@ -109,8 +109,8 @@ public:
                     _m_cam.put(_m_cam.allocate<cam_type>(
                         {
                             cam_time_point,
-                            cv::Mat{ir_left},
-                            cv::Mat{ir_right}
+                            ir_left,
+                            ir_right
                         }
                     ));
                     _m_rgb_depth.put(_m_rgb_depth.allocate<rgb_depth_type>(
@@ -128,8 +128,8 @@ public:
                     _m_cam.put(_m_cam.allocate<cam_type>(
                         {
                             cam_time_point,
-                            cv::Mat{fisheye_left},
-                            cv::Mat{fisheye_right}
+                            fisheye_left,
+                            fisheye_right
                         }
                     ));
                 }
