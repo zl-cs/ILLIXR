@@ -21,13 +21,13 @@ plugin_groups:
       # - path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sopen_vins.git/
 
       # Option 3: Uncomment if Kimera hasnt been fetched from remote.
-      # - name: Kimera-VIO/
-      #   path:
-      #     git_repo: https://github.com/ILLIXR/Kimera-VIO.git
-      #     version: "3.2"
+      #- name: Kimera-VIO/
+      #  path:
+      #    git_repo: https://github.com/ILLIXR/Kimera-VIO.git
+      #    version: "offload_timing"
 
       # Option 4: Uncomment if you made changes to Kimera and want those to be reflected in the subsequent ILLIXR runs.
-      # - path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO.git/
+      #- path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO.git/
 
       #################################################################
 

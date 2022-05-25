@@ -260,7 +260,8 @@ def load_monado(config: Mapping[str, Any]) -> None:
     else:
         ## Get the full path to the 'app' binary
         openxr_app_path     = None
-        openxr_app_bin_path = pathify(openxr_app_obj["app"], root_dir, cache_path, True, True)
+        # openxr_app_bin_path = pathify(openxr_app_obj["app"], root_dir, cache_path, True, True)
+        openxr_app_bin_path = Path(openxr_app_obj["app"])
 
     ## Compile the OpenXR app if we received an 'app' with 'src_path'
     if openxr_app_path:
