@@ -152,7 +152,7 @@ public:
 			// 64mm is also what TW currently uses through HMD::GetDefaultBodyInfo.
 			// Unfortunately HMD:: namespace is currently private to TW. Need to
 			// integrate as a config topic that can share HMD info.
-			float ipd = 0.0640f; 
+			float ipd = 0.0620f; 
 
 			// Excessive? Maybe.
 			constexpr int LEFT_EYE = 0;
@@ -395,7 +395,7 @@ public:
 		demoscene = ObjScene(std::string(obj_dir), "scene.obj");
 
 		// Construct a basic perspective projection
-		math_util::projection_fov( &basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f );
+		math_util::projection_fov( &basicProjection, 54.0f, 54.0f, 52.0f, 52.0f, 0.03f, 20.0f );
 
 		RAC_ERRNO_MSG("gldemo before glXMakeCurrent");
         [[maybe_unused]] const bool gl_result_1 = static_cast<bool>(glXMakeCurrent(xwin->dpy, None, nullptr));

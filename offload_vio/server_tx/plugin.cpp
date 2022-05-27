@@ -121,7 +121,6 @@ public:
 		unsigned long long end_pose_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		vio_output_params->set_end_server_timestamp(end_pose_time);
 
-
 		publisher.Send(*vio_output_params);
 		delete vio_output_params;
     }
