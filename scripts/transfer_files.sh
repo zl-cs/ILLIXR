@@ -1,0 +1,1 @@
+scp nvidia@10.6.3.109:/media/nvidia/sdcard/ILLIXR/recorded_data/* ~/ILLIXR/recorded_data
