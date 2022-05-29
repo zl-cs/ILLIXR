@@ -7,21 +7,21 @@ vio_time = {}
 pose_transfer_time = {}
 roundtrip_time = {}
 
-with open('../recorded_data/receive_time.csv', mode='r') as intput:
+with open('../recorded_data/receive_time.csv', mode='r') as input:
     reader = csv.reader(input)
-    receive_time = {rows[0]:r (rows[1], rows[2]) for rows in reader}
+    receive_time = {rows[0]: (np.int64(rows[1]), float(rows[2])) for rows in reader}
 
-with open('../recorded_data/vio_time.csv', mode='r') as intput:
+with open('../recorded_data/vio_time.csv', mode='r') as input:
     reader = csv.reader(input)
-    vio_time = {rows[0]:r (rows[1], rows[2]) for rows in reader}
+    vio_time = {rows[0]: (np.int64(rows[1]), float(rows[2])) for rows in reader}
 
-with open('../recorded_data/pose_transfer_time.csv', mode='r') as intput:
+with open('../recorded_data/pose_transfer_time.csv', mode='r') as input:
     reader = csv.reader(input)
-    pose_transfer_time = {rows[0]:r (rows[1], rows[2]) for rows in reader}
+    pose_transfer_time = {rows[0]: (np.int64(rows[1]), float(rows[2])) for rows in reader}
 
-with open('../recorded_data/roundtrip_time.csv', mode='r') as intput:
+with open('../recorded_data/roundtrip_time.csv', mode='r') as input:
     reader = csv.reader(input)
-    roundtrip_time = {rows[0]:r (rows[1], rows[2]) for rows in reader}
+    roundtrip_time = {rows[0]: (np.int64(rows[1]), float(rows[2])) for rows in reader}
 
 min_length = min(len(receive_time), len(vio_time), len(pose_transfer_time), len(roundtrip_time))
 receive_time = receive_time[:min_length]
