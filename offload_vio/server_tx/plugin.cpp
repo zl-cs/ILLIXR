@@ -46,7 +46,7 @@ public:
     void send_vio_output(switchboard::ptr<const pose_type_prof> datum) {
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		double sec_to_trans = (curr_time - datum->rec_time.time_since_epoch().count()) / 1e9;
-		receiver_to_sender << datum->frame_id << " " << sec_to_trans * 1e3 << std::endl;
+		receiver_to_sender << datum->frame_id << " " << datum->start_time() << " " << sec_to_trans * 1e3 << std::endl;
 
 		// Construct slow pose for output
 		vio_output_proto::SlowPose* protobuf_slow_pose = new vio_output_proto::SlowPose();
