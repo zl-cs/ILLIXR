@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <fstream>
+
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
@@ -21,6 +24,11 @@ public:
 		publisher = eCAL::protobuf::CPublisher<vio_output_proto::VIOOutput>("vio_output");
 		publisher.SetLayerMode(eCAL::TLayer::tlayer_udp_mc, eCAL::TLayer::smode_off);
 		publisher.SetLayerMode(eCAL::TLayer::tlayer_tcp, eCAL::TLayer::smode_auto);
+
+		if (!std::filesystem::create_directory(data_path)) {
+            std::cerr << "Failed to create data directory.";
+        }
+		receiver_to_sender.open(data_path + "/receiver_to_sender_time.csv");
 	}
 
 
@@ -38,7 +46,7 @@ public:
     void send_vio_output(switchboard::ptr<const pose_type_prof> datum) {
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		double sec_to_trans = (curr_time - datum->rec_time.time_since_epoch().count()) / 1e9;
-		std::cout << datum->frame_id << ": Seconds to run VIO (ms): " << sec_to_trans * 1e3 << std::endl;
+		receiver_to_sender << datum->frame_id << " " << sec_to_trans * 1e3 << std::endl;
 
 		// Construct slow pose for output
 		vio_output_proto::SlowPose* protobuf_slow_pose = new vio_output_proto::SlowPose();
@@ -126,6 +134,9 @@ public:
     }
 
 private:
+    const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
+    std::ofstream receiver_to_sender;
+
     const std::shared_ptr<switchboard> sb;
 	switchboard::reader<imu_integrator_input> _m_imu_int_input;
 	eCAL::protobuf::CPublisher<vio_output_proto::VIOOutput> publisher;

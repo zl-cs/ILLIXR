@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <fstream>
+
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
@@ -20,13 +23,18 @@ public:
 		eCAL::Initialize(0, NULL, "VIO Server Reader");
 		subscriber = eCAL::protobuf::CSubscriber<vio_input_proto::IMUCamVec>("vio_input");
 		subscriber.AddReceiveCallback(std::bind(&server_reader::ReceiveVioInput, this, std::placeholders::_2));
+
+		if (!std::filesystem::create_directory(data_path)) {
+            std::cerr << "Failed to create data directory.";
+		}
+		receive_time.open(data_path + "/receive_time.csv");
 	}
 
 private:
 	void ReceiveVioInput(const vio_input_proto::IMUCamVec& vio_input) {	
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		double sec_to_trans = (curr_time - vio_input.real_timestamp()) / 1e9;
-		std::cout << vio_input.frame_id() << ": Seconds to receive camera + IMU (ms): " << sec_to_trans * 1e3 << std::endl;
+		receive_time << vio_input.frame_id() << " " << sec_to_trans * 1e3 << std::endl;
 
 		// Loop through all IMU values first then the cam frame	
 		for (int i = 0; i < vio_input.imu_cam_data_size(); i++) {
@@ -67,6 +75,9 @@ private:
 		// double sec_to_push = (after_time - curr_time) / 1e9;
 		// std::cout << vio_input.frame_id() << ": Seconds to push data (ms): " << sec_to_push * 1e3 << std::endl;
 	}
+
+	const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
+    std::ofstream receive_time;
 
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<imu_cam_type_prof> _m_imu_cam;

@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <fstream>
+
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
@@ -29,6 +32,12 @@ public:
 		eCAL::Initialize(0, NULL, "VIO Device Reader");
 		subscriber = eCAL::protobuf::CSubscriber<vio_output_proto::VIOOutput>("vio_output");
 		subscriber.AddReceiveCallback(std::bind(&offload_reader::ReceiveVioOutput, this, std::placeholders::_2));
+
+		if (!std::filesystem::create_directory(data_path)) {
+            std::cerr << "Failed to create data directory.";
+        }
+		pose_transfer_csv.open(data_path + "/pose_transfer_time.csv");
+		roundtrip_csv.open(data_path + "/roundtrip_time.csv");
 	}
 
 private:
@@ -36,11 +45,12 @@ private:
 		vio_output_proto::SlowPose slow_pose = vio_output.slow_pose();
 
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		
 		double sec_to_trans_pose = (curr_time - vio_output.end_server_timestamp()) / 1e9;
+		pose_transfer_csv << vio_output.frame_id() << " " << sec_to_trans_pose * 1e3 << std::endl;
+		
 		double sec_to_trans = (curr_time - vio_output.start_timestamp()) / 1e9;
-		// std::cout << "Seconds to receive pose (ms): " << sec_to_trans * 1e3 << std::endl;
-		std::cout << vio_output.frame_id() << ": Pose Transfer Time (ms): " << sec_to_trans_pose * 1e3 << std::endl;
-		std::cout << vio_output.frame_id() << ": Full Round trip (ms): " << sec_to_trans * 1e3 << std::endl;
+		roundtrip_csv << vio_output.frame_id() << " " << sec_to_trans * 1e3 << std::endl;
 
 		pose_type datum_pose_tmp{
 			time_point{std::chrono::nanoseconds{slow_pose.timestamp()}},
@@ -87,6 +97,10 @@ private:
             _m_imu_integrator_input.allocate<imu_integrator_input>(std::move(datum_imu_int_tmp));
         _m_imu_integrator_input.put(std::move(datum_imu_int));
 	}
+
+	std::ofstream pose_transfer_csv;
+	std::ofstream roundtrip_csv;
+	const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
 
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<pose_type> _m_pose;
