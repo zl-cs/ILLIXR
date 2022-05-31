@@ -32,6 +32,6 @@ action:
   # command: printf %s\n $env_cmd
 
   # Capture stdout for metrics
-  # log_stdout: metrics/output.log
+  log_stdout: metrics/output.log
 
 profile: opt

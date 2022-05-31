@@ -75,7 +75,7 @@ private:
 	static constexpr int   SCREEN_WIDTH    = ILLIXR::FB_WIDTH;
 	static constexpr int   SCREEN_HEIGHT   = ILLIXR::FB_HEIGHT;
 
-	static constexpr double DISPLAY_REFRESH_RATE = 60.0;
+	static constexpr double DISPLAY_REFRESH_RATE = 120.0;
 	static constexpr double FPS_WARNING_TOLERANCE = 0.5;
 
 	// Note: 0.9 works fine without hologram, but we need a larger safety net with hologram enabled
@@ -641,6 +641,7 @@ public:
 			// reused for both eyes. Therefore glDrawElements can be immediately called,
 			// with the UV and position buffers correctly offset.
 			glDrawElements(GL_TRIANGLES, num_distortion_indices, GL_UNSIGNED_INT, (void*)0);
+			glFinish();
 		}
 
 		glEndQuery(GL_TIME_ELAPSED);

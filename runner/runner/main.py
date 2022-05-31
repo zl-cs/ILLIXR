@@ -289,21 +289,29 @@ def load_monado(config: Mapping[str, Any]) -> None:
     ## Give the Monado service some time to boot up and the user some time to initialize VIO
     time.sleep(5)
 
-    subprocess_run(
-        [str(openxr_app_bin_path)],
-        env_override=dict(
-            ILLIXR_DEMO_DATA=str(demo_data_path),
-            ILLIXR_OFFLOAD_ENABLE=str(enable_offload_flag),
-            ILLIXR_ALIGNMENT_ENABLE=str(enable_alignment_flag),
-            ILLIXR_ENABLE_VERBOSE_ERRORS=str(config["enable_verbose_errors"]),
-            ILLIXR_ENABLE_PRE_SLEEP=str(config["enable_pre_sleep"]),
-            KIMERA_ROOT=config["action"]["kimera_path"],
-            AUDIO_ROOT=config["action"]["audio_path"],
-            REALSENSE_CAM=str(realsense_cam_string),
-            **env_monado,
-        ),
-        check=True,
+    log_stdout_str = config["action"].get("log_stdout", None)
+    log_stdout_ctx = cast(
+        ContextManager[Optional[BinaryIO]],
+        (open(log_stdout_str, "wb") if (log_stdout_str is not None) else noop_context(None)),
     )
+
+    with log_stdout_ctx as log_stdout:
+        subprocess_run(
+            [str(openxr_app_bin_path)],
+            env_override=dict(
+                ILLIXR_DEMO_DATA=str(demo_data_path),
+                ILLIXR_OFFLOAD_ENABLE=str(enable_offload_flag),
+                ILLIXR_ALIGNMENT_ENABLE=str(enable_alignment_flag),
+                ILLIXR_ENABLE_VERBOSE_ERRORS=str(config["enable_verbose_errors"]),
+                ILLIXR_ENABLE_PRE_SLEEP=str(config["enable_pre_sleep"]),
+                KIMERA_ROOT=config["action"]["kimera_path"],
+                AUDIO_ROOT=config["action"]["audio_path"],
+                REALSENSE_CAM=str(realsense_cam_string),
+                **env_monado,
+            ),
+            stdout=log_stdout,
+            check=True,
+        )
 
     if is_mainline:
         ## Close and clean up the Monado service application

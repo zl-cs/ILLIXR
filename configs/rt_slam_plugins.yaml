@@ -13,7 +13,8 @@ plugin_group:
   #     git_repo: https://github.com/ILLIXR/open_vins.git
   #     version: "offload_timing"
   # - path: rk4_integrator/
-  - path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sopen_vins.git/
+  - name: OpenVINS
+    path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sopen_vins.git/
   - path: gtsam_integrator/
   # - path: passthrough_integrator/
   - path: pose_prediction/
