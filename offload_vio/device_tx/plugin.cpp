@@ -6,6 +6,8 @@
 #include <ecal/ecal.h>
 #include <ecal/msg/protobuf/publisher.h>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs/imgcodecs_c.h>
+#include <opencv2/opencv.hpp>
 
 #include "vio_input.pb.h"
 
@@ -32,6 +34,15 @@ public:
 		});
 	}
 
+    // compress cv::Mat to byte array
+    std::vector<uchar>&& compress_mat(cv::Mat mat) {
+        std::vector<uint8_t> compressed_data;
+        std::vector<int> params;
+        params.push_back(CV_IMWRITE_JPEG_QUALITY);
+        params.push_back(100);
+        cv::imencode(".jpg", mat, compressed_data, params);
+        return std::move(compressed_data);
+    }
 
     void send_imu_cam_data(switchboard::ptr<const imu_cam_type_prof> datum) {
 		// Ensures that slam doesnt start before valid IMU readings come in
@@ -69,8 +80,11 @@ public:
 			imu_cam_data->set_rows(img0.rows);
 			imu_cam_data->set_cols(img0.cols);
 
-			imu_cam_data->set_img0_data((void*) img0.data, img0.rows * img0.cols);
-			imu_cam_data->set_img1_data((void*) img1.data, img1.rows * img1.cols);
+            auto compressed_img0 = compress_mat(img0);
+            auto compressed_img1 = compress_mat(img1);
+
+			imu_cam_data->set_img0_data((void*) reinterpret_cast<char*>(compressed_img0.data()), compressed_img0.size());
+			imu_cam_data->set_img1_data((void*) reinterpret_cast<char*>(compressed_img1.data()), compressed_img1.size());
 
 			data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 			data_buffer->set_dataset_timestamp(datum->dataset_time.time_since_epoch().count());

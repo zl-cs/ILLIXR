@@ -10,6 +10,8 @@
 #include <ecal/msg/protobuf/subscriber.h>
 
 #include "vio_input.pb.h"
+#include <opencv2/imgcodecs/imgcodecs_c.h>
+#include <opencv2/opencv.hpp>
 
 using namespace ILLIXR;
 
@@ -31,6 +33,14 @@ public:
 	}
 
 private:
+    // decompress byte array to cv::Mat
+    cv::Mat decompress_mat(std::vector<uchar> compressed_data) {
+        cv::Mat uncompressed_data;
+        cv::Mat compressed_data_mat(compressed_data.size(), 1, CV_8UC1, &compressed_data[0]);
+        cv::imdecode(compressed_data_mat, CV_LOAD_IMAGE_COLOR, &uncompressed_data);
+        return uncompressed_data;
+    }
+
 	void ReceiveVioInput(const vio_input_proto::IMUCamVec& vio_input) {	
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		double sec_to_trans = (curr_time - vio_input.real_timestamp()) / 1e9;
@@ -49,8 +59,8 @@ private:
 				auto img0_copy = std::make_shared<std::string>(std::string(curr_data.img0_data()));
 				auto img1_copy = std::make_shared<std::string>(std::string(curr_data.img1_data()));
 
-				cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, img0_copy->data());
-				cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, img1_copy->data());
+                cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, decompress_mat(img0_copy->data()));
+                cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, decompress_mat(img1_copy->data()));
 
 				cam0 = std::make_optional<cv::Mat>(img0);
 				cam1 = std::make_optional<cv::Mat>(img1);
