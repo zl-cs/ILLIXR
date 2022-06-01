@@ -35,11 +35,11 @@ public:
 	}
 
     // compress cv::Mat to byte array
-    std::vector<uchar> compress_mat(cv::Mat mat) {
+    std::vector<uchar> compress_mat(const cv::Mat& mat) {
         std::vector<uint8_t> compressed_data;
         std::vector<int> params;
         params.push_back(CV_IMWRITE_JPEG_QUALITY);
-        params.push_back(100);
+        params.push_back(50);
         cv::imencode(".jpg", mat, compressed_data, params);
         return compressed_data;
     }
@@ -88,12 +88,12 @@ public:
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             std::cout << "compression time: " << duration.count() << " ns" << std::endl;
 
-//            std::cout << "Compressed image size: " << compressed_img0.size() << " " << compressed_img1.size() << std::endl;
+            std::cout << "Compressed image size: " << compressed_img0.size() << " original size " << img0.rows * img0.cols << std::endl;
 
             imu_cam_data->set_img0_data((void*) compressed_img0.data(), compressed_img0.size());
             imu_cam_data->set_img1_data((void*) compressed_img1.data(), compressed_img1.size());
-            imu_cam_data->set_original_img0_data((void *) img0.data, img0.rows * img0.cols);
-            imu_cam_data->set_original_img1_data((void *) img1.data, img1.rows * img1.cols);
+//            imu_cam_data->set_img0_data((void *) img0.data, img0.rows * img0.cols);
+//            imu_cam_data->set_img1_data((void *) img1.data, img1.rows * img1.cols);
 
 			data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 			data_buffer->set_dataset_timestamp(datum->dataset_time.time_since_epoch().count());

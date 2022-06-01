@@ -1,7 +1,6 @@
 #include <filesystem>
 #include <fstream>
 
-#include "common/threadloop.hpp"
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
@@ -16,10 +15,10 @@
 
 using namespace ILLIXR;
 
-class server_reader : public threadloop {
+class server_reader : public plugin {
 public:
 	server_reader(std::string name_, phonebook* pb_)
-		: threadloop{name_, pb_}
+		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_imu_cam{sb->get_writer<imu_cam_type_prof>("imu_cam")}
     {
@@ -34,13 +33,6 @@ public:
 	}
 
 private:
-
-    boost::lockfree::spsc_queue<switchboard::ptr<imu_cam_type_prof>> _m_imu_cam;
-
-    virtual void _p_one_iteration() {
-
-    }
-
     // decompress byte array to cv::Mat
     cv::Mat decompress_mat(std::vector<uchar>& compressed_data) {
         cv::Mat uncompressed_data;
@@ -66,25 +58,24 @@ private:
 				// Must do a deep copy of the received data (in the form of a string of bytes)
 				auto img0_copy = std::make_shared<std::string>(std::string(curr_data.img0_data()));
 				auto img1_copy = std::make_shared<std::string>(std::string(curr_data.img1_data()));
-                auto original_img0_copy = std::make_shared<std::string>(std::string(curr_data.original_img0_data()));
-                auto original_img1_copy = std::make_shared<std::string>(std::string(curr_data.original_img1_data()));
+//                auto original_img0_copy = std::make_shared<std::string>(std::string(curr_data.original_img0_data()));
+//                auto original_img1_copy = std::make_shared<std::string>(std::string(curr_data.original_img1_data()));
 
                 auto img0_vec = std::vector<uchar>(img0_copy->begin(), img0_copy->end());
                 auto img1_vec = std::vector<uchar>(img1_copy->begin(), img1_copy->end());
 
                 // profile nano time
-                auto start_time = std::chrono::high_resolution_clock::now();
+//                auto start_time = std::chrono::high_resolution_clock::now();
                 cv::Mat img0 = decompress_mat(img0_vec);
                 cv::Mat img1 = decompress_mat(img1_vec);
-                auto end_time = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
-                std::cout << "Decompression time: " << duration << " microseconds" << std::endl;
+//                auto end_time = std::chrono::high_resolution_clock::now();
+//                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
 
-                cv::Mat original_img0(curr_data.rows(), curr_data.cols(), CV_8UC1, original_img0_copy->data());
-                cv::Mat original_img1(curr_data.rows(), curr_data.cols(), CV_8UC1, original_img1_copy->data());
+                // original
+//                cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, img0_copy->data());
+//                cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, img1_copy->data());
 
 //                imshow("img0", img0);
-//                imshow("original_img0", original_img0);
 //                while (true) {
 //                    char key = cv::waitKey(1);
 //                    if (key == 'q') {
@@ -95,8 +86,8 @@ private:
 //                std::cout << "Received image with size: " << img0.size() << std::endl;
 //                std::cout << "Received original image with size: " << original_img0.size() << std::endl;
 
-				cam0 = std::make_optional<cv::Mat>(original_img0);
-				cam1 = std::make_optional<cv::Mat>(original_img1);
+				cam0 = std::make_optional<cv::Mat>(img0);
+				cam1 = std::make_optional<cv::Mat>(img1);
 			}
 
 			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
