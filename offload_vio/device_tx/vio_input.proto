@@ -18,6 +18,8 @@ message IMUCamData
   int32 cols = 5;
   bytes img0_data = 6;
   bytes img1_data = 7;
+  bytes original_img0_data = 8;
+  bytes original_img1_data = 9;
 }
 
 message IMUCamVec {

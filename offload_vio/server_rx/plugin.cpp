@@ -21,7 +21,7 @@ public:
 		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_imu_cam{sb->get_writer<imu_cam_type_prof>("imu_cam")}
-    { 
+    {
 		eCAL::Initialize(0, NULL, "VIO Server Reader");
 		subscriber = eCAL::protobuf::CSubscriber<vio_input_proto::IMUCamVec>("vio_input");
 		subscriber.AddReceiveCallback(std::bind(&server_reader::ReceiveVioInput, this, std::placeholders::_2));
@@ -34,10 +34,10 @@ public:
 
 private:
     // decompress byte array to cv::Mat
-    cv::Mat decompress_mat(std::vector<uchar> compressed_data) {
+    cv::Mat decompress_mat(std::vector<uchar>& compressed_data) {
         cv::Mat uncompressed_data;
-        cv::Mat compressed_data_mat(compressed_data.size(), 1, CV_8UC1, &compressed_data[0]);
-        cv::imdecode(compressed_data_mat, CV_LOAD_IMAGE_COLOR, &uncompressed_data);
+        cv::Mat compressed_data_mat(1, compressed_data.size(), CV_8UC1, (void *) compressed_data.data());
+        cv::imdecode(compressed_data_mat, CV_LOAD_IMAGE_UNCHANGED, &uncompressed_data);
         return uncompressed_data;
     }
 
@@ -58,12 +58,31 @@ private:
 				// Must do a deep copy of the received data (in the form of a string of bytes)
 				auto img0_copy = std::make_shared<std::string>(std::string(curr_data.img0_data()));
 				auto img1_copy = std::make_shared<std::string>(std::string(curr_data.img1_data()));
+                auto original_img0_copy = std::make_shared<std::string>(std::string(curr_data.original_img0_data()));
+                auto original_img1_copy = std::make_shared<std::string>(std::string(curr_data.original_img1_data()));
 
-                cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, decompress_mat(img0_copy->data()));
-                cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, decompress_mat(img1_copy->data()));
+                auto img0_vec = std::vector<uchar>(img0_copy->begin(), img0_copy->end());
+                auto img1_vec = std::vector<uchar>(img1_copy->begin(), img1_copy->end());
 
-				cam0 = std::make_optional<cv::Mat>(img0);
-				cam1 = std::make_optional<cv::Mat>(img1);
+                cv::Mat img0 = decompress_mat(img0_vec);
+                cv::Mat img1 = decompress_mat(img1_vec);
+
+                cv::Mat original_img0(curr_data.rows(), curr_data.cols(), CV_8UC1, original_img0_copy->data());
+                cv::Mat original_img1(curr_data.rows(), curr_data.cols(), CV_8UC1, original_img1_copy->data());
+
+                imshow("img0", img0);
+                imshow("original_img0", original_img0);
+                while (true) {
+                    char key = cv::waitKey(1);
+                    if (key == 'q') {
+                        break;
+                    }
+                }
+                std::cout << "Received image with size: " << img0.size() << std::endl;
+                std::cout << "Received original image with size: " << original_img0.size() << std::endl;
+
+				cam0 = std::make_optional<cv::Mat>(original_img0);
+				cam1 = std::make_optional<cv::Mat>(original_img1);
 			}
 
 			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
