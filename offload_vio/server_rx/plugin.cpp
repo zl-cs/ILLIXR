@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <fstream>
 
+#include "common/threadloop.hpp"
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
@@ -15,10 +16,10 @@
 
 using namespace ILLIXR;
 
-class server_reader : public plugin {
+class server_reader : public threadloop {
 public:
 	server_reader(std::string name_, phonebook* pb_)
-		: plugin{name_, pb_}
+		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_imu_cam{sb->get_writer<imu_cam_type_prof>("imu_cam")}
     {
@@ -33,6 +34,13 @@ public:
 	}
 
 private:
+
+    boost::lockfree::spsc_queue<switchboard::ptr<imu_cam_type_prof>> _m_imu_cam;
+
+    virtual void _p_one_iteration() {
+
+    }
+
     // decompress byte array to cv::Mat
     cv::Mat decompress_mat(std::vector<uchar>& compressed_data) {
         cv::Mat uncompressed_data;
@@ -64,22 +72,28 @@ private:
                 auto img0_vec = std::vector<uchar>(img0_copy->begin(), img0_copy->end());
                 auto img1_vec = std::vector<uchar>(img1_copy->begin(), img1_copy->end());
 
+                // profile nano time
+                auto start_time = std::chrono::high_resolution_clock::now();
                 cv::Mat img0 = decompress_mat(img0_vec);
                 cv::Mat img1 = decompress_mat(img1_vec);
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                std::cout << "Decompression time: " << duration << " microseconds" << std::endl;
 
                 cv::Mat original_img0(curr_data.rows(), curr_data.cols(), CV_8UC1, original_img0_copy->data());
                 cv::Mat original_img1(curr_data.rows(), curr_data.cols(), CV_8UC1, original_img1_copy->data());
 
-                imshow("img0", img0);
-                imshow("original_img0", original_img0);
-                while (true) {
-                    char key = cv::waitKey(1);
-                    if (key == 'q') {
-                        break;
-                    }
-                }
-                std::cout << "Received image with size: " << img0.size() << std::endl;
-                std::cout << "Received original image with size: " << original_img0.size() << std::endl;
+//                imshow("img0", img0);
+//                imshow("original_img0", original_img0);
+//                while (true) {
+//                    char key = cv::waitKey(1);
+//                    if (key == 'q') {
+//                        break;
+//                    }
+//                }
+
+//                std::cout << "Received image with size: " << img0.size() << std::endl;
+//                std::cout << "Received original image with size: " << original_img0.size() << std::endl;
 
 				cam0 = std::make_optional<cv::Mat>(original_img0);
 				cam1 = std::make_optional<cv::Mat>(original_img1);
@@ -97,7 +111,7 @@ private:
 					cam0,
 					cam1
 				}
-			));	
+			));
 		}
 
 		// unsigned long long after_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();

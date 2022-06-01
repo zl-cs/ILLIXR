@@ -80,10 +80,15 @@ public:
 			imu_cam_data->set_rows(img0.rows);
 			imu_cam_data->set_cols(img0.cols);
 
+            // profile nano time
+            auto start = std::chrono::high_resolution_clock::now();
             auto compressed_img0 = compress_mat(img0);
             auto compressed_img1 = compress_mat(img1);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            std::cout << "compression time: " << duration.count() << " ns" << std::endl;
 
-            std::cout << "Compressed image size: " << compressed_img0.size() << " " << compressed_img1.size() << std::endl;
+//            std::cout << "Compressed image size: " << compressed_img0.size() << " " << compressed_img1.size() << std::endl;
 
             imu_cam_data->set_img0_data((void*) compressed_img0.data(), compressed_img0.size());
             imu_cam_data->set_img1_data((void*) compressed_img1.data(), compressed_img1.size());
