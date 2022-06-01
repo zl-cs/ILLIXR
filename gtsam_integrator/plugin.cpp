@@ -49,9 +49,9 @@ public:
         rpe_integrator_csv.open(data_path + "/rpe_integrator.csv");
 
         const double frequency = 200;
-        const double mincutoff = 10;
+        const double mincutoff = 2;
         const double beta = 1;
-        const double dcutoff = 10;
+        const double dcutoff = 2;
 
         for (int i = 0; i < 8; ++i) {
             filters.emplace_back(frequency,
@@ -300,7 +300,7 @@ private:
             abs(rotation_angles[2] - prev_euler_angles[2]) > M_PI / 2)) {
             filters[6].clear();
             filters[7].clear();
-            std::cout << "clear filter" << std::endl;
+            // std::cout << "clear filter" << std::endl;
 //            std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
 //                      << to_dregrees(rotation_angles[2]) << "  --->  "
 //                      << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
