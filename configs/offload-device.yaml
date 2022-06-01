@@ -1,7 +1,7 @@
 plugin_groups:
   - plugin_group:
-      - path: offline_imu_cam/
-      # - path: zed/
+      # - path: offline_imu_cam/
+      - path: zed/
       # - path: rk4_integrator/
       - path: gtsam_integrator/
       # - path: passthrough_integrator/
@@ -39,6 +39,6 @@ action:
   # command: printf %s\n $env_cmd
 
   # Capture stdout for metrics
-  # log_stdout: metrics/output.log
+  log_stdout: metrics/output.log
 
 profile: opt

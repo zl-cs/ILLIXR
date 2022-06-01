@@ -22,7 +22,7 @@ using namespace ILLIXR;
 static constexpr int   EYE_TEXTURE_WIDTH   = ILLIXR::FB_WIDTH;
 static constexpr int   EYE_TEXTURE_HEIGHT  = ILLIXR::FB_HEIGHT;
 
-static constexpr duration VSYNC_PERIOD {freq2period(60.0)};
+static constexpr duration VSYNC_PERIOD {freq2period(120.0)};
 static constexpr duration VSYNC_DELAY_TIME {std::chrono::milliseconds{2}};
 
 // Monado-style eyebuffers:
@@ -395,8 +395,9 @@ public:
 		demoscene = ObjScene(std::string(obj_dir), "scene.obj");
 
 		// Construct a basic perspective projection
-		math_util::projection_fov( &basicProjection, 54.0f, 54.0f, 52.0f, 52.0f, 0.03f, 20.0f );
-
+		// math_util::projection_fov( &basicProjection, 54.0f, 54.0f, 52.0f, 52.0f, 0.03f, 20.0f );
+		math_util::projection_fov( &basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f );
+		
 		RAC_ERRNO_MSG("gldemo before glXMakeCurrent");
         [[maybe_unused]] const bool gl_result_1 = static_cast<bool>(glXMakeCurrent(xwin->dpy, None, nullptr));
 		assert(gl_result_1 && "glXMakeCurrent should not fail");

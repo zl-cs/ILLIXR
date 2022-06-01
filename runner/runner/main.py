@@ -307,6 +307,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
                 KIMERA_ROOT=config["action"]["kimera_path"],
                 AUDIO_ROOT=config["action"]["audio_path"],
                 REALSENSE_CAM=str(realsense_cam_string),
+                ILLIXR_RUN_DURATION=str(config["action"].get("ILLIXR_RUN_DURATION", 40)),
                 **env_monado,
             ),
             stdout=log_stdout,
