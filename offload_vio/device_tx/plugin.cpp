@@ -9,7 +9,67 @@
 
 #include "vio_input.pb.h"
 
+#include "libavcodec/avcodec.h"
+#include "libavformat/avformat.h"
+#include "libavutil/avutil.h"
+#include "libavutil/opt.h"
+
 using namespace ILLIXR;
+
+class ffmpeg_encoder {
+private:
+    AVFrame *frame;
+    AVCodecContext *ctx;
+public:
+    ffmpeg_encoder() {
+        frame = av_frame_alloc();
+        frame->format = AV_PIX_FMT_GRAY8;
+        frame->width = 640;
+        frame->height = 480;
+    }
+
+    int ffmepg_init() {
+        AVCodec *codec = avcodec_find_encoder_by_name("h264_nvenc");
+        if (!codec) {
+            printf("Codec not found\n");
+            return -1;
+        }
+        ctx = avcodec_alloc_context3(codec);
+        if (!ctx) {
+            printf("Could not allocate video codec context\n");
+            return -1;
+        }
+        ctx->width = 672;
+        ctx->height = 376;
+        ctx->codec_type = AVMEDIA_TYPE_VIDEO;
+        ctx->framerate = {15, 1};
+        ctx->time_base = {1, 15};
+        ctx->bit_rate = 6000;
+        ctx->gop_size = 480;
+        ctx->max_b_frames = 0;
+        ctx->pix_fmt = AV_PIX_FMT_GRAY8;
+        av_opt_set(ctx->priv_data, "preset", "llhq", 0);
+        av_opt_set_int(ctx->priv_data, "zerolatency", 1, 0);
+        av_opt_set_int(ctx->priv_data, "delay", 0, 0);
+
+        auto ret = avcodec_open2(ctx, codec, NULL);
+        if (ret < 0) {
+            printf("Could not open codec\n");
+            return -1;
+        }
+    }
+
+    AVFrame* cvmat_to_avframe(const cv::Mat& cvmat, int pts) {
+        frame->width = cvmat.cols;
+        frame->height = cvmat.rows;
+        frame->format = AV_PIX_FMT_GRAY8;
+        frame->data[0] = cvmat.data;
+        frame->linesize[0] = cvmat.step;
+        frame->pts = pts;
+        return frame;
+    }
+
+};
 
 class offload_writer : public plugin {
 public:
@@ -23,15 +83,17 @@ public:
 		publisher.SetLayerMode(eCAL::TLayer::tlayer_tcp, eCAL::TLayer::smode_auto);
 	}
 
-
     virtual void start() override {
         plugin::start();
+
+        // Initialize ffmpeg
+        encoder = std::make_unique<ffmpeg_encoder>();
+        encoder->ffmepg_init();
 
         sb->schedule<imu_cam_type_prof>(id, "imu_cam", [this](switchboard::ptr<const imu_cam_type_prof> datum, std::size_t) {
 			this->send_imu_cam_data(datum);
 		});
 	}
-
 
     void send_imu_cam_data(switchboard::ptr<const imu_cam_type_prof> datum) {
 		// Ensures that slam doesnt start before valid IMU readings come in
@@ -84,6 +146,7 @@ public:
     }
 
 private:
+    std::unique_ptr<ffmpeg_encoder> encoder = nullptr;
 	long previous_timestamp = 0;
 	int frame_id = 0;
 	vio_input_proto::IMUCamVec* data_buffer = new vio_input_proto::IMUCamVec();

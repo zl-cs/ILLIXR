@@ -9,6 +9,14 @@ set(CMAKE_BUILD_TYPE Release)
 find_package(eCAL REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
+        libavformat
+        libavcodec
+        libswresample
+        libswscale
+        libavutil
+        )
 
 add_library(plugin SHARED plugin.cpp)
 
@@ -25,4 +33,5 @@ target_link_libraries(${PROJECT_NAME}
   ${OpenCV_LIBS}
   eCAL::core
   protobuf::libprotobuf
+  PkgConfig::LIBAV
 )
