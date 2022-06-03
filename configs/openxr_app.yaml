@@ -2,8 +2,8 @@ app:
   src_path:
     git_repo : https://gitlab.freedesktop.org/monado/demos/openxr-simple-example
     version  : master
-  # bin_subpath: sponza/Sponza_VR.x86_64
+  bin_subpath: sponza/Sponza_VR.x86_64
   # bin_subpath: platformer/Platformer_VR.x86_64
   # bin_subpath: demo/Demo_AR.x86_64
-  bin_subpath: materials/Materials_VR.x86_64
+  #bin_subpath: materials/Materials_VR.x86_64
 config: {}

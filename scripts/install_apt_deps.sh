@@ -177,16 +177,6 @@ pkg_dep_list_docker=(
     docker-ce
 ) # End List
 
-pkg_dep_list_realsense_anyarch=(
-    librealsense2-utils
-    librealsense2-dev
-    librealsense2-gl-dev
-) # End List
-
-pkg_dep_list_realsense_x86_64=(
-    librealsense2-dkms
-) # End List
-
 pkg_dep_list_prereq_cuda=(
     linux-headers-${kernel_version}
 ) # End List
@@ -225,32 +215,6 @@ if [ "${use_docker}" = "yes" ]; then
 fi
 
 ## Intel RealSense ##
-
-# Check for distribution support of Intel RealSense
-# For supported distributions, automatically add the RealSense package group to our list
-if [ "${distro_name}" = "ubuntu" ] && ([ "${distro_version}" = "18.04" ] || [ "${distro_version}" = "20.04" ]); then
-    case "${arch_name}" in
-        x86_64)     use_realsense="yes"
-                    pkg_dep_groups+=" realsense_anyarch"
-                    pkg_dep_groups+=" realsense_x86_64"
-                    ;;
-        aarch64)    use_realsense="yes"
-                    pkg_dep_groups+=" realsense_anyarch"
-                    ;;
-        *)          print_warning "Unsupported arch '${arch_name}' for Intel RealSense."
-                    exit 1
-                    ;;
-    esac
-else
-    pkg_install_url_realsense="https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md"
-    pkg_build_url_realsense="https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md"
-    pkg_warn_msg_realsense="This script only supports installation of Intel RealSense for Ubuntu 18.04 and 20.04. "
-    pkg_warn_msg_realsense+="For other Ubuntu or non-Ubuntu Linux distributions, "
-    pkg_warn_msg_realsense+="if your project requires Intel RealSense support, "
-    pkg_warn_msg_realsense+="please build and install the Intel RealSense SDK from source. "
-    pkg_warn_msg_realsense+="For more information, visit '${pkg_install_url_realsense}' and '${pkg_build_url_realsense}'."
-    print_warning "${pkg_warn_msg_realsense}"
-fi
 
 ## CUDA ##
 
@@ -336,10 +300,6 @@ sudo add-apt-repository -u -y ppa:graphics-drivers/ppa
 sudo add-apt-repository -u -y ppa:deadsnakes/ppa
 
 # Add Kitware repository (for third party Ubuntu dependencies)
-dep_ver_kitware="latest"
-key_srv_url_kitware="https://apt.kitware.com/keys/kitware-archive-${dep_ver_kitware}.asc"
-repo_url_kitware="https://apt.kitware.com/ubuntu"
-add_repo "${key_srv_url_kitware}" "${repo_url_kitware}" "${distro_codename} main"
 
 # If prompted, add Docker repository (for local CI/CD debugging)
 if [ "${use_docker}" = "yes" ]; then
@@ -349,12 +309,6 @@ if [ "${use_docker}" = "yes" ]; then
 fi
 
 # If supported, add the gpg keys and repository for Intel RealSense
-if [ "${use_realsense}" = "yes" ]; then
-    key_srv_url_list_realsense="keys.gnupg.net hkp://keyserver.ubuntu.com:80"
-    repo_url_realsense="http://librealsense.intel.com/Debian/apt-repo"
-    key_id_realsense="F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE"
-    add_repo "${key_srv_url_list_realsense}" "${repo_url_realsense}" "${distro_codename} main" "${key_id_realsense}"
-fi
 
 # If supported, add the keys and repository for CUDA (for GPU plugin support)
 if [ "${use_cuda}" = "yes" ]; then

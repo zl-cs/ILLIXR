@@ -25,4 +25,5 @@ target_link_libraries(${PROJECT_NAME}
   ${OpenCV_LIBS}
   eCAL::core
   protobuf::libprotobuf
+  stdc++fs
 )

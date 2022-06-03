@@ -1,7 +1,7 @@
 plugin_group:
   - path: timewarp_gl/
-  - name: audio
-    path: .cache/paths/https%c%s%sgithub.com%sILLIXR%saudio_pipeline.git
+    #- name: audio
+    #path: .cache/paths/https%c%s%sgithub.com%sILLIXR%saudio_pipeline.git
       # git_repo: https://github.com/ILLIXR/audio_pipeline.git
       # version: "3.3"
   # - name: hologram

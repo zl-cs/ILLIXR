@@ -24,6 +24,7 @@
 using namespace ILLIXR;
 // IMU sample time to live in seconds
 constexpr duration IMU_TTL {std::chrono::seconds{20}};
+constexpr int IMU_BUFFER_SIZE {21};
 
 using ImuBias = gtsam::imuBias::ConstantBias;
 
@@ -49,11 +50,11 @@ public:
         rpe_integrator_csv.open(data_path + "/rpe_integrator.csv");
 
         const double frequency = 200;
-        const double mincutoff = 10;
+        const double mincutoff = 2;
         const double beta = 1;
-        const double dcutoff = 10;
+        const double dcutoff = 2;
 
-        for (int i = 0; i < 7; ++i) {
+        for (int i = 0; i < 8; ++i) {
             filters.emplace_back(frequency,
                                  Eigen::Array<double, 3, 1>{mincutoff, mincutoff, mincutoff},
                                  Eigen::Array<double, 3, 1>{beta, beta, beta},
@@ -85,6 +86,8 @@ private:
     std::ofstream filtered_csv;
     std::ofstream rpe_integrator_csv;
     std::vector <one_euro_filter<Eigen::Array<double,3,1>, double>> filters;
+    bool has_prev = false;
+    Eigen::Matrix<double, 3, 1> prev_euler_angles;
 
     const std::shared_ptr<switchboard> sb;
     const std::shared_ptr<RelativeClock> _m_clock;
@@ -97,6 +100,7 @@ private:
     switchboard::writer<imu_raw_type> _m_imu_raw;
 
     std::vector<imu_type> _imu_vec;
+    std::vector<ILLIXR::switchboard::ptr<const ILLIXR::imu_integrator_input>> _imu_integrator_input_buffer;
 
     [[maybe_unused]] time_point last_cam_time;
     duration last_imu_offset;
@@ -210,12 +214,27 @@ private:
 			return;
 		}
 
-#ifndef NDEBUG
+// #ifndef NDEBUG
         if (input_values->last_cam_integration_time > last_cam_time) {
-            std::cout << "New slow pose has arrived!\n";
+            // std::cout << "New slow pose has arrived!\n";
             last_cam_time = input_values->last_cam_integration_time;
+
+            _imu_integrator_input_buffer.push_back(input_values);
+            if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
+                return;
+            }
+
+            if (_imu_integrator_input_buffer.size() > IMU_BUFFER_SIZE) {
+                _imu_integrator_input_buffer.erase(_imu_integrator_input_buffer.begin());
+            }
         }
-#endif
+        
+        if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
+            return;
+        } else {
+            input_values = _imu_integrator_input_buffer.front();
+        }
+// #endif
 
         if (_pim_obj == nullptr) {
             /// We don't have a PimObject -> make and set given the current input
@@ -245,9 +264,9 @@ private:
         ImuBias prev_bias = _pim_obj->biasHat();
         ImuBias bias = _pim_obj->biasHat();
 
-#ifndef NDEBUG
-        std::cout << "Integrating over " << prop_data.size() << " IMU samples\n";
-#endif
+// #ifndef NDEBUG
+        std::cerr << "Integrating over " << prop_data.size() << " IMU samples\n";
+// #endif
 
         for (int i = 0; i < int(prop_data.size()) - 1; i++) {
             _pim_obj->integrateMeasurement(prop_data[i], prop_data[i+1]);
@@ -282,9 +301,44 @@ private:
                 << out_pose.rotation().toQuaternion().y() << ","
                 << out_pose.rotation().toQuaternion().z() << std::endl;
 
+        //auto to_dregrees = [](double radians) -> double {
+        //    return radians * 180 / M_PI;
+        //};
+
         auto original_quaternion = out_pose.rotation().toQuaternion();
         Eigen::Matrix<double, 3, 1> rotation_angles = original_quaternion.toRotationMatrix().eulerAngles(0, 1, 2).cast<double>();
-        Eigen::Matrix<double, 3, 1> filtered_angles = filters[6](rotation_angles.array(), seconds_since_epoch);
+        Eigen::Matrix<double, 3, 1> filtered_sins = filters[6](rotation_angles.array().sin(), seconds_since_epoch);
+        Eigen::Matrix<double, 3, 1> filtered_cosines = filters[7](rotation_angles.array().cos(), seconds_since_epoch);
+        Eigen::Matrix<double, 3, 1> filtered_angles{atan2(filtered_sins[0], filtered_cosines[0]),
+                                                    atan2(filtered_sins[1], filtered_cosines[1]),
+                                                    atan2(filtered_sins[2], filtered_cosines[2])};
+
+        if (has_prev && (abs(rotation_angles[0] - prev_euler_angles[0]) > M_PI / 2 || abs(rotation_angles[1] - prev_euler_angles[1]) > M_PI / 2 ||
+            abs(rotation_angles[2] - prev_euler_angles[2]) > M_PI / 2)) {
+            filters[6].clear();
+            filters[7].clear();
+            // std::cout << "clear filter" << std::endl;
+//            std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
+//                      << to_dregrees(rotation_angles[2]) << "  --->  "
+//                      << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
+//                      << to_dregrees(filtered_angles[2]) << std::endl;
+
+            filtered_sins = filters[6](rotation_angles.array().sin(), seconds_since_epoch);
+            filtered_cosines = filters[7](rotation_angles.array().cos(), seconds_since_epoch);
+            filtered_angles = {atan2(filtered_sins[0], filtered_cosines[0]),
+                            atan2(filtered_sins[1], filtered_cosines[1]),
+                            atan2(filtered_sins[2], filtered_cosines[2])};
+        } else {
+            has_prev = true;
+        }
+
+	//# std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
+	//#          << to_dregrees(rotation_angles[2]) << "  --->  "
+	//#          << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
+	//#          << to_dregrees(filtered_angles[2]) << std::endl;
+
+        prev_euler_angles = std::move(rotation_angles);
+
         __attribute__((unused)) auto new_quaternion = Eigen::AngleAxisd(filtered_angles(0, 0), Eigen::Vector3d::UnitX())
                 * Eigen::AngleAxisd(filtered_angles(1, 0), Eigen::Vector3d::UnitY())
                 * Eigen::AngleAxisd(filtered_angles(2, 0), Eigen::Vector3d::UnitZ());
@@ -308,19 +362,19 @@ private:
                      << filtered_pos.x() << ","
                      << filtered_pos.y() << ","
                      << filtered_pos.z() << ","
-                     << original_quaternion.w() << ","
-                     << original_quaternion.x() << ","
-                     << original_quaternion.y() << ","
-                     << original_quaternion.z() << std::endl;
+                     << new_quaternion.w() << ","
+                     << new_quaternion.x() << ","
+                     << new_quaternion.y() << ","
+                     << new_quaternion.z() << std::endl;
 
         rpe_integrator_csv << std::fixed << dataset_time.time_since_epoch().count() / 1e9 << " "
                      << filtered_pos.x() << " "
                      << filtered_pos.y() << " "
                      << filtered_pos.z() << " "
-                     << original_quaternion.w() << " "
-                     << original_quaternion.x() << " "
-                     << original_quaternion.y() << " "
-                     << original_quaternion.z() << std::endl;
+                     << new_quaternion.w() << " "
+                     << new_quaternion.x() << " "
+                     << new_quaternion.y() << " "
+                     << new_quaternion.z() << std::endl;
 
         _m_imu_raw.put(_m_imu_raw.allocate<imu_raw_type>(
                 imu_raw_type {
@@ -334,7 +388,7 @@ private:
                         bias.accelerometer(),
                         filtered_pos,             /// Position
                         filters[5](navstate_k.velocity().array(), seconds_since_epoch),              /// Velocity
-                        original_quaternion, /// Eigen Quat
+                        new_quaternion, /// Eigen Quat
                         real_time
                 }
         ));

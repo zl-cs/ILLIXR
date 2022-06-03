@@ -21,8 +21,9 @@ action:
 
   monado:
     path: .cache/paths/https%c%s%sgithub.com%sILLIXR%smonado_integration.git/
-      # git_repo : https://github.com/ILLIXR/monado_integration.git
-      # version  : "3.1"
+   #path:
+   #   git_repo : https://github.com/ILLIXR/monado_integration.git
+   #   version  : "issue-10-fix-timing"
 
     config: # For CMake
       BUILD_WITH_LIBUDEV : "0"
