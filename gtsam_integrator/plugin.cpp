@@ -24,6 +24,7 @@
 using namespace ILLIXR;
 // IMU sample time to live in seconds
 constexpr duration IMU_TTL {std::chrono::seconds{20}};
+constexpr int IMU_BUFFER_SIZE {21};
 
 using ImuBias = gtsam::imuBias::ConstantBias;
 
@@ -99,6 +100,7 @@ private:
     switchboard::writer<imu_raw_type> _m_imu_raw;
 
     std::vector<imu_type> _imu_vec;
+    std::vector<ILLIXR::switchboard::ptr<const ILLIXR::imu_integrator_input>> _imu_integrator_input_buffer;
 
     [[maybe_unused]] time_point last_cam_time;
     duration last_imu_offset;
@@ -212,12 +214,27 @@ private:
 			return;
 		}
 
-#ifndef NDEBUG
+// #ifndef NDEBUG
         if (input_values->last_cam_integration_time > last_cam_time) {
-            std::cout << "New slow pose has arrived!\n";
+            // std::cout << "New slow pose has arrived!\n";
             last_cam_time = input_values->last_cam_integration_time;
+
+            _imu_integrator_input_buffer.push_back(input_values);
+            if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
+                return;
+            }
+
+            if (_imu_integrator_input_buffer.size() > IMU_BUFFER_SIZE) {
+                _imu_integrator_input_buffer.erase(_imu_integrator_input_buffer.begin());
+            }
         }
-#endif
+        
+        if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
+            return;
+        } else {
+            input_values = _imu_integrator_input_buffer.front();
+        }
+// #endif
 
         if (_pim_obj == nullptr) {
             /// We don't have a PimObject -> make and set given the current input
@@ -247,9 +264,9 @@ private:
         ImuBias prev_bias = _pim_obj->biasHat();
         ImuBias bias = _pim_obj->biasHat();
 
-#ifndef NDEBUG
-        std::cout << "Integrating over " << prop_data.size() << " IMU samples\n";
-#endif
+// #ifndef NDEBUG
+        std::cerr << "Integrating over " << prop_data.size() << " IMU samples\n";
+// #endif
 
         for (int i = 0; i < int(prop_data.size()) - 1; i++) {
             _pim_obj->integrateMeasurement(prop_data[i], prop_data[i+1]);
@@ -345,19 +362,19 @@ private:
                      << filtered_pos.x() << ","
                      << filtered_pos.y() << ","
                      << filtered_pos.z() << ","
-                     << original_quaternion.w() << ","
-                     << original_quaternion.x() << ","
-                     << original_quaternion.y() << ","
-                     << original_quaternion.z() << std::endl;
+                     << new_quaternion.w() << ","
+                     << new_quaternion.x() << ","
+                     << new_quaternion.y() << ","
+                     << new_quaternion.z() << std::endl;
 
         rpe_integrator_csv << std::fixed << dataset_time.time_since_epoch().count() / 1e9 << " "
                      << filtered_pos.x() << " "
                      << filtered_pos.y() << " "
                      << filtered_pos.z() << " "
-                     << original_quaternion.w() << " "
-                     << original_quaternion.x() << " "
-                     << original_quaternion.y() << " "
-                     << original_quaternion.z() << std::endl;
+                     << new_quaternion.w() << " "
+                     << new_quaternion.x() << " "
+                     << new_quaternion.y() << " "
+                     << new_quaternion.z() << std::endl;
 
         _m_imu_raw.put(_m_imu_raw.allocate<imu_raw_type>(
                 imu_raw_type {

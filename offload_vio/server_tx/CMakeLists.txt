@@ -21,4 +21,5 @@ PROTOBUF_TARGET_CPP(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${protobuf_files
 target_link_libraries(${PROJECT_NAME} 
   eCAL::core
   protobuf::libprotobuf
+  stdc++fs
 )
