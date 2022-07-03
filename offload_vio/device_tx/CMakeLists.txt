@@ -9,6 +9,7 @@ find_package(eCAL REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(CUDA REQUIRED)
+include(useffmpeg.cmake)
 
 add_library(plugin SHARED plugin.cpp)
 
@@ -28,6 +29,7 @@ target_link_libraries(${PROJECT_NAME}
   ${OpenCV_LIBS}
   ${CUDA_CUDA_LIBRARY}
   ${CUDA_CUDART_LIBRARY}
+  ${FFMPEG_LIBRARIES}
   eCAL::core
   protobuf::libprotobuf
 )
