@@ -14,6 +14,18 @@
 #include "switchboard.hpp"
 #include "relative_clock.hpp"
 
+// ffmpeg
+extern "C" {
+    #include "libavcodec/avcodec.h"
+    #include "libavutil/avutil.h"
+    #include "libavutil/frame.h"
+    #include "libavutil/hwcontext.h"
+    #include "libavutil/imgutils.h"
+    #include "libavutil/opt.h"
+    #include "libavutil/pixfmt.h"
+    #include "libswscale/swscale.h"
+}
+
 // Tell gldemo and timewarp_gl to use two texture handle for left and right eye
 #define USE_ALT_EYE_FORMAT
 
@@ -61,7 +73,8 @@ namespace ILLIXR {
 					 Eigen::Vector3f angular_v_,
 					 Eigen::Vector3f linear_a_,
 					 std::optional<cv::Mat> img0_,
-					 std::optional<cv::Mat> img1_)
+					 std::optional<cv::Mat> img1_
+                     )
 			: frame_id{frame_id_}
 			, time{time_}
 			, start_time{start_time_}
