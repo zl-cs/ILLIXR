@@ -24,7 +24,7 @@
 using namespace ILLIXR;
 // IMU sample time to live in seconds
 constexpr duration IMU_TTL {std::chrono::seconds{20}};
-constexpr int IMU_BUFFER_SIZE {21};
+constexpr int IMU_BUFFER_SIZE {1};
 
 using ImuBias = gtsam::imuBias::ConstantBias;
 
@@ -102,7 +102,7 @@ private:
     std::vector<imu_type> _imu_vec;
     std::vector<ILLIXR::switchboard::ptr<const ILLIXR::imu_integrator_input>> _imu_integrator_input_buffer;
 
-    [[maybe_unused]] time_point last_cam_time;
+    [[maybe_unused]] std::optional <time_point> last_cam_time;
     duration last_imu_offset;
 
     /**
