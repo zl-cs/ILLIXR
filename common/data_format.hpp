@@ -122,6 +122,7 @@ namespace ILLIXR {
 
 	// IMU biases, initialization params, and slow pose needed by the IMU integrator
 	struct imu_integrator_input : public switchboard::event {
+		time_point recv_time;
 		time_point last_cam_integration_time;
 		duration t_offset;
 		imu_params params;
@@ -132,7 +133,8 @@ namespace ILLIXR {
 		Eigen::Matrix<double,3,1> velocity;
 		Eigen::Quaterniond quat;
 		imu_integrator_input()
-			: last_cam_integration_time{time_point{}}
+			: recv_time{time_point{}}
+			, last_cam_integration_time{time_point{}}
 			, t_offset{duration(std::chrono::milliseconds{-50})}
 			, params{.gyro_noise = 0.00016968,
 				.acc_noise = 0.002,
@@ -148,6 +150,7 @@ namespace ILLIXR {
 			, quat{Eigen::Quaterniond{1, 0, 0, 0}}
 		{ }
 		imu_integrator_input(
+							 time_point recv_time_,
 							 time_point last_cam_integration_time_,
 							 duration t_offset_,
 							 imu_params params_,
@@ -157,7 +160,8 @@ namespace ILLIXR {
 							 Eigen::Matrix<double,3,1> velocity_,
 							 Eigen::Quaterniond quat_
 							 )
-			: last_cam_integration_time{last_cam_integration_time_}
+			: recv_time{recv_time_}
+			, last_cam_integration_time{last_cam_integration_time_}
 			, t_offset{t_offset_}
 			, params{params_}
 			, biasAcc{biasAcc_}
@@ -201,18 +205,22 @@ namespace ILLIXR {
 	};
 
 	struct pose_type : public switchboard::event {
+		time_point recv_time;
 		time_point sensor_time; // Recorded time of sensor data ingestion
 		Eigen::Vector3f position;
 		Eigen::Quaternionf orientation;
 		pose_type()
-			: sensor_time{time_point{}}
+			: recv_time{time_point{}}
+			, sensor_time{time_point{}}
 			, position{Eigen::Vector3f{0, 0, 0}}
 			, orientation{Eigen::Quaternionf{1, 0, 0, 0}}
 		{ }
-		pose_type(time_point sensor_time_,
+		pose_type(time_point recv_time_,
+				  time_point sensor_time_,
 				  Eigen::Vector3f position_,
 				  Eigen::Quaternionf orientation_)
-			: sensor_time{sensor_time_}
+			: recv_time{recv_time_}
+			, sensor_time{sensor_time_}
 			, position{position_}
 			, orientation{orientation_}
 		{ }

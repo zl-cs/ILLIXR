@@ -22,17 +22,18 @@ public:
     offload_reader(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_pose{sb->get_writer<pose_type>("slow_pose")}
 		, _m_imu_integrator_input{sb->get_writer<imu_integrator_input>("imu_integrator_input")}
 		, client_addr(CLIENT_IP, CLIENT_PORT_2)
     { 
-		pose_type datum_pose_tmp{
-            time_point{},
-            Eigen::Vector3f{0, 0, 0},
-            Eigen::Quaternionf{1, 0, 0, 0}
-        };
-        switchboard::ptr<pose_type> datum_pose = _m_pose.allocate<pose_type>(std::move(datum_pose_tmp));
-        _m_pose.put(std::move(datum_pose));
+		// pose_type datum_pose_tmp{
+        //     time_point{},
+        //     Eigen::Vector3f{0, 0, 0},
+        //     Eigen::Quaternionf{1, 0, 0, 0}
+        // };
+        // switchboard::ptr<pose_type> datum_pose = _m_pose.allocate<pose_type>(std::move(datum_pose_tmp));
+        // _m_pose.put(std::move(datum_pose));
 
 		if (!filesystem::exists(data_path)) {
 			if (!filesystem::create_directory(data_path)) {
@@ -68,7 +69,7 @@ public:
 	}
 
 private:
-	void ReceiveVioOutput(const vio_output_proto::VIOOutput& vio_output, const string & str_data) {		
+	void ReceiveVioOutput(const vio_output_proto::VIOOutput& vio_output, const string & str_data) {
 		vio_output_proto::SlowPose slow_pose = vio_output.slow_pose();
 
 		/** Logging **/
@@ -85,6 +86,7 @@ private:
 		hashed << vio_output.frame_id() << "\t" << hash_result << endl;
 
 		pose_type datum_pose_tmp{
+			_m_clock->now(),
 			time_point{std::chrono::nanoseconds{slow_pose.timestamp()}},
 			Eigen::Vector3f{
 				static_cast<float>(slow_pose.position().x()), 
@@ -103,6 +105,7 @@ private:
 		vio_output_proto::IMUIntInput imu_int_input = vio_output.imu_int_input();
 
 		imu_integrator_input datum_imu_int_tmp{
+			_m_clock->now(),
 			time_point{std::chrono::nanoseconds{imu_int_input.last_cam_integration_time()}},
 			duration(std::chrono::nanoseconds{imu_int_input.t_offset()}),
 			imu_params{
@@ -130,10 +133,6 @@ private:
         _m_imu_integrator_input.put(std::move(datum_imu_int));
 	}
 
-	std::ofstream pose_transfer_csv;
-	std::ofstream roundtrip_csv;
-	const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
-
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<pose_type> _m_pose;
 	switchboard::writer<imu_integrator_input> _m_imu_integrator_input;
@@ -145,6 +144,9 @@ private:
 	std::ofstream pose_transfer_csv;
 	std::ofstream roundtrip_csv;
 	std::ofstream hashed;
+
+	const std::shared_ptr<RelativeClock> _m_clock;
+
 };
 
 PLUGIN_MAIN(offload_reader)

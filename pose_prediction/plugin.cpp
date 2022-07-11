@@ -82,6 +82,7 @@ public:
         }
 
         // slow_pose and imu_raw, do pose prediction
+        std::cout << "slow_pose recv to use time = " << (_m_clock->now() - slow_pose->recv_time).count() << "\n";
 
         double dt = duration2double(future_timestamp - imu_raw->imu_time);
         std::pair<Eigen::Matrix<double,13,1>, time_point> predictor_result = predict_mean_rk4(dt);
@@ -92,6 +93,7 @@ public:
         auto predictor_imu_time = predictor_result.second;
         
         pose_type predicted_pose = correct_pose({
+            slow_pose->recv_time,
             predictor_imu_time,
             Eigen::Vector3f{
                 static_cast<float>(state_plus(4)),
