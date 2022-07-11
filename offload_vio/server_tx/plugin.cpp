@@ -155,8 +155,6 @@ public:
     }
 
 private:
-    const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
-    std::ofstream receiver_to_sender;
 
     const std::shared_ptr<switchboard> sb;
 	switchboard::reader<imu_integrator_input> _m_imu_int_input;

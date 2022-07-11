@@ -44,6 +44,7 @@ namespace ILLIXR {
 	};
 
 	struct imu_cam_type_prof : public switchboard::event {
+		time_point recv_time;
 		int frame_id;
 		time_point time;
 		time_point start_time; // Time that the device sent the packet
@@ -53,7 +54,8 @@ namespace ILLIXR {
 		Eigen::Vector3f linear_a;
 		std::optional<cv::Mat> img0;
 		std::optional<cv::Mat> img1;
-		imu_cam_type_prof(int frame_id_,
+		imu_cam_type_prof(time_point recv_time_,
+					 int frame_id_,
 					 time_point time_,
 					 time_point start_time_,
 					 time_point rec_time_,
@@ -62,7 +64,8 @@ namespace ILLIXR {
 					 Eigen::Vector3f linear_a_,
 					 std::optional<cv::Mat> img0_,
 					 std::optional<cv::Mat> img1_)
-			: frame_id{frame_id_}
+			: recv_time{recv_time_}
+			, frame_id{frame_id_}
 			, time{time_}
 			, start_time{start_time_}
 			, rec_time{rec_time_}

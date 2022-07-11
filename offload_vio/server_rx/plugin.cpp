@@ -5,6 +5,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
+#include "common/relative_clock.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -22,6 +23,7 @@ public:
 	server_reader(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_imu_cam{sb->get_writer<imu_cam_type_prof>("imu_cam")}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, buffer_str("")
@@ -34,6 +36,7 @@ public:
 		
 		receive_time.open(data_path + "/receive_time.csv");
 		hashed_data.open(data_path + "/hash_server_rx.txt");
+		imu_recv.open(data_path + "/imu_recv.csv");
 		socket.set_reuseaddr();
 		socket.bind(server_addr);
 	}
@@ -112,6 +115,7 @@ private:
 
 			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
 				imu_cam_type_prof {
+					_m_clock->now(),
 					vio_input.frame_id(),
 					time_point{std::chrono::nanoseconds{curr_data.timestamp()}},
 					time_point{std::chrono::nanoseconds{vio_input.real_timestamp()}}, // Timestamp of when the device sent the packet
@@ -123,6 +127,10 @@ private:
 					cam1
 				}
 			));	
+			imu_recv << vio_input.real_timestamp() << "," << curr_data.angular_vel().x() << "," << curr_data.angular_vel().y() << "," << curr_data.angular_vel().z() << "," 
+					 << curr_data.linear_accel().x() << "," << curr_data.linear_accel().y() << "," << curr_data.linear_accel().z() << std::endl;
+			
+
 		}
 
 		// unsigned long long after_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -130,10 +138,8 @@ private:
 		// std::cout << vio_input.frame_id() << ": Seconds to push data (ms): " << sec_to_push * 1e3 << std::endl;
 	}
 
-	const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
-    std::ofstream receive_time;
-
     const std::shared_ptr<switchboard> sb;
+	const std::shared_ptr<RelativeClock> _m_clock;
 	switchboard::writer<imu_cam_type_prof> _m_imu_cam;
 
 	TCPSocket socket;
@@ -144,6 +150,7 @@ private:
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
 	std::ofstream receive_time;
 	std::ofstream hashed_data;
+	std::ofstream imu_recv;
 };
 
 PLUGIN_MAIN(server_reader)
