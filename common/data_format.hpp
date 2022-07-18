@@ -185,6 +185,7 @@ namespace ILLIXR {
 		Eigen::Matrix<double,3,1> vel;
 		Eigen::Quaterniond quat;
 		time_point imu_time;
+		time_point publish_time;
 		imu_raw_type(Eigen::Matrix<double,3,1> w_hat_,
 					 Eigen::Matrix<double,3,1> a_hat_,
 					 Eigen::Matrix<double,3,1> w_hat2_,
@@ -192,7 +193,8 @@ namespace ILLIXR {
 					 Eigen::Matrix<double,3,1> pos_,
 					 Eigen::Matrix<double,3,1> vel_,
 					 Eigen::Quaterniond quat_,
-					 time_point imu_time_)
+					 time_point imu_time_,
+					 time_point publish_time_)
 			: w_hat{w_hat_}
 			, a_hat{a_hat_}
 			, w_hat2{w_hat2_}
@@ -201,6 +203,7 @@ namespace ILLIXR {
 			, vel{vel_}
 			, quat{quat_}
 			, imu_time{imu_time_}
+			, publish_time{publish_time_}
 		{ }
 	};
 

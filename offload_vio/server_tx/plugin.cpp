@@ -35,6 +35,8 @@ public:
 
 		last_send_time = timestamp();
 		socket.bind(Address(SERVER_IP, SERVER_PORT_2));	
+
+		
 	}
 
 
@@ -42,10 +44,10 @@ public:
 	// the callbeing being triggered before any data is written to slow_pose. This needs debugging.
     virtual void start() override {
         plugin::start();
-
-        sb->schedule<pose_type_prof>(id, "slow_pose_prof", [this](switchboard::ptr<const pose_type_prof> datum, std::size_t) {
+		sb->schedule<pose_type_prof>(id, "slow_pose_prof", [this](switchboard::ptr<const pose_type_prof> datum, std::size_t) {
 			this->send_vio_output(datum);
 		});
+        
 	}
 
 

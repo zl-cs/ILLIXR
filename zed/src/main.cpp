@@ -218,6 +218,7 @@ protected:
         }});
 
         _m_imu_cam.put(_m_imu_cam.allocate(
+            time_point{},
             0,
             imu_time_point,
             time_point{},
@@ -228,6 +229,8 @@ protected:
             img0,
             img1
 		));
+        std::cout << av.x() << "," << av.y() << "," << av.z() << "," 
+				<< la.x() << "," << la.y() << "," << la.z() << std::endl;
 
         if (rgb && depth) {
             _m_rgb_depth.put(_m_rgb_depth.allocate(

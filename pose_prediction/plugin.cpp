@@ -67,6 +67,7 @@ public:
                 future_timestamp,
             };
         }
+        // std::cout << "slow_pose recv to use time = " << (_m_clock->now() - slow_pose->recv_time).count() << "\n";
 
         switchboard::ptr<const imu_raw_type> imu_raw = _m_imu_raw.get_ro_nullable();
         if (imu_raw == nullptr) {
@@ -82,8 +83,7 @@ public:
         }
 
         // slow_pose and imu_raw, do pose prediction
-        std::cout << "slow_pose recv to use time = " << (_m_clock->now() - slow_pose->recv_time).count() << "\n";
-
+std::cout << "imu_raw publish to use time = " << (_m_clock->now() - imu_raw->publish_time).count() << "\n";
         double dt = duration2double(future_timestamp - imu_raw->imu_time);
         std::pair<Eigen::Matrix<double,13,1>, time_point> predictor_result = predict_mean_rk4(dt);
 

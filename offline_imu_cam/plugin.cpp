@@ -92,6 +92,7 @@ protected:
 
         _m_imu_cam.put(_m_imu_cam.allocate< imu_cam_type_prof>(
              imu_cam_type_prof {
+				time_point{},
 				0,
 				time_point{std::chrono::nanoseconds(dataset_now - dataset_first_time)},
 				time_point{},

@@ -24,7 +24,7 @@
 using namespace ILLIXR;
 // IMU sample time to live in seconds
 constexpr duration IMU_TTL {std::chrono::seconds{20}};
-constexpr int IMU_BUFFER_SIZE {1};
+// constexpr int IMU_BUFFER_SIZE {1};
 
 using ImuBias = gtsam::imuBias::ConstantBias;
 
@@ -217,25 +217,25 @@ private:
 		}
 
 // #ifndef NDEBUG
-        if (input_values->last_cam_integration_time > last_cam_time) {
-            // std::cout << "New slow pose has arrived!\n";
-            last_cam_time = input_values->last_cam_integration_time;
+        // if (input_values->last_cam_integration_time > last_cam_time) {
+        //     // std::cout << "New slow pose has arrived!\n";
+        //     last_cam_time = input_values->last_cam_integration_time;
 
-            _imu_integrator_input_buffer.push_back(input_values);
-            if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
-                return;
-            }
+        //     _imu_integrator_input_buffer.push_back(input_values);
+        //     if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
+        //         return;
+        //     }
 
-            if (_imu_integrator_input_buffer.size() > IMU_BUFFER_SIZE) {
-                _imu_integrator_input_buffer.erase(_imu_integrator_input_buffer.begin());
-            }
-        }
+        //     if (_imu_integrator_input_buffer.size() > IMU_BUFFER_SIZE) {
+        //         _imu_integrator_input_buffer.erase(_imu_integrator_input_buffer.begin());
+        //     }
+        // }
         
-        if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
-            return;
-        } else {
-            input_values = _imu_integrator_input_buffer.front();
-        }
+        // if (_imu_integrator_input_buffer.size() < IMU_BUFFER_SIZE) {
+        //     return;
+        // } else {
+        //     input_values = _imu_integrator_input_buffer.front();
+        // }
 // #endif
 
         if (_pim_obj == nullptr) {
@@ -294,14 +294,14 @@ private:
 
         auto seconds_since_epoch = std::chrono::duration<double>(real_time.time_since_epoch()).count();
 
-        raw_csv << std::fixed << real_time.time_since_epoch().count() << ","
-                << out_pose.x() << ","
-                << out_pose.y() << ","
-                << out_pose.z() << ","
-                << out_pose.rotation().toQuaternion().w() << ","
-                << out_pose.rotation().toQuaternion().x() << ","
-                << out_pose.rotation().toQuaternion().y() << ","
-                << out_pose.rotation().toQuaternion().z() << std::endl;
+        // raw_csv << std::fixed << real_time.time_since_epoch().count() << ","
+        //         << out_pose.x() << ","
+        //         << out_pose.y() << ","
+        //         << out_pose.z() << ","
+        //         << out_pose.rotation().toQuaternion().w() << ","
+        //         << out_pose.rotation().toQuaternion().x() << ","
+        //         << out_pose.rotation().toQuaternion().y() << ","
+        //         << out_pose.rotation().toQuaternion().z() << std::endl;
 
         //auto to_dregrees = [](double radians) -> double {
         //    return radians * 180 / M_PI;
@@ -360,14 +360,14 @@ private:
     //            }
     //    ));
 
-        filtered_csv << std::fixed << real_time.time_since_epoch().count() << ","
-                     << filtered_pos.x() << ","
-                     << filtered_pos.y() << ","
-                     << filtered_pos.z() << ","
-                     << new_quaternion.w() << ","
-                     << new_quaternion.x() << ","
-                     << new_quaternion.y() << ","
-                     << new_quaternion.z() << std::endl;
+        // filtered_csv << std::fixed << real_time.time_since_epoch().count() << ","
+        //              << filtered_pos.x() << ","
+        //              << filtered_pos.y() << ","
+        //              << filtered_pos.z() << ","
+        //              << new_quaternion.w() << ","
+        //              << new_quaternion.x() << ","
+        //              << new_quaternion.y() << ","
+        //              << new_quaternion.z() << std::endl;
 
         rpe_integrator_csv << std::fixed << dataset_time.time_since_epoch().count() / 1e9 << " "
                      << filtered_pos.x() << " "
@@ -391,11 +391,12 @@ private:
                         filtered_pos,             /// Position
                         filters[5](navstate_k.velocity().array(), seconds_since_epoch),              /// Velocity
                         new_quaternion, /// Eigen Quat
-                        real_time
+                        real_time,
+                        _m_clock->now()
                 }
         ));
 
-        std::cout << "imu_int_input recv to use time = " << (_m_clock->now() - input_values->recv_time).count() << "\n";
+        // std::cout << "imu_int_input recv to use time = " << (_m_clock->now() - input_values->recv_time).count() << "\n";
 
     }
 

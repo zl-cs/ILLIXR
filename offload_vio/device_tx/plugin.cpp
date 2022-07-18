@@ -2,6 +2,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
+#include "common/relative_clock.hpp"
 
 #include <opencv2/core/mat.hpp>
 #include <filesystem>
@@ -32,6 +33,7 @@ public:
 		}
 		
 		hashed_data.open(data_path + "/hash_device_tx.txt");
+		imu_send.open(data_path + "/imu_send.csv"); 
 	}
 
 
@@ -39,8 +41,10 @@ public:
         plugin::start();
 
 		cout << "TEST: Connecting to " << server_addr.str(":") << endl;
+		auto before_connect = timestamp();
 		socket.connect(server_addr);
-		cout << "Connected to " << server_addr.str(":") << endl;	
+		cout << "Connection takes " << timestamp() - before_connect << "ms\n";
+		cout << "Connected to " << server_addr.str(":") << endl;
 
         sb->schedule<imu_cam_type_prof>(id, "imu_cam", [this](switchboard::ptr<const imu_cam_type_prof> datum, std::size_t) {
 			this->send_imu_cam_data(datum);
@@ -72,6 +76,9 @@ public:
 		linear_accel->set_y(datum->linear_a.y());
 		linear_accel->set_z(datum->linear_a.z());
 		imu_cam_data->set_allocated_linear_accel(linear_accel);
+
+		imu_send << datum->time.time_since_epoch().count() << "," << datum->angular_v.x() << "," << datum->angular_v.y() << "," << datum->angular_v.z() << "," 
+					 << datum->linear_a.x() << "," << datum->linear_a.y() << "," << datum->linear_a.z() << std::endl; 
 
       	if (!datum->img0.has_value() && !datum->img1.has_value()) {
 			imu_cam_data->set_rows(-1);
@@ -121,6 +128,7 @@ private:
 
 	const string data_path = filesystem::current_path().string() + "/recorded_data";
 	std::ofstream hashed_data;
+	std::ofstream imu_send;
 };
 
 PLUGIN_MAIN(offload_writer)
