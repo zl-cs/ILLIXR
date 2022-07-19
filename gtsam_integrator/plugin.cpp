@@ -347,18 +347,18 @@ private:
 
         auto filtered_pos = filters[4](out_pose.translation().array(), seconds_since_epoch).matrix();
 
-//        _m_imu_raw.put(_m_imu_raw.allocate<imu_raw_type>(
-//                imu_raw_type {
-//                        prev_bias.gyroscope(),
-//                        prev_bias.accelerometer(),
-//                        bias.gyroscope(),
-//                        bias.accelerometer(),
-//                        out_pose.translation(),             /// Position
-//                        navstate_k.velocity(),              /// Velocity
-//                        out_pose.rotation().toQuaternion(), /// Eigen Quat
-//                        real_time
-//                }
-//        ));
+    //    _m_imu_raw.put(_m_imu_raw.allocate<imu_raw_type>(
+    //            imu_raw_type {
+    //                    prev_bias.gyroscope(),
+    //                    prev_bias.accelerometer(),
+    //                    bias.gyroscope(),
+    //                    bias.accelerometer(),
+    //                    out_pose.translation(),             /// Position
+    //                    navstate_k.velocity(),              /// Velocity
+    //                    out_pose.rotation().toQuaternion(), /// Eigen Quat
+    //                    real_time
+    //            }
+    //    ));
 
         filtered_csv << std::fixed << real_time.time_since_epoch().count() << ","
                      << filtered_pos.x() << ","
@@ -394,6 +394,8 @@ private:
                         real_time
                 }
         ));
+
+        std::cout << "imu_int_input recv to use time = " << (_m_clock->now() - input_values->recv_time).count() << "\n";
 
     }
 
