@@ -67,7 +67,7 @@ public:
 			read_socket = new TCPSocket( FileDescriptor( SystemCall( "accept", ::accept( socket.fd_num(), nullptr, nullptr) ) ) ); /* Blocking operation, waiting for client to connect */
 			cout << "Connection is established with " << read_socket->peer_address().str(":") << endl;
 		} else {
-			auto now = timestamp();
+			// auto now = timestamp();
 			string delimitter = "END!";
 			// auto before_read = timestamp();
 			string recv_data = read_socket->read(); /* Blocking operation, wait for the data to come */
@@ -91,7 +91,10 @@ public:
 						auto hash_result = hasher(before);
 						hashed_data << vio_input.frame_id() << "\t" << hash_result << endl;
 						// cout << "vio_input: " << &(vio_input) << "\n";
+						// cout << "Recv time = " << timestamp() - now << endl;
+						// now = timestamp();
 						ReceiveVioInput(vio_input);
+						
 					}
 					end_position = buffer_str.find(delimitter);
 					// cout << "buffer_str: " << &buffer_str << "\n";
@@ -128,21 +131,45 @@ private:
 				auto img0_copy = std::make_shared<std::string>(std::string(curr_data.img0_data()));
 				auto img1_copy = std::make_shared<std::string>(std::string(curr_data.img1_data()));
 				// cout << "curr_data.img0_data(): " << &(curr_data.img0_data()) << "\n";
-				cout << "img0_copy " << (void*)img0_copy->data() << "\n";
+				// cout << "img0_copy " << (void*)img0_copy->data() << "\n";
+				// cout << "img0 use count (1)" << img0_copy.use_count() << "\n";
 
 				cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)img0_copy->data());
 				cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)img1_copy->data());
-				cout << "img0 " << (void*)(img0.data) << "\n";
+				if (img0.u) cout << "img0 refcount (1) " << img0.u->refcount << "\n";
+				// cout << "img0 " << (void*)(img0.data) << "\n";
+				// cout << "img0 use count (2)" << img0_copy.use_count() << "\n";
 
 				cam0 = std::make_optional<cv::Mat>(img0.clone());
 				cam1 = std::make_optional<cv::Mat>(img1.clone());
-				cout << "cam0 " << (void*)(cam0.value().data) << "\n";
+				// cout << "img0 refcount (2) " << img0.u->refcount << "\n";
+				cout << "cam0 refcount (3) " << cam0.value().u->refcount << "\n";
+				// cout << "img0 use count (3)" << img0_copy.use_count() << "\n";
+				// cout << "cam0 address " << &cam0 << "\n";
+				// cout << "cam0 " << (void*)(cam0.value().data) << "\n";
 
-				cv::imwrite(cam0_dir + std::to_string(vio_input.frame_id()) + ".png", cam0.value());
-				cv::imwrite(cam1_dir + std::to_string(vio_input.frame_id()) + ".png", cam1.value());
+				_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
+					imu_cam_type_prof {
+						_m_clock->now(),
+						vio_input.frame_id(),
+						time_point{std::chrono::nanoseconds{curr_data.timestamp()}},
+						time_point{std::chrono::nanoseconds{vio_input.real_timestamp()}}, // Timestamp of when the device sent the packet
+						time_point{std::chrono::nanoseconds{curr_time}}, // Timestamp of receive time of the packet
+						time_point{std::chrono::nanoseconds{vio_input.dataset_timestamp()}}, // Timestamp of the sensor data
+						Eigen::Vector3f{curr_data.angular_vel().x(), curr_data.angular_vel().y(), curr_data.angular_vel().z()},
+						Eigen::Vector3f{curr_data.linear_accel().x(), curr_data.linear_accel().y(), curr_data.linear_accel().z()},
+						cam0,
+						cam1
+					}
+				));	
+				// cout << "img0 use count (4)" << img0_copy.use_count() << "\n";
+
+				// cv::imwrite(cam0_dir + std::to_string(vio_input.frame_id()) + ".png", cam0.value());
+				// cv::imwrite(cam1_dir + std::to_string(vio_input.frame_id()) + ".png", cam1.value());
 
 			}
 // time_point before_put = _m_clock->now();
+else {
 			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
 				imu_cam_type_prof {
 					_m_clock->now(),
@@ -157,9 +184,10 @@ private:
 					cam1
 				}
 			));	
+}
 // std::cout << "put takes " << (_m_clock->now() - before_put).count() << " ns \n";
-			imu_recv << curr_data.timestamp() << "," << curr_data.angular_vel().x() << "," << curr_data.angular_vel().y() << "," << curr_data.angular_vel().z() << "," 
-					 << curr_data.linear_accel().x() << "," << curr_data.linear_accel().y() << "," << curr_data.linear_accel().z() << std::endl;
+			// imu_recv << curr_data.timestamp() << "," << curr_data.angular_vel().x() << "," << curr_data.angular_vel().y() << "," << curr_data.angular_vel().z() << "," 
+			// 		 << curr_data.linear_accel().x() << "," << curr_data.linear_accel().y() << "," << curr_data.linear_accel().z() << std::endl;
 			
 
 		}
@@ -186,6 +214,8 @@ private:
 
 	std::string cam0_dir = data_path + "/cam0/";
 	std::string cam1_dir = data_path + "/cam1/";
+
+	uint64_t now = timestamp();
 };
 
 PLUGIN_MAIN(server_reader)
