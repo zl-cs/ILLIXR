@@ -42,6 +42,7 @@ enable_offload:   False
 enable_alignment: False
 enable_verbose_errors: False
 enable_pre_sleep: False
+enable_logging: False
 # realsense_cam: auto
 
 action:
