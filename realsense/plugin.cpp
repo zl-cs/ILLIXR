@@ -40,6 +40,7 @@ public:
         // Without this lock, prior invocations of `callback` are not necessarily "happens-before" ordered, so accessing
         // persistent variables constitutes a data-race, which is undefined behavior in the C++ memory model.
 
+        if (!_m_clock->is_started()) return;
         if (cam_select == D4XXI) {
             if (auto fs = frame.as<rs2::frameset>()) {
                 rs2::video_frame ir_frame_left  = fs.get_infrared_frame(1);

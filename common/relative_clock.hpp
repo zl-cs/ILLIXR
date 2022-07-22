@@ -123,6 +123,13 @@ public:
         _m_start = std::chrono::steady_clock::now();
     }
 
+    /**
+     * @brief Check if the clock is started.
+     */
+    bool is_started() const {
+        return _m_start > std::chrono::steady_clock::time_point{};
+    }
+
 private:
     std::chrono::steady_clock::time_point _m_start;
 };
