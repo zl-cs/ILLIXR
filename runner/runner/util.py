@@ -463,6 +463,10 @@ Returns:
             raise ValueError(
                 f"{path_descr} points to a dir (because of the git_repo scheme) not a file"
             )
+        # To run with open xr app offline, uncomment this elif and comment out the one at line 486
+        # Make sure the desired repo is already cached
+        # elif cache_dest.exists():
+            # return cache_dest
         elif "version" in path_descr:
             repo_path = pathify(dict(git_repo=path_descr["git_repo"]), base, cache_path, True, True)
             subprocess_run(
