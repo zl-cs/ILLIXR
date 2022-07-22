@@ -1,7 +1,7 @@
 plugin_groups:
   - plugin_group:
-      # - path: offline_imu_cam/
-      - path: zed/
+      - path: offline_imu_cam/
+      # - path: zed/
       # - path: rk4_integrator/
       - path: gtsam_integrator/
       # - path: passthrough_integrator/
@@ -10,6 +10,7 @@ plugin_groups:
       - path: gldemo/
       - path: debugview/
       # - path: offload_data/
+      # - path: record_imu_cam
       - path: offload_vio/device_rx/
       - path: offload_vio/device_tx/
   - !include "core_plugins.yaml"
@@ -25,6 +26,7 @@ enable_offload:   False
 enable_alignment: False
 enable_verbose_errors: False
 enable_pre_sleep: False
+enable_logging: True
 # realsense_cam: auto
 
 action:
