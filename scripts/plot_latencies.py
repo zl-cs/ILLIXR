@@ -8,9 +8,7 @@ vio_time = {}
 pose_transfer_time = {}
 roundtrip_time = {}
 
-# DIR_NAME = "offload_unconstrained"
-# DIR_NAME = "offload_constrained"
-DIR_NAME = "offload_24"
+DIR_NAME = "recorded_data"
 
 with open('../' + DIR_NAME + '/receive_time.csv', mode='r') as input:
     reader = csv.reader(input)
