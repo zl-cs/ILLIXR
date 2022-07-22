@@ -170,6 +170,9 @@ properties:
   enable_pre_sleep:
     type: boolean
     description: Flag to activate sleeping at application start for attaching gdb. Disables 'catchsegv'.
+  enable_logging:
+    type: boolean
+    description: Flag to activate cpu_timer logging.
   profile:
     default: dbg
     type: string

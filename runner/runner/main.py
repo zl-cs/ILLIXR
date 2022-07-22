@@ -93,9 +93,13 @@ def build_runtime(
 def load_native(config: Mapping[str, Any]) -> None:
     runtime_exe_path = build_runtime(config, "exe")
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
+    # To use recorded dataset
+    # data_path = pathify(config["data"], root_dir, root_dir / "data_record", True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
+    enable_logging = "y" if config["enable_logging"]==True else "n"
+    print(enable_logging)
     realsense_cam_string = config["realsense_cam"]
     plugin_paths = threading_map(
         lambda plugin_config: build_one_plugin(config, plugin_config),
@@ -112,6 +116,7 @@ def load_native(config: Mapping[str, Any]) -> None:
         ILLIXR_ENABLE_VERBOSE_ERRORS=str(config["enable_verbose_errors"]),
         ILLIXR_RUN_DURATION=str(config["action"].get("ILLIXR_RUN_DURATION", 600)),
         ILLIXR_ENABLE_PRE_SLEEP=str(config["enable_pre_sleep"]),
+        ILLIXR_STDOUT_METRICS=str(enable_logging),
         KIMERA_ROOT=config["action"]["kimera_path"],
         AUDIO_ROOT=config["action"]["audio_path"],
         REALSENSE_CAM=str(realsense_cam_string),
@@ -156,6 +161,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
+    enable_logging = "y" if config["enable_logging"]==True else "n"
     env_override: Mapping[str, str] = dict(ILLIXR_INTEGRATION="yes")
     make(Path("common"), ["tests/run"], env_override=env_override)
     realsense_cam_string = config["realsense_cam"]
@@ -181,6 +187,7 @@ def load_tests(config: Mapping[str, Any]) -> None:
             ILLIXR_ALIGNMENT_ENABLE=str(enable_alignment_flag),
             ILLIXR_ENABLE_VERBOSE_ERRORS=str(config["enable_verbose_errors"]),
             ILLIXR_ENABLE_PRE_SLEEP=str(enable_pre_sleep),
+            ILLIXR_STDOUT_METRICS=str(enable_logging),
             KIMERA_ROOT=config["action"]["kimera_path"],
             AUDIO_ROOT=config["action"]["audio_path"],
             REALSENSE_CAM=str(realsense_cam_string),
@@ -199,9 +206,12 @@ def load_monado(config: Mapping[str, Any]) -> None:
     monado_config = config["action"]["monado"].get("config", {})
     monado_path = pathify(config["action"]["monado"]["path"], root_dir, cache_path, True, True)
     data_path = pathify(config["data"], root_dir, cache_path, True, True)
+    # To use recorded dataset
+    # data_path = pathify(config["data"], root_dir, root_dir / "data_record", True, True)
     demo_data_path = pathify(config["demo_data"], root_dir, cache_path, True, True)
     enable_offload_flag = config["enable_offload"]
     enable_alignment_flag = config["enable_alignment"]
+    enable_logging = "y" if config["enable_logging"]==True else "n"
     realsense_cam_string = config["realsense_cam"]
 
     is_mainline: bool = bool(config["action"]["is_mainline"])
@@ -262,7 +272,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
         openxr_app_path     = None
         openxr_app_bin_path = pathify(openxr_app_obj["app"], root_dir, cache_path, True, True)
 
-    ## Compile the OpenXR app if we received an 'app' with 'src_path'
+    # Compile the OpenXR app if we received an 'app' with 'src_path'
     if openxr_app_path:
         cmake(
             openxr_app_path,
@@ -304,6 +314,7 @@ def load_monado(config: Mapping[str, Any]) -> None:
                 ILLIXR_ALIGNMENT_ENABLE=str(enable_alignment_flag),
                 ILLIXR_ENABLE_VERBOSE_ERRORS=str(config["enable_verbose_errors"]),
                 ILLIXR_ENABLE_PRE_SLEEP=str(config["enable_pre_sleep"]),
+                ILLIXR_STDOUT_METRICS=str(enable_logging),
                 KIMERA_ROOT=config["action"]["kimera_path"],
                 AUDIO_ROOT=config["action"]["audio_path"],
                 REALSENSE_CAM=str(realsense_cam_string),
