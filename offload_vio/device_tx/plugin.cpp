@@ -1,14 +1,13 @@
 #include <ecal/ecal.h>
 #include <ecal/msg/protobuf/publisher.h>
 #include <opencv2/core/mat.hpp>
-
+#include <opencv2/opencv.hpp>
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
 #include "common/plugin.hpp"
 #include "common/switchboard.hpp"
 
 #include "vio_input.pb.h"
-
 // ffmpeg
 extern "C" {
     #include "libavcodec/avcodec.h"
@@ -56,7 +55,14 @@ public:
         context->time_base = (AVRational) {1, 20};
 
         // Let's aim for 1.1 Mbps with no B-Frames
-        context->bit_rate = 11000000;
+        //context->bit_rate = 1100000;
+        context->bit_rate = 1000000;
+        //context->bit_rate = 800000;
+        //context->bit_rate = 600000;
+        //context->bit_rate = 400000;
+        //context->bit_rate = 200000;
+        //context->bit_rate = 100000;
+        //context->bit_rate = 50000;
         //0 indicates intra-only coding(iAVC)
         context->gop_size = 0;
         context->max_b_frames = 0;
@@ -149,6 +155,23 @@ public:
             exit(1);
         }
         
+        //testing: Initialize a decoder
+        //const AVCodec *decoder = avcodec_find_decoder_by_name("h264_cuvid");
+        //dec_context = avcodec_alloc_context3(decoder);
+        //// Create hardware device context
+        //ret = av_hwdevice_ctx_create(&dec_context->hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, NULL, NULL, 0);
+        //if (ret) {
+        //    ILLIXR::abort("Failed to create hardware device context");
+        //} else {
+        //    std::cout << "Created hardware device context\n";
+        //}
+        //ret = avcodec_open2(dec_context, decoder, NULL);
+        //if (ret) {
+        //    ILLIXR::abort("Failed to open context");
+        //} else {
+        //    std::cout << "opened codec context\n";
+        //}
+        
         // Initialize eCAL
         eCAL::Initialize(0, NULL, "VIO Device Transmitter");
         publisher = eCAL::protobuf::CPublisher<vio_input_proto::IMUCamVec>("vio_input");
@@ -157,6 +180,7 @@ public:
     }
 
     virtual ~offload_writer() override {
+        
         av_frame_free(&frame);
         avcodec_free_context(&context);
     }
@@ -179,6 +203,7 @@ public:
 
         //pyh add encoding
         //modified from https://gist.github.com/foowaa/1d296a9dee81c7a2a52f291c95e55680
+        vio_input_proto::IMUCamData* imu_cam_data = data_buffer->add_imu_cam_data();
 
         if(datum->img0.has_value())
         {
@@ -192,12 +217,10 @@ public:
             ////allocate an image with size w and h and pixel format pix_fmt and fill pointers and linesizes accordingly
             ////0RGB32 corresponds to ARGB, 1 means align the value to use for buffer size alignment
             av_image_alloc(img0_swframe->data, img0_swframe->linesize, width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, 1);
-            //
             ////sws -> ffmpeg color conversion and scaling libbrary?
             ////allocate and return an SwsContext, one need it to perform scaling/conversion operations using sws_scale
             ////parameters: src_width, src_height, srcFormat, dest_width, dest_height, dest_format, algo to rescale, src_filter, dst_filter, extra param
             SwsContext *conversion = sws_getContext(width,height,AVPixelFormat::AV_PIX_FMT_GRAY8,width,height, (AVPixelFormat)AV_PIX_FMT_YUV420P,SWS_BICUBIC,NULL,NULL,NULL);
-            //
             ////scale the image slice in srcSlice, and put the resulting scaled slice in the image in dst
             ////params:
             ////  1. swscontext
@@ -207,54 +230,89 @@ public:
             ////  5. the height of the source slice, that is the number of rows in the slice,
             ////  6. dst, the array containing the pointers to the plane of the destination image
             ////  7. dstStride, the array containing the strides of each plane of the destination image
-            sws_scale(conversion, &datum->img0->data, cvLinesizes, 0, height, img0_swframe->data, img0_swframe->linesize);
-           
+            //sws_scale(conversion, &datum->img0->data, cvLinesizes, 0, height, img0_swframe->data, img0_swframe->linesize);
+            //dumping img1
+            sws_scale(conversion, &datum->img1->data, cvLinesizes, 0, height, img0_swframe->data, img0_swframe->linesize);
             sws_freeContext(conversion);
-            //
-            //av_frame_copy(frame,img0_hwframe);
-        }
-        int ret;
-        
-        //ret = av_frame_get_buffer(img0_swframe,0);
-        fflush(stdout);
-        ret = av_frame_is_writable(frame);
-        if(ret < 0){
-            std::cout<<"frame not writeable\n";
-            exit(1);
-        }
-        //transfer from or to a hw surface, first param dst
-        ret = av_hwframe_transfer_data(frame,img0_swframe,0);
-        if(ret < 0){
-            std::cout<<"sw->hw transfer not successful\n";
-            exit(1);
-        }
-        
-        //encode every frame of video
-        //supply a raw video frame to encoder
-        ret = avcodec_send_frame(context,frame);
-        if(ret < 0)
-        {
-            std::cout<<"error sending a frame for encoding\n";
-            exit(1);
-        }
-
-        //read encoded data from the coder
-        while( ret>=0)
-        {
-            ret = avcodec_receive_packet(context,img0_pkt);
-            if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                continue;
-                //std::cout<<"no input or EOF\n";
-            else if (ret < 0){
-                std::cout<<"Error during encoding\n";
-            }
-        }
-        //std::cout<<"received a packet\n";
          
+            int ret;
+            fflush(stdout);
+            ret = av_frame_is_writable(frame);
+            
+            if(ret < 0){
+                std::cout<<"frame not writeable\n";
+                exit(1);
+            } 
+            //dump frame to image
+            std::string seq_num = std::to_string(image_count);
+            //std::string convert_loc =  image_convert_loc + seq_num + ".yuv";
+            //f_convert = fopen(convert_loc.c_str(),"wb"); 
+            //for(int i=0; i < img0_swframe->height; i++)
+            //{        
+            //    fwrite(img0_swframe->data[0] + i * img0_swframe->linesize[0], 1, img0_swframe->width, f_convert);        
+            //}
+            //fclose(f_convert);
+            
+            //convert img0_swframe back to cv::Mat for sanity check
+            //std::string ori_loc =  image_ori_loc + seq_num + ".png";
+            //cv::Mat image(img0_swframe->height, img0_swframe->width, CV_8UC3);
+            //SwsContext* conversion = sws_getContext(img0_swframe->width, img0_swframe->height, (AVPixelFormat) img0_swframe->format, img0_swframe->width, img0_swframe->height, AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);  
+            //int cvLineSizes[1];
+            //cvLineSizes[0] = image.step1();
+            //sws_scale(conversion, img0_swframe->data, img0_swframe->linesize, 0, img0_swframe->height, &image.data,cvLineSizes);  
+            //sws_freeContext(conversion);
+            //cv::imwrite(ori_loc,image);
+            
+            //transfer from or to a hw surface, first param dst
+            ret = av_hwframe_transfer_data(frame,img0_swframe,0);
+            if(ret < 0){
+                std::cout<<"sw->hw transfer not successful\n";
+                exit(1);
+            }
+            
+            //encode every frame of video
+            //supply a raw video frame to encoder
+            ret = avcodec_send_frame(context,frame);
+            if(ret < 0)
+            {
+                std::cout<<"error sending a frame for encoding\n";
+                exit(1);
+            }
+
+            //std::cout<<"received a packet\n";
+            std::string final_loc =  image_generating_loc + seq_num + ".h264";
+            std::cout<<"writing encoded images to "<<final_loc<<"\n";
+            f = fopen(final_loc.c_str(),"wb"); 
+            
+            //read encoded data from the coder
+            while( ret>=0)
+            {
+                ret = avcodec_receive_packet(context,img0_pkt);
+                if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                    continue;
+                else if (ret < 0){
+                    std::cout<<"Error during encoding\n";
+                }
+                printf("Write packet %d (size=%5d)\n", image_count, img0_pkt->size);
+                encoded_size+=img0_pkt->size;
+                //pyh add pkt to ecal message
+                imu_cam_data->set_img0_pkt((void*) img0_pkt->data, img0_pkt->size);
+                fwrite(img0_pkt->data, 1, img0_pkt->size, f);
+                fclose(f);
+                //av_packet_unref(img0_pkt);
+
+            }
+            //pyh now img0_pkt suppose to have the encoded image
+            //every imu reading generates an image
+            image_count++;
+            //fclose(f);
+            //printf("one frame done\n"); 
+
+        }   
+        
         assert(datum->time.time_since_epoch().count() > previous_timestamp);
         previous_timestamp = datum->time.time_since_epoch().count();
 
-        vio_input_proto::IMUCamData* imu_cam_data = data_buffer->add_imu_cam_data();
         imu_cam_data->set_timestamp(datum->time.time_since_epoch().count());
 
         vio_input_proto::Vec3* angular_vel = new vio_input_proto::Vec3();
@@ -270,21 +328,19 @@ public:
         imu_cam_data->set_allocated_linear_accel(linear_accel);
 
         if (!datum->img0.has_value() && !datum->img1.has_value()) {
-            imu_cam_data->set_rows(-1);
-            imu_cam_data->set_cols(-1);
+           imu_cam_data->set_rows(-1);
+           imu_cam_data->set_cols(-1);
 
         } else {
-            cv::Mat img0{(datum->img0.value()).clone()};
-            cv::Mat img1{(datum->img1.value()).clone()};
+           cv::Mat img0{(datum->img0.value()).clone()};
+           cv::Mat img1{(datum->img1.value()).clone()};
 
-            imu_cam_data->set_rows(img0.rows);
-            imu_cam_data->set_cols(img0.cols);
+           imu_cam_data->set_rows(img0.rows);
+           imu_cam_data->set_cols(img0.cols);
 
-            imu_cam_data->set_img0_data((void*) img0.data, img0.rows * img0.cols);
-            imu_cam_data->set_img1_data((void*) img1.data, img1.rows * img1.cols);
+           imu_cam_data->set_img0_data((void*) img0.data, img0.rows * img0.cols);
+           imu_cam_data->set_img1_data((void*) img1.data, img1.rows * img1.cols);
 
-            //pyh add pkt to ecal message
-            imu_cam_data->set_img0_pkt((void*) img0_pkt->data, img0_pkt->size);
 
             data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
             data_buffer->set_dataset_timestamp(datum->dataset_time.time_since_epoch().count());
@@ -298,7 +354,9 @@ public:
             publisher.Send(*data_buffer);
             delete data_buffer;
             data_buffer = new vio_input_proto::IMUCamVec();
+            std::cout<<"current encoded total size: "<<encoded_size<<"\n";
         }
+    
     }
 
 private:
@@ -313,7 +371,16 @@ private:
     AVPacket *img0_pkt;
 
     AVCodecContext *context;
+    AVCodecContext *dec_context;
     AVFrame *frame;
+
+    int encoded_size=0;
+    int image_count=0;
+    std::string image_generating_loc = "encoded_images/";
+    std::string image_ori_loc = "original_images/";
+    std::string image_convert_loc = "converted_images/";
+    FILE *f;
+    FILE *f_convert;
 };
 
 PLUGIN_MAIN(offload_writer)
