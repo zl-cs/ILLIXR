@@ -1,5 +1,8 @@
-#include "common/plugin.hpp"
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 
+#include "common/plugin.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
 #include "common/pose_prediction.hpp"
@@ -18,7 +21,15 @@ public:
         , _m_imu_raw{sb->get_reader<imu_raw_type>("imu_raw")}
         , _m_true_pose{sb->get_reader<pose_type>("true_pose")}
         , _m_ground_truth_offset{sb->get_reader<switchboard::event_wrapper<Eigen::Vector3f>>("ground_truth_offset")}
-        , _m_vsync_estimate{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")} { }
+		, _m_vsync_estimate{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
+    {
+        if (!std::filesystem::exists(data_path)) {
+			if (!std::filesystem::create_directory(data_path)) {
+				std::cerr << "Failed to create data directory.";
+			}
+		}
+        pred_pose_csv.open(data_path + "/pred_pose.csv");
+    }
 
     // No parameter get_fast_pose() should just predict to the next vsync
     // However, we don't have vsync estimation yet.
@@ -98,6 +109,19 @@ public:
                                           static_cast<float>(state_plus(6))},
                           Eigen::Quaternionf{static_cast<float>(state_plus(3)), static_cast<float>(state_plus(0)),
                                              static_cast<float>(state_plus(1)), static_cast<float>(state_plus(2))}});
+
+        if (future_timestamp > last_pose_time) {
+            pred_pose_csv << future_timestamp.time_since_epoch().count() << ","
+                << predicted_pose.position.x() << ","
+                << predicted_pose.position.y() << ","
+                << predicted_pose.position.z() << ","
+                << predicted_pose.orientation.w() << ","
+                << predicted_pose.orientation.x() << ","
+                << predicted_pose.orientation.y() << ","
+                << predicted_pose.orientation.z() << std::endl;
+        }
+        last_pose = predicted_pose;
+        last_pose_time = future_timestamp;
 
         // Make the first valid fast pose be straight ahead.
         if (first_time) {
@@ -196,9 +220,16 @@ private:
     switchboard::reader<imu_raw_type>                                _m_imu_raw;
     switchboard::reader<pose_type>                                   _m_true_pose;
     switchboard::reader<switchboard::event_wrapper<Eigen::Vector3f>> _m_ground_truth_offset;
-    switchboard::reader<switchboard::event_wrapper<time_point>>      _m_vsync_estimate;
-    mutable Eigen::Quaternionf                                       offset{Eigen::Quaternionf::Identity()};
-    mutable std::shared_mutex                                        offset_mutex;
+    switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync_estimate;
+	mutable Eigen::Quaternionf offset {Eigen::Quaternionf::Identity()};
+	mutable std::shared_mutex offset_mutex;
+
+    const std::string data_path = std::filesystem::current_path().string() + "/recorded_data";
+	mutable std::ofstream pred_pose_csv;
+
+    mutable pose_type last_pose;
+    mutable time_point last_pose_time;
+    
 
     // Slightly modified copy of OpenVINS method found in propagator.cpp
     // Returns a pair of the predictor state_plus and the time associated with the
