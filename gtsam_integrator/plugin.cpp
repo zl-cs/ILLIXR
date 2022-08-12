@@ -294,9 +294,9 @@ private:
                 << out_pose.rotation().toQuaternion().y() << ","
                 << out_pose.rotation().toQuaternion().z() << std::endl;
 
-        auto to_dregrees = [](double radians) -> double {
-            return radians * 180 / M_PI;
-        };
+        // auto to_dregrees = [](double radians) -> double {
+        //     return radians * 180 / M_PI;
+        // };
 
         auto original_quaternion = out_pose.rotation().toQuaternion();
         Eigen::Matrix<double, 3, 1> rotation_angles = original_quaternion.toRotationMatrix().eulerAngles(0, 1, 2).cast<double>();
@@ -310,7 +310,7 @@ private:
             abs(rotation_angles[2] - prev_euler_angles[2]) > M_PI / 2)) {
             filters[6].clear();
             filters[7].clear();
-            std::cout << "clear filter" << std::endl;
+            // std::cout << "clear filter" << std::endl;
 //            std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
 //                      << to_dregrees(rotation_angles[2]) << "  --->  "
 //                      << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
@@ -325,10 +325,10 @@ private:
             has_prev = true;
         }
 
-        std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
-                  << to_dregrees(rotation_angles[2]) << "  --->  "
-                  << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
-                  << to_dregrees(filtered_angles[2]) << std::endl;
+        // std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
+        //           << to_dregrees(rotation_angles[2]) << "  --->  "
+        //           << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
+        //           << to_dregrees(filtered_angles[2]) << std::endl;
 
         prev_euler_angles = std::move(rotation_angles);
 
@@ -355,10 +355,10 @@ private:
                      << filtered_pos.x() << ","
                      << filtered_pos.y() << ","
                      << filtered_pos.z() << ","
-                     << original_quaternion.w() << ","
-                     << original_quaternion.x() << ","
-                     << original_quaternion.y() << ","
-                     << original_quaternion.z() << std::endl;
+                     << new_quaternion.w() << ","
+                     << new_quaternion.x() << ","
+                     << new_quaternion.y() << ","
+                     << new_quaternion.z() << std::endl;
 
         rpe_integrator_csv << std::fixed << dataset_time.time_since_epoch().count() / 1e9 << " "
                      << filtered_pos.x() << " "
