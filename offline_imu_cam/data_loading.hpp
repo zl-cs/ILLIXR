@@ -14,7 +14,6 @@
 
 
 typedef unsigned long long ullong;
-
 typedef struct {
 	Eigen::Vector3d angular_v;
 	Eigen::Vector3d linear_a;
@@ -26,7 +25,8 @@ public:
 		: _m_path(path)
 	{ }
 	std::unique_ptr<cv::Mat> load() const {
-		auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_GRAYSCALE)}};
+        std::cout<<"reading file : "<<_m_path<<"\n";
+        auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_GRAYSCALE)}};
 		assert(!img->empty());
 		return img;
 	}
@@ -66,6 +66,8 @@ load_data() {
 		data[t].imu0 = {av, la};
 	}
 
+	//const std::string cam0_subpath = "/cam0_pyh_short/data.csv";
+	//const std::string cam0_subpath = "/cam0_pyh/data.csv";
 	const std::string cam0_subpath = "/cam0/data.csv";
 	std::ifstream cam0_file {illixr_data + cam0_subpath};
 	if (!cam0_file.good()) {
@@ -75,19 +77,45 @@ load_data() {
 	for (CSVIterator row{cam0_file, 1}; row != CSVIterator{}; ++row) {
 		ullong t = std::stoull(row[0]);
 		data[t].cam0 = {illixr_data + "/cam0/data/" + row[1]};
+		//data[t].cam0 = {illixr_data + "/cam0_pyh_short/" + row[1]};
+		//data[t].cam0 = {illixr_data + "/cam0_pyh/" + row[1]};
 	}
 
+	//const std::string cam1_subpath = "/cam1_pyh_short/data.csv";
+	//const std::string cam1_subpath = "/cam1_pyh/data.csv";
 	const std::string cam1_subpath = "/cam1/data.csv";
 	std::ifstream cam1_file {illixr_data + cam1_subpath};
 	if (!cam1_file.good()) {
 		std::cerr << "${ILLIXR_DATA}" << cam1_subpath << " (" << illixr_data << cam1_subpath << ") is not a good path" << std::endl;
         ILLIXR::abort();
 	}
-	for (CSVIterator row{cam1_file, 1}; row != CSVIterator{}; ++row) {
+    for (CSVIterator row{cam1_file, 1}; row != CSVIterator{}; ++row) {
 		ullong t = std::stoull(row[0]);
-		std::string fname = row[1];
 		data[t].cam1 = {illixr_data + "/cam1/data/" + row[1]};
+		//data[t].cam1 = {illixr_data + "/cam1_pyh_short/" + row[1]};
+		//data[t].cam1 = {illixr_data + "/cam1_pyh/" + row[1]};
 	}
+	
+    //const std::string cam0_subpath = "/cam0/data.csv";
+	//std::ifstream cam0_file {illixr_data + cam0_subpath};
+	//if (!cam0_file.good()) {
+	//	std::cerr << "${ILLIXR_DATA}" << cam0_subpath << " (" << illixr_data << cam0_subpath << ") is not a good path" << std::endl;
+    //    ILLIXR::abort();
+	//}
+	//for (CSVIterator row{cam0_file, 1}; row != CSVIterator{}; ++row) {
+	//	ullong t = std::stoull(row[0]);
+	//	data[t].cam0 = {illixr_data + "/cam0/data/" + row[1]};
+	//}
 
+	//const std::string cam1_subpath = "/cam1/data.csv";
+	//std::ifstream cam1_file {illixr_data + cam1_subpath};
+	//if (!cam1_file.good()) {
+	//	std::cerr << "${ILLIXR_DATA}" << cam1_subpath << " (" << illixr_data << cam1_subpath << ") is not a good path" << std::endl;
+    //    ILLIXR::abort();
+	//}
+    //for (CSVIterator row{cam1_file, 1}; row != CSVIterator{}; ++row) {
+	//	ullong t = std::stoull(row[0]);
+	//	data[t].cam1 = {illixr_data + "/cam1/data/" + row[1]};
+	//}
 	return data;
 }

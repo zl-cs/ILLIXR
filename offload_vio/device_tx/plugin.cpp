@@ -50,21 +50,16 @@ public:
         // EuRoC is 752x480 at 20 fps
         context->codec_type = AVMEDIA_TYPE_VIDEO;
         context->width = 752;
+        //480*2 pyh: we are merging two opencv into one before passing
         context->height = 480;
         context->framerate = (AVRational) {20, 1};
         context->time_base = (AVRational) {1, 20};
 
         // Let's aim for 1.1 Mbps with no B-Frames
-        //context->bit_rate = 1100000;
-        context->bit_rate = 1000000;
-        //context->bit_rate = 800000;
-        //context->bit_rate = 600000;
-        //context->bit_rate = 400000;
-        //context->bit_rate = 200000;
-        //context->bit_rate = 100000;
-        //context->bit_rate = 50000;
+        context->bit_rate =   4000000;
+        
         //0 indicates intra-only coding(iAVC)
-        context->gop_size = 0;
+        context->gop_size = 30;
         context->max_b_frames = 0;
 
         // CUDA acceleration with yuv420 fallback
@@ -154,23 +149,6 @@ public:
             std::cout<<"can not get new buffer\n";
             exit(1);
         }
-        
-        //testing: Initialize a decoder
-        //const AVCodec *decoder = avcodec_find_decoder_by_name("h264_cuvid");
-        //dec_context = avcodec_alloc_context3(decoder);
-        //// Create hardware device context
-        //ret = av_hwdevice_ctx_create(&dec_context->hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, NULL, NULL, 0);
-        //if (ret) {
-        //    ILLIXR::abort("Failed to create hardware device context");
-        //} else {
-        //    std::cout << "Created hardware device context\n";
-        //}
-        //ret = avcodec_open2(dec_context, decoder, NULL);
-        //if (ret) {
-        //    ILLIXR::abort("Failed to open context");
-        //} else {
-        //    std::cout << "opened codec context\n";
-        //}
         
         // Initialize eCAL
         eCAL::Initialize(0, NULL, "VIO Device Transmitter");
@@ -367,6 +345,8 @@ private:
     const std::shared_ptr<switchboard> sb;
     eCAL::protobuf::CPublisher<vio_input_proto::IMUCamVec> publisher;
 
+    //AVFrame *img0_swframe, *img0_hwframe;
+    //AVPacket *img0_pkt;
     AVFrame *img0_swframe, *img0_hwframe;
     AVPacket *img0_pkt;
 
