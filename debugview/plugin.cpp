@@ -199,17 +199,32 @@ public:
                     camera_texture_sizes[0].y(), camera_textures[0]);
         ImGui::Text("	Camera1: (%d, %d) \n		GL texture handle: %d", camera_texture_sizes[1].x(),
                     camera_texture_sizes[1].y(), camera_textures[1]);
+#ifdef ETH3D
+        ImGui::Text("   Depth: (%d, %d) \n          GL texture handle: %d",
+                    camera_texture_sizes[2].x(),
+                    camera_texture_sizes[2].y(),
+                    camera_textures[2]);
         ImGui::End();
+#endif
 
-        ImGui::SetNextWindowSize(ImVec2(700, 350), ImGuiCond_Once);
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y), ImGuiCond_Once,
-                                ImVec2(1.0f, 1.0f));
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y), ImGuiCond_Once, ImVec2(1.0f, 1.0f));
         ImGui::Begin("Onboard camera views");
         auto windowSize     = ImGui::GetWindowSize();
         auto verticalOffset = ImGui::GetCursorPos().y;
+
+#ifdef ETH3D
+        ImGui::SetNextWindowSize(ImVec2(480,720), ImGuiCond_Once);      // vertical
+
+        ImGui::Image((void*)(intptr_t)camera_textures[0], ImVec2(windowSize.x,windowSize.y/3 - verticalOffset)); 
+        ImGui::Image((void*)(intptr_t)camera_textures[1], ImVec2(windowSize.x,windowSize.y/3));
+        ImGui::Image((void*)(intptr_t)camera_textures[2], ImVec2(windowSize.x,windowSize.y/3));
+#else
+        ImGui::SetNextWindowSize(ImVec2(700, 350), ImGuiCond_Once);
+
         ImGui::Image((void*) (intptr_t) camera_textures[0], ImVec2(windowSize.x / 2, windowSize.y - verticalOffset * 2));
         ImGui::SameLine();
         ImGui::Image((void*) (intptr_t) camera_textures[1], ImVec2(windowSize.x / 2, windowSize.y - verticalOffset * 2));
+#endif
         ImGui::End();
 
         ImGui::Render();
@@ -227,10 +242,14 @@ public:
         if (last_datum_with_images->img0.has_value()) {
             glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
             cv::Mat img0{last_datum_with_images->img0.value().clone()};
+#ifdef ETH3D
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img0.cols, img0.rows, 0, GL_BGR, GL_UNSIGNED_BYTE, img0.ptr());
+#else
             glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img0.cols, img0.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img0.ptr());
             camera_texture_sizes[0] = Eigen::Vector2i(img0.cols, img0.rows);
             GLint swizzleMask[]     = {GL_RED, GL_RED, GL_RED, GL_RED};
             glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+#endif
         } else {
             std::cerr << "img0 has no value!" << std::endl;
             glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
@@ -243,10 +262,14 @@ public:
         if (last_datum_with_images->img1.has_value()) {
             glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
             cv::Mat img1{last_datum_with_images->img1.value().clone()}; /// <- Adding this here to simulate the copy
+#ifdef ETH3D
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img1.cols, img1.rows, 0, GL_BGR, GL_UNSIGNED_BYTE, img1.ptr());
+#else
             glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img1.cols, img1.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img1.ptr());
             camera_texture_sizes[1] = Eigen::Vector2i(img1.cols, img1.rows);
             GLint swizzleMask[]     = {GL_RED, GL_RED, GL_RED, GL_RED};
             glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+#endif
         } else {
             glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE,
@@ -254,6 +277,28 @@ public:
             glFlush();
             camera_texture_sizes[1] = Eigen::Vector2i(TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT);
         }
+
+        if (last_datum_with_images->depth.has_value()) {
+            glBindTexture(GL_TEXTURE_2D, camera_textures[2]);
+            cv::Mat depth{last_datum_with_images->depth.value().clone()};    /// <- Adding this here to simulate the copy
+#ifdef ETH3D
+            // glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, depth.cols, depth.rows, 0, GL_DEPTH_COMPONENT, GL_SHORT, depth.ptr());
+            GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, 1};
+            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+#else
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img1.cols, img1.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img1.ptr());
+            camera_texture_sizes[2] = Eigen::Vector2i(img1.cols, img1.rows);
+            GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
+            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+#endif
+        } else {
+            glBindTexture(GL_TEXTURE_2D, camera_textures[2]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE, &(test_pattern[0][0]));
+            glFlush();
+            camera_texture_sizes[2] = Eigen::Vector2i(TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT);
+        }
+
 
         RAC_ERRNO_MSG("debugview at end of load_camera_images");
         return true;
@@ -409,8 +454,13 @@ private:
 
     switchboard::ptr<const imu_cam_type> last_datum_with_images;
     // std::vector<std::optional<cv::Mat>> camera_data = {std::nullopt, std::nullopt};
+#ifdef ETH3D
+    GLuint          camera_textures[3];
+    Eigen::Vector2i camera_texture_sizes[3] = {Eigen::Vector2i::Zero(), Eigen::Vector2i::Zero(), Eigen::Vector2i::Zero()};
+#else
     GLuint          camera_textures[2];
     Eigen::Vector2i camera_texture_sizes[2] = {Eigen::Vector2i::Zero(), Eigen::Vector2i::Zero()};
+#endif
 
     GLuint demo_vao;
     GLuint demoShaderProgram;
@@ -530,13 +580,29 @@ public:
             }
         }
 
+#ifdef ETH3D
+        glGenTextures(3, &(camera_textures[0]));
+
+#else
         glGenTextures(2, &(camera_textures[0]));
+#endif
         glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+#ifdef ETH3D
+        glBindTexture(GL_TEXTURE_2D, camera_textures[2]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+#endif
 
         // Construct a basic perspective projection
         math_util::projection_fov(&basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f);
