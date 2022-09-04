@@ -25,7 +25,11 @@ public:
         std::string       cell;
 
         m_data.clear();
+#ifdef ETH3D
+        while (std::getline(lineStream, cell, ' ')) {
+#else
         while (std::getline(lineStream, cell, ',')) {
+#endif
             m_data.push_back(cell);
         }
         // This checks for a trailing comma with no data after it.

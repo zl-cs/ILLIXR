@@ -74,6 +74,10 @@ protected:
             sensor_datum.cam1 ? std::make_optional<cv::Mat>(*(sensor_datum.cam1.value().load().release())) : std::nullopt;
         RAC_ERRNO_MSG("offline_imu_cam after cam1");
 
+        std::optional<cv::Mat> depth =
+            sensor_datum.depth ? std::make_optional<cv::Mat>(*(sensor_datum.depth.value().load_depth().release())) : std::nullopt;
+        RAC_ERRNO_MSG("offline_imu_cam after depth");
+
 #ifndef NDEBUG
         /// If debugging, assert the image is grayscale
         if (cam0.has_value() && cam1.has_value()) {
@@ -86,8 +90,9 @@ protected:
 
         _m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type>(
             imu_cam_type{time_point{std::chrono::nanoseconds(dataset_now - dataset_first_time)},
+						 dataset_now,
                          (sensor_datum.imu0.value().angular_v).cast<float>(),
-                         (sensor_datum.imu0.value().linear_a).cast<float>(), cam0, cam1}));
+                         (sensor_datum.imu0.value().linear_a).cast<float>(), cam0, cam1, depth}));
 
         RAC_ERRNO_MSG("offline_imu_cam at bottom of iteration");
     }

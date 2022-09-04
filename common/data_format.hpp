@@ -25,18 +25,21 @@ using ullong = unsigned long long;
 // time is the current UNIX time where dataset_time is the time read from the csv
 struct imu_cam_type : public switchboard::event {
     time_point             time;
+	ullong				   dataset_time;
     Eigen::Vector3f        angular_v;
     Eigen::Vector3f        linear_a;
     std::optional<cv::Mat> img0;
     std::optional<cv::Mat> img1;
+    std::optional<cv::Mat> depth;
 
-    imu_cam_type(time_point time_, Eigen::Vector3f angular_v_, Eigen::Vector3f linear_a_, std::optional<cv::Mat> img0_,
-                 std::optional<cv::Mat> img1_)
+    imu_cam_type(time_point time_, ullong dataset_time_, Eigen::Vector3f angular_v_, Eigen::Vector3f linear_a_, std::optional<cv::Mat> img0_, std::optional<cv::Mat> img1_, std::optional<cv::Mat> depth_)
         : time{time_}
+		, dataset_time{dataset_time_}
         , angular_v{angular_v_}
         , linear_a{linear_a_}
         , img0{img0_}
-        , img1{img1_} { }
+        , img1{img1_}
+		, depth{depth_} { }
 };
 
 struct imu_type {

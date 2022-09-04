@@ -24,10 +24,25 @@ public:
         : _m_path(path) { }
 
     std::unique_ptr<cv::Mat> load() const {
+
+#ifdef ETH3D
+        auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_COLOR)}};
+        assert(!img->empty());
+		cv::resize(*img, *img, cv::Size(720, 405));
+#else
         auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_GRAYSCALE)}};
         assert(!img->empty());
+#endif
         return img;
     }
+
+    std::unique_ptr<cv::Mat> load_depth() const {
+        auto img = std::unique_ptr<cv::Mat>{new cv::Mat{cv::imread(_m_path, cv::IMREAD_ANYDEPTH)}};
+        assert(!img->empty());
+        cv::resize(*img, *img, cv::Size(720, 405));
+        return img;
+    }
+
 
 private:
     std::string _m_path;
@@ -37,7 +52,92 @@ typedef struct {
     std::optional<raw_imu_type>    imu0;
     std::optional<lazy_load_image> cam0;
     std::optional<lazy_load_image> cam1;
+    std::optional<lazy_load_image> depth;
 } sensor_types;
+
+#ifdef ETH3D
+static std::map<ullong, sensor_types> load_data() {
+    // const char* illixr_data_c_str = std::getenv("ILLIXR_DATA");
+    // if (!illixr_data_c_str) {
+    //  std::cerr << "Please define ILLIXR_DATA" << std::endl;
+    //     ILLIXR::abort();
+    // }
+    // std::string illixr_data = std::string{illixr_data_c_str};
+
+    std::string illixr_data = "/home/bytian/Documents/Datasets/ETH3D/table3-kimera-aligned";
+    // std::string illixr_data = "path-to-aligned-sequence";
+
+    std::map<ullong, sensor_types> data;
+
+    const std::string imu0_subpath = "/imu.txt";
+    std::ifstream imu0_file {illixr_data + imu0_subpath};
+
+    if (!imu0_file.good()) {
+        std::cerr << "${ILLIXR_DATA}" << imu0_subpath << " (" << illixr_data << imu0_subpath << ") is not a good path" << std::endl;
+        ILLIXR::abort();
+    }
+    for (CSVIterator row{imu0_file, 1}; row != CSVIterator{}; ++row) {
+        ullong t = std::stoull(row[0]);
+        Eigen::Vector3d av {std::stod(row[1]), std::stod(row[2]), std::stod(row[3])};
+        Eigen::Vector3d la {std::stod(row[4]), std::stod(row[5]), std::stod(row[6])};
+        data[t].imu0 = {av, la};
+        std::cout << "[DEBUG] Loaded IMU: "
+                    << t << " "
+                    << av(0) << " "
+                    << av(1) << " "
+                    << av(2) << " "
+                    << la(0) << " "
+                    << la(1) << " "
+                    << la(2) << "\n";
+    }
+
+    const std::string cam0_subpath = "/rgb2.txt";
+    std::ifstream cam0_file {illixr_data + cam0_subpath};
+    if (!cam0_file.good()) {
+        std::cerr << "${ILLIXR_DATA}" << cam0_subpath << " (" << illixr_data << cam0_subpath << ") is not a good path" << std::endl;
+        ILLIXR::abort();
+    }
+    for (CSVIterator row{cam0_file, 1}; row != CSVIterator{}; ++row) {
+        ullong t = std::stoull(row[0]);
+        data[t].cam0 = {illixr_data + "/" + row[1]};
+        // std::cout << "[DEBUG] Loaded left cam: "
+        //          << t << " "
+        //          << illixr_data + "/" + row[1] << "\n";
+    }
+
+    const std::string cam1_subpath = "/rgb.txt";
+    std::ifstream cam1_file {illixr_data + cam1_subpath};
+    if (!cam1_file.good()) {
+        std::cerr << "${ILLIXR_DATA}" << cam1_subpath << " (" << illixr_data << cam1_subpath << ") is not a good path" << std::endl;
+        ILLIXR::abort();
+    }
+    for (CSVIterator row{cam1_file, 1}; row != CSVIterator{}; ++row) {
+        ullong t = std::stoull(row[0]);
+        std::string fname = row[1];
+        data[t].cam1 = {illixr_data + "/" + row[1]};
+        // std::cout << "[DEBUG] Loaded right cam: "
+        //          << t << " "
+        //          << illixr_data + "/" + row[1] << "\n";
+    }
+
+    const std::string depth_subpath = "/depth.txt";
+    std::ifstream depth_file {illixr_data + depth_subpath};
+    if (!depth_file.good()) {
+        std::cerr << "${ILLIXR_DATA}" << depth_subpath << " (" << illixr_data << depth_subpath << ") is not a good path" << std::endl;
+        ILLIXR::abort();
+    }
+    for (CSVIterator row{depth_file, 1}; row != CSVIterator{}; ++row) {
+        ullong t = std::stoull(row[0]);
+        std::string fname = row[1];
+        data[t].depth = {illixr_data + "/" + row[1]};
+        // std::cout << "[DEBUG] Loaded depth cam: "
+        //          << t << " "
+        //          << illixr_data + "/" + row[1] << "\n";
+    }
+    return data;
+}
+
+#else
 
 static std::map<ullong, sensor_types> load_data() {
     const char* illixr_data_c_str = std::getenv("ILLIXR_DATA");
@@ -90,3 +190,4 @@ static std::map<ullong, sensor_types> load_data() {
 
     return data;
 }
+#endif
