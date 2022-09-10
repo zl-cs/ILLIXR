@@ -2,6 +2,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
+#include "common/decoder.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -21,9 +22,17 @@ public:
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_imu_cam{sb->get_writer<imu_cam_type_prof>("imu_cam")}
 		, _conn_signal{sb->get_writer<connection_signal>("connection_signal")}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
+		, _m_decoder{pb->lookup_impl<decoder>()}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, buffer_str("")
-    { 
+    {
+		recv_pkt = av_packet_alloc();
+		if (recv_pkt == NULL) {
+			std::cerr << "Failed allocated a packet for encoding cam0\n";
+			ILLIXR::abort();
+		}
+
 		if (!filesystem::exists(data_path)) {
 			if (!std::filesystem::create_directory(data_path)) {
 				std::cerr << "Failed to create data directory.";
@@ -105,11 +114,25 @@ private:
 				// auto img0_copy = std::make_shared<std::string>(std::string(curr_data.img0_data()));
 				// auto img1_copy = std::make_shared<std::string>(std::string(curr_data.img1_data()));
 
-				cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img0_data().data()));
-				cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img1_data().data()));
+				// Decompression
+				int ret = av_packet_from_data(recv_pkt, (uint8_t*)curr_data.img0_data().data(), curr_data.size());
+                if(ret < 0){
+                     ILLIXR::abort("Failed to initalize packet from data");   
+                }else{
+                    std::cout << "Reconstruct offloaded packet\n";
+                }
 
-				cam0 = std::make_optional<cv::Mat>(img0.clone());
-				cam1 = std::make_optional<cv::Mat>(img1.clone());
+				std::cout << "--------------------DECODING cam----------------------\n";
+				time_point decode_start = _m_clock->now();
+				cv::Mat merged = *(_m_decoder->decode(recv_pkt).release());
+				cv::Mat cam0_decoded = merged.colRange(0, 752);
+				cv::Mat cam1_decoded = merged.colRange(752, 1504);
+
+				// cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img0_data().data()));
+				// cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img1_data().data()));
+
+				cam0 = std::make_optional<cv::Mat>(cam0_decoded);
+				cam1 = std::make_optional<cv::Mat>(cam1_decoded);
 			}
 
 			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
@@ -136,6 +159,8 @@ private:
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<imu_cam_type_prof> _m_imu_cam;
 	switchboard::writer<connection_signal> _conn_signal;
+	std::shared_ptr<const RelativeClock> _m_clock;
+	const std::shared_ptr<decoder> _m_decoder;
 
 	TCPSocket socket;
 	TCPSocket * read_socket = NULL;
@@ -145,6 +170,8 @@ private:
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
 	std::ofstream receive_time;
 	std::ofstream hashed_data;
+
+	AVPacket *recv_pkt;
 };
 
 PLUGIN_MAIN(server_reader)

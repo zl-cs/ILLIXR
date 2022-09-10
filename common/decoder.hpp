@@ -14,6 +14,9 @@ extern "C" {
 #include "phonebook.hpp"
 #include "error_util.hpp"
 
+#include <filesystem>
+#include <fstream>
+
 namespace ILLIXR {
 
 class decoder : public phonebook::service {

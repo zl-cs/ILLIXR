@@ -2,6 +2,7 @@
 #include "common/switchboard.hpp"
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
+#include "common/encoder.hpp"
 
 #include <opencv2/core/mat.hpp>
 #include <filesystem>
@@ -22,12 +23,19 @@ public:
 		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
+		, _m_encoder{pb->lookup_impl<encoder>()}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, drop_count{0}
     { 
 		socket.set_reuseaddr();
 		socket.bind(Address(CLIENT_IP, CLIENT_PORT_1));
 		initial_timestamp();
+
+		encoded = av_packet_alloc();
+		if (encoded == NULL) {
+			std::cerr << "Failed allocated a packet for encoding cam0\n";
+			ILLIXR::abort();
+		}
 
 		if (!filesystem::exists(data_path)) {
 			if (!filesystem::create_directory(data_path)) {
@@ -91,8 +99,22 @@ public:
 			imu_cam_data->set_rows(img0.rows);
 			imu_cam_data->set_cols(img0.cols);
 
-			imu_cam_data->set_img0_data((void*) img0.data, img0.rows * img0.cols);
-			imu_cam_data->set_img1_data((void*) img1.data, img1.rows * img1.cols);
+			// Compression
+			std::vector<cv::Mat> cams;
+			cv::Mat merged, cam0_decoded, cam1_decoded;
+			cams.push_back(img0);
+			cams.push_back(img1);
+			cv::hconcat(cams, merged);
+
+			std::cout << "--------------------ENCODING cam----------------------\n";
+			time_point encode_start = _m_clock->now();
+			if (_m_encoder->encode(merged, encoded)) {
+				std::cout << "Encoding takes " << (_m_clock->now() - encode_start).count() << " ns\n";
+			}
+
+			imu_cam_data->set_img0_data((void*) encoded->data, encoded->size);
+			imu_cam_data->set_size(encoded->size);
+			// imu_cam_data->set_img1_data((void*) img1.data, img1.rows * img1.cols);
 
 			data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 			data_buffer->set_dataset_timestamp(datum->dataset_time.time_since_epoch().count());
@@ -135,6 +157,7 @@ private:
 	vio_input_proto::IMUCamVec* data_buffer = new vio_input_proto::IMUCamVec();
     const std::shared_ptr<switchboard> sb;
 	const std::shared_ptr<RelativeClock> _m_clock;
+	const std::shared_ptr<encoder> _m_encoder;
 
 	TCPSocket socket;
 	Address server_addr;
@@ -144,6 +167,8 @@ private:
 	std::ofstream frame_info; 
 
 	int drop_count;
+
+	AVPacket *encoded;
 };
 
 PLUGIN_MAIN(offload_writer)
