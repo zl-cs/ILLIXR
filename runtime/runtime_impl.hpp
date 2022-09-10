@@ -2,6 +2,8 @@
 #include <cassert>
 #include <cerrno>
 #include <chrono>
+#include "common/encoder.hpp"
+#include "common/decoder.hpp"
 #include "common/runtime.hpp"
 #include "common/extended_window.hpp"
 #include "common/dynamic_lib.hpp"
@@ -32,6 +34,8 @@ public:
 #endif /// ILLIXR_MONADO_MAINLINE
 		pb.register_impl<Stoplight>(std::make_shared<Stoplight>());
 		pb.register_impl<RelativeClock>(std::make_shared<RelativeClock>());
+		pb.register_impl<encoder>(std::make_shared<encoder>());
+		pb.register_impl<decoder>(std::make_shared<decoder>());
 	}
 
 	virtual void load_so(const std::vector<std::string>& so_paths) override {
