@@ -19,6 +19,13 @@ message IMUCamData
   bytes img0_data = 6;
   bytes img1_data = 7;
   int32 size = 8;
+
+  bytes side_data = 9;
+  int32 side_data_size = 10;
+  int32 side_data_type = 11;
+  int64 pts = 12;
+  int64 dts = 13;
+  int32 flags = 14;
 }
 
 message IMUCamVec {

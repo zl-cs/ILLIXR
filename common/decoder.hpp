@@ -199,7 +199,7 @@ public:
         sws_scale(conversion_back, decoded_frame->data, decoded_frame->linesize, 0, height, &img_decoded_padding.data, cvLinesizes);
         sws_freeContext(conversion_back);
 
-        unsigned long long start_copy = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        // unsigned long long start_copy = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         // std::cout << "decoded_frame width after sws_scale: " << decoded_frame->width << "\n";
         // int padding_width = width + 32;
         // for (int r = 0; r < height; r++) {
@@ -210,7 +210,7 @@ public:
         // }
         img_decoded_padding.data = decoded_frame->data[0];
         auto img_decoded = std::unique_ptr<cv::Mat>(new cv::Mat(img_decoded_padding.colRange(0, 1504)));
-        std::cout << "Decoder Mat Copy Time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - start_copy << "\n";
+        // std::cout << "Decoder Mat Copy Time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - start_copy << "\n";
 
         // img_decoded->data = decoded_frame->data[0];
         // std::string space;

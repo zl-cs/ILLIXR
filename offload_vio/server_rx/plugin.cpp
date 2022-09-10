@@ -121,18 +121,26 @@ private:
                 }else{
                     std::cout << "Reconstruct offloaded packet\n";
                 }
+				recv_pkt->side_data->data = (uint8_t*)curr_data.side_data().data();
+				recv_pkt->side_data->size = curr_data.side_data_size();
+				recv_pkt->side_data->type = (AVPacketSideDataType)curr_data.side_data_type();
+				recv_pkt->pts = curr_data.pts();
+				recv_pkt->dts = curr_data.dts();
+				recv_pkt->flags = curr_data.flags();
+
 
 				std::cout << "--------------------DECODING cam----------------------\n";
 				time_point decode_start = _m_clock->now();
 				cv::Mat merged = *(_m_decoder->decode(recv_pkt).release());
 				cv::Mat cam0_decoded = merged.colRange(0, 752);
 				cv::Mat cam1_decoded = merged.colRange(752, 1504);
+				std::cout << "Decoding takes " << (_m_clock->now() - decode_start).count() << " ns\n";
 
 				// cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img0_data().data()));
 				// cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img1_data().data()));
 
-				cam0 = std::make_optional<cv::Mat>(cam0_decoded);
-				cam1 = std::make_optional<cv::Mat>(cam1_decoded);
+				cam0 = std::make_optional<cv::Mat>(cam0_decoded.clone());
+				cam1 = std::make_optional<cv::Mat>(cam1_decoded.clone());
 			}
 
 			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(

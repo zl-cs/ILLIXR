@@ -114,6 +114,12 @@ public:
 
 			imu_cam_data->set_img0_data((void*) encoded->data, encoded->size);
 			imu_cam_data->set_size(encoded->size);
+			imu_cam_data->set_side_data((void*) encoded->side_data->data, encoded->side_data->size);
+			imu_cam_data->set_side_data_size(encoded->side_data->size);
+			imu_cam_data->set_side_data_type(encoded->side_data->type);
+			imu_cam_data->set_pts(encoded->pts);
+			imu_cam_data->set_dts(encoded->dts);
+			imu_cam_data->set_flags(encoded->flags);
 			// imu_cam_data->set_img1_data((void*) img1.data, img1.rows * img1.cols);
 
 			data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
