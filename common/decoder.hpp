@@ -165,19 +165,28 @@ public:
             std::cerr << "Failed sending a packet\n";
             ILLIXR::abort(av_make_error(ret));
         }
-        while (1) {
-            ret = avcodec_receive_frame(av_codec_ctx, decoded_frame);
-            if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                std::cout << "EAGAIN or EOF in decoder\n";
-                avcodec_send_packet(av_codec_ctx, input_pkt);
-                continue;
-            } else if (ret < 0) {
-                std::cout << "Error during encoding\n";
-                ILLIXR::abort(av_make_error(ret));
-            } else { // success
-                break;
-            }
+        ret = avcodec_send_packet(av_codec_ctx, NULL);
+        if (ret < 0) {
+            std::cerr << "Failed sending a NULL to flush the buffer\n";
+            ILLIXR::abort(av_make_error(ret));
         }
+        ret = avcodec_receive_frame(av_codec_ctx, decoded_frame);
+        if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            std::cout << "EAGAIN or EOF in decoder\n";
+        }
+        // while (1) {
+        //     ret = avcodec_receive_frame(av_codec_ctx, decoded_frame);
+        //     if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        //         std::cout << "EAGAIN or EOF in decoder\n";
+        //         avcodec_send_packet(av_codec_ctx, input_pkt);
+        //         continue;
+        //     } else if (ret < 0) {
+        //         std::cout << "Error during encoding\n";
+        //         ILLIXR::abort(av_make_error(ret));
+        //     } else { // success
+        //         break;
+        //     }
+        // }
 
         // ret = av_hwframe_transfer_data(sw_frame, decoded_frame, 0);
         // if(ret < 0){
@@ -195,7 +204,7 @@ public:
         cv::Mat img_decoded_padding(height, width+32, CV_8UC1);
         int cvLinesizes[1];
         cvLinesizes[0] = img_decoded_padding.step1();
-        SwsContext *conversion_back = sws_getContext(width, height, (AVPixelFormat)decoded_frame->format, width, height, AVPixelFormat::AV_PIX_FMT_GRAY8, SWS_BICUBIC, NULL, NULL, NULL);
+        SwsContext *conversion_back = sws_getContext(width, height, (AVPixelFormat)decoded_frame->format, width, height, AVPixelFormat::AV_PIX_FMT_GRAY8, SWS_SPLINE, NULL, NULL, NULL);
         sws_scale(conversion_back, decoded_frame->data, decoded_frame->linesize, 0, height, &img_decoded_padding.data, cvLinesizes);
         sws_freeContext(conversion_back);
 
@@ -208,7 +217,10 @@ public:
         //             img_decoded_padding.row(r).col(c) = *(decoded_frame->data[0] + r*padding_width + c);
         //     }
         // }
+        // cam0_scaled << img_decoded_padding << std::endl;
         img_decoded_padding.data = decoded_frame->data[0];
+        // if (count++ < 10)
+        //     cam0_decoded << img_decoded_padding << std::endl;
         auto img_decoded = std::unique_ptr<cv::Mat>(new cv::Mat(img_decoded_padding.colRange(0, 1504)));
         // std::cout << "Decoder Mat Copy Time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - start_copy << "\n";
 
@@ -232,8 +244,10 @@ public:
         //     cv::waitKey(1);
         // }
 
-        cv::imshow("merged_decoded", *img_decoded);
-        cv::waitKey(1);
+        // cv::imshow("merged_decoded", *img_decoded);
+        // cv::waitKey(1);
+
+        avcodec_flush_buffers(av_codec_ctx);
 
         return img_decoded;
     }

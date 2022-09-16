@@ -53,7 +53,7 @@ public:
         
         // 0 indicates intra-only coding(iAVC)
         av_codec_ctx->gop_size = 0;
-        av_codec_ctx->max_b_frames = 0;
+        // av_codec_ctx->max_b_frames = -1;
 
         // CUDA acceleration with yuv420 fallback
         av_codec_ctx->pix_fmt = AV_PIX_FMT_CUDA;
@@ -62,10 +62,13 @@ public:
         // Encoder settings. Refer to https://www.ffmpeg.org/doxygen/3.2/nvenc__h264_8c_source.html for details
         int ret;
         // ret = av_opt_set(av_codec_ctx->priv_data, "preset", "p7", 0);
-        // ret = av_opt_set(av_codec_ctx->priv_data, "tune", "lossless", 0);
+        ret = av_opt_set(av_codec_ctx->priv_data, "tune", "lossless", 0);
         // ret |= av_opt_set(av_codec_ctx->priv_data, "profile", "high", 0);
-        ret = av_opt_set(av_codec_ctx->priv_data, "rc", "vbr", 0);
+        ret |= av_opt_set(av_codec_ctx->priv_data, "rc", "vbr", 0);
         ret |= av_opt_set_int(av_codec_ctx->priv_data, "cq", 0, 0);
+        // ret |= av_opt_set_int(av_codec_ctx->priv_data, "rc-lookahead", 0, 0);
+        // ret |= av_opt_set_int(av_codec_ctx->priv_data, "qmin", 0, 0);
+        // ret |= av_opt_set_int(av_codec_ctx->priv_data, "qmax", 1, 0);
         // ret |= av_opt_set_int(av_codec_ctx->priv_data, "qp", 1, 0);
         // ret |= av_opt_set(av_codec_ctx->priv_data, "forced-idr", "true", 0);
         // ret |= av_opt_set_int(av_codec_ctx->priv_data, "zerolatency", 1, 0);
@@ -171,8 +174,13 @@ public:
 				std::cerr << "Failed to create data directory.";
 			}
 		}
-        cam0_mat.open(data_path + "/cam0_mat.txt");
-        cam0_frame.open(data_path + "/cam0_frame.txt");
+        // cam0_mat.open(data_path + "/cam0_mat.txt");
+        // cam0_frame.open(data_path + "/cam0_frame.txt");
+
+        // prewarm the encoder
+        // cv::Mat cam0 = cv::imread(std::filesystem::current_path().string() + "/common/cam0.png", cv::IMREAD_GRAYSCALE);
+        // encode(cam0, img_packet);
+
     }
 
     // av_err2str returns a temporary array. This doesn't work in gcc.
@@ -187,6 +195,7 @@ public:
         int ret; // catch return errors
         int width = img.cols;
         int height = img.rows;
+        std::cout << "encode image width " << width << " height " << height << std::endl;
 
         // convert img (cv::Mat) to img_frame (AVFrame)
         int cvLinesizes[1];
@@ -199,7 +208,7 @@ public:
             std::cout << "Allocated image buffer (size " << ret << "bytes)\n";
         }
         // img_frame->buf[0] = av_buffer_alloc(frame_size);
-        SwsContext *conversion = sws_getContext(width, height, AVPixelFormat::AV_PIX_FMT_GRAY8, width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+        SwsContext *conversion = sws_getContext(width, height, AVPixelFormat::AV_PIX_FMT_GRAY8, width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, SWS_SPLINE, NULL, NULL, NULL);
         sws_scale(conversion, &img.data, cvLinesizes, 0, height, img_frame->data, img_frame->linesize);
         sws_freeContext(conversion);
 
@@ -242,19 +251,32 @@ public:
             ILLIXR::abort(av_make_error(ret));
         }
 
-        while (1) {
-            ret = avcodec_receive_packet(av_codec_ctx, img_packet);
-            if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                std::cout << "EAGAIN or EOF\n";
-                avcodec_send_frame(av_codec_ctx, hw_frame);
-                continue;
-            } else if (ret < 0) {
-                std::cout << "Error during encoding\n";
-                ILLIXR::abort(av_make_error(ret));
-            } else { // success
-                break;
-            }
+        ret = avcodec_send_frame(av_codec_ctx, NULL);
+        if (ret < 0) {
+            std::cerr << "Failed sending a NULL to flush the buffer\n";
+            ILLIXR::abort(av_make_error(ret));
         }
+        ret = avcodec_receive_packet(av_codec_ctx, img_packet);
+        if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            std::cout << "EAGAIN or EOF\n";
+        }
+        // while (1) {
+        //     ret = avcodec_receive_packet(av_codec_ctx, img_packet);
+        //     if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        //         std::cout << "EAGAIN or EOF\n";
+        //         avcodec_send_frame(av_codec_ctx, hw_frame);
+        //         continue;
+        //     } else if (ret < 0) {
+        //         std::cout << "Error during encoding\n";
+        //         ILLIXR::abort(av_make_error(ret));
+        //     } else { // success
+        //         break;
+        //     }
+        // }
+        // if (img_packet->side_data != NULL)
+        //     std::cout << "The compressed packet has side data! The size is " << img_packet->side_data->size << "\n";
+        // else
+        //     std::cout << "The compressed packet has NO side data!\n";
 
         // CONVERSTION AVPACKET TO CV::MAT GIVES CORRUPTED IMAGES
         // cv::Mat img_encoded(height, width, CV_8UC1);
@@ -276,6 +298,7 @@ public:
 
         // if (encoded) av_packet_unref(encoded);
         ret = av_packet_ref(encoded, img_packet);
+        avcodec_flush_buffers(av_codec_ctx);
         if (ret < 0) {
             std::cerr << "Failed add ref to the encoded packet\n";
             ILLIXR::abort(av_make_error(ret));
