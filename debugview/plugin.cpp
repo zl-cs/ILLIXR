@@ -58,10 +58,9 @@ static void glfw_error_callback(int error, const char* description) {
 
 class debugview : public threadloop {
 public:
-    // Public constructor, Spindle passes the phonebook to this
-    // constructor. In turn, the constructor fills in the private
-    // references to the switchboard plugs, so the plugin can read
-    // the data whenever it needs to.
+    // Public constructor, Spindle passes the phonebook to this constructor. In
+    // turn, the constructor fills in the private references to the switchboard
+    // plugs, so the plugin can read the data whenever it needs to.
     debugview(std::string name_, phonebook* pb_)
         : threadloop{name_, pb_}
         , sb{pb->lookup_impl<switchboard>()}
@@ -70,15 +69,291 @@ public:
         , _m_fast_pose{sb->get_reader<imu_raw_type>("imu_raw")} //, glfw_context{pb->lookup_impl<global_config>()->glfw_context}
     { }
 
+    virtual void start() override {
+        // Stereo camera images
+        sb->schedule<imu_cam_type>(id, "imu_cam", [&](switchboard::ptr<const imu_cam_type> datum, std::size_t) {
+            this->imu_cam_handler(datum);
+        });
+
+        // Scene reconstruction
+        sb->schedule<reconstruction_type>(id, "scene_reconstruction", [&](switchboard::ptr<const reconstruction_type> datum, std::size_t) {
+            this->reconstruction_handler(datum);
+        });
+
+        if (!glfwInit()) {
+            ILLIXR::abort("[debugview] Failed to initalize glfw");
+        }
+
+        /// Registering error callback for additional debug info
+        glfwSetErrorCallback(glfw_error_callback);
+
+        /// Enable debug context for glDebugMessageCallback to work
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+        glfwWindowHint(GLFW_VISIBLE, GL_TRUE);
+
+        constexpr std::string_view glsl_version{"#version 330 core"};
+
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        constexpr unsigned window_size_x = 2000;
+        constexpr unsigned window_size_y = 1600;
+        gui_window = glfwCreateWindow(window_size_x, window_size_y, "ILLIXR Debug View", nullptr, nullptr);
+        if (gui_window == nullptr) {
+            std::cerr << "Debug view couldn't create window " << __FILE__ << ":" << __LINE__ << std::endl;
+            ILLIXR::abort();
+        }
+
+        glfwSetWindowSize(gui_window, window_size_x, window_size_y);
+
+        glfwMakeContextCurrent(gui_window);
+
+        glfwSwapInterval(1); // Enable vsync!
+
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(MessageCallback, 0);
+
+        // Init and verify GLEW
+        const GLenum glew_err = glewInit();
+        if (glew_err != GLEW_OK) {
+            std::cerr << "[debugview] GLEW Error: " << glewGetErrorString(glew_err) << std::endl;
+            glfwDestroyWindow(gui_window);
+            ILLIXR::abort("[debugview] Failed to initialize GLEW");
+        }
+
+        // Initialize IMGUI context.
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+
+        // Dark theme, of course.
+        ImGui::StyleColorsDark();
+
+        // Init IMGUI for OpenGL
+        ImGui_ImplGlfw_InitForOpenGL(gui_window, true);
+        ImGui_ImplOpenGL3_Init(glsl_version.data());
+
+        // Create and bind global VAO object
+        glGenVertexArrays(1, &demo_vao);
+        glBindVertexArray(demo_vao);
+
+        demoShaderProgram = init_and_link(demo_vertex_shader, demo_fragment_shader);
+#ifndef NDEBUG
+        std::cout << "Demo app shader program is program " << demoShaderProgram << std::endl;
+#endif
+
+        vertexPosAttr    = glGetAttribLocation(demoShaderProgram, "vertexPosition");
+        vertexNormalAttr = glGetAttribLocation(demoShaderProgram, "vertexNormal");
+        modelViewAttr    = glGetUniformLocation(demoShaderProgram, "u_modelview");
+        projectionAttr   = glGetUniformLocation(demoShaderProgram, "u_projection");
+        colorUniform     = glGetUniformLocation(demoShaderProgram, "u_color");
+
+        // Load/initialize the demo scene.
+        char* obj_dir = std::getenv("ILLIXR_DEMO_DATA");
+        if (obj_dir == nullptr) {
+            ILLIXR::abort("Please define ILLIXR_DEMO_DATA.");
+        }
+
+        demoscene = ObjScene(std::string(obj_dir), "scene.obj");
+        headset   = ObjScene(std::string(obj_dir), "headset.obj");
+
+        // Generate fun test pattern for missing camera images.
+        for (unsigned x = 0; x < TEST_PATTERN_WIDTH; x++) {
+            for (unsigned y = 0; y < TEST_PATTERN_HEIGHT; y++) {
+                test_pattern[x][y] = ((x + y) % 6 == 0) ? 255 : 0;
+            }
+        }
+
+        // Camera images
+        glGenTextures(2, &(camera_textures[0]));
+        glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // Scene reconstruction
+        glGenTextures(1, &reconstruction_texture);
+        glBindTexture(GL_TEXTURE_2D, reconstruction_texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // Construct a basic perspective projection
+        math_util::projection_fov(&basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f);
+
+        glfwMakeContextCurrent(nullptr);
+        threadloop::start();
+    }
+
+    virtual ~debugview() override {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+        glfwDestroyWindow(gui_window);
+        glfwTerminate();
+    }
+
+protected:
+
+    virtual void _p_thread_setup() override {
+        // Note: glfwMakeContextCurrent must be called from the thread which will be using it.
+        glfwMakeContextCurrent(gui_window);
+    }
+
+    virtual void _p_one_iteration() override {
+        glfwPollEvents();
+
+        if (glfwGetMouseButton(gui_window, GLFW_MOUSE_BUTTON_LEFT)) {
+            double xpos, ypos;
+
+            glfwGetCursorPos(gui_window, &xpos, &ypos);
+
+            Eigen::Vector2d new_pos = Eigen::Vector2d{xpos, ypos};
+            if (beingDragged == false) {
+                last_mouse_pos = new_pos;
+                beingDragged   = true;
+            }
+            mouse_velocity = new_pos - last_mouse_pos;
+            last_mouse_pos = new_pos;
+        } else {
+            beingDragged = false;
+        }
+
+        view_euler.y() += mouse_velocity.x() * 0.002f;
+        view_euler.x() += mouse_velocity.y() * 0.002f;
+
+        mouse_velocity = mouse_velocity * 0.95;
+
+        load_camera_images();
+        load_reconstruction();
+
+        glUseProgram(demoShaderProgram);
+
+        Eigen::Matrix4f headsetPose = Eigen::Matrix4f::Identity();
+
+        const fast_pose_type predicted_pose = pp->get_fast_pose();
+        if (pp->fast_pose_reliable()) {
+            const pose_type    pose         = predicted_pose.pose;
+            Eigen::Quaternionf combinedQuat = pose.orientation;
+            headsetPose                     = generateHeadsetTransform(pose.position, combinedQuat, tracking_position_offset);
+        }
+
+        Eigen::Matrix4f modelMatrix = Eigen::Matrix4f::Identity();
+
+        // If we are following the headset, and have a valid pose, apply the optional offset.
+        Eigen::Vector3f optionalOffset = (follow_headset && pp->fast_pose_reliable())
+            ? (predicted_pose.pose.position + tracking_position_offset)
+            : Eigen::Vector3f{0.0f, 0.0f, 0.0f};
+
+        Eigen::Matrix4f userView =
+            lookAt(Eigen::Vector3f{(float) (view_dist * cos(view_euler.y())), (float) (view_dist * sin(view_euler.x())),
+                                   (float) (view_dist * sin(view_euler.y()))} +
+                       optionalOffset,
+                   optionalOffset, Eigen::Vector3f::UnitY());
+
+        Eigen::Matrix4f modelView = userView * modelMatrix;
+
+        glUseProgram(demoShaderProgram);
+
+        // Size viewport to window size.
+        int display_w, display_h;
+
+        glfwGetFramebufferSize(gui_window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+
+        float ratio = (float) display_h / (float) display_w;
+
+        // Construct a basic perspective projection
+        math_util::projection_fov(&basicProjection, 40.0f, 40.0f, 40.0f * ratio, 40.0f * ratio, 0.03f, 20.0f);
+
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_DEPTH_TEST);
+
+        glClearDepth(1);
+
+        glUniformMatrix4fv(modelViewAttr, 1, GL_FALSE, (GLfloat*) modelView.data());
+        glUniformMatrix4fv(projectionAttr, 1, GL_FALSE, (GLfloat*) (basicProjection.data()));
+        glBindVertexArray(demo_vao);
+
+        // Draw things
+        glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        demoscene.Draw();
+        modelView = userView * headsetPose;
+        glUniformMatrix4fv(modelViewAttr, 1, GL_FALSE, (GLfloat*) modelView.data());
+        headset.Draw();
+        draw_GUI();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(gui_window);
+    }
+
+private:
+    // Callback handler for imu_cam data
     void imu_cam_handler(switchboard::ptr<const imu_cam_type> datum) {
         if (datum != nullptr && datum->img0.has_value() && datum->img1.has_value()) {
             last_datum_with_images = datum;
         }
     }
 
-    void draw_GUI() {
-        RAC_ERRNO_MSG("debugview at start of draw_GUI");
+    // Callback handler for scene reconstruction data
+    void reconstruction_handler(switchboard::ptr<const reconstruction_type> datum) {
+        last_reconstruction = datum;
+    }
 
+    // Transfer stereo camera images from CPU memory to GPU texture
+    void load_camera_images() {
+        if (last_datum_with_images == nullptr) {
+            return;
+        }
+
+        if (last_datum_with_images->img0.has_value()) {
+            glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
+            cv::Mat img0{last_datum_with_images->img0.value().clone()};
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img0.cols, img0.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img0.ptr());
+            camera_texture_sizes[0] = Eigen::Vector2i(img0.cols, img0.rows);
+            GLint swizzleMask[]     = {GL_RED, GL_RED, GL_RED, GL_RED};
+            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+        } else {
+            std::cerr << "img0 has no value!" << std::endl;
+            glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE,
+                         &(test_pattern[0][0]));
+            glFlush();
+            camera_texture_sizes[0] = Eigen::Vector2i(TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT);
+        }
+
+        if (last_datum_with_images->img1.has_value()) {
+            glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
+            cv::Mat img1{last_datum_with_images->img1.value().clone()}; /// <- Adding this here to simulate the copy
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img1.cols, img1.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img1.ptr());
+            camera_texture_sizes[1] = Eigen::Vector2i(img1.cols, img1.rows);
+            GLint swizzleMask[]     = {GL_RED, GL_RED, GL_RED, GL_RED};
+            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE,
+                         &(test_pattern[0][0]));
+            glFlush();
+            camera_texture_sizes[1] = Eigen::Vector2i(TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT);
+        }
+    }
+
+    // Transfer reconstruction from CPU memory to GPU texture
+    void load_reconstruction() {
+        if (last_reconstruction == nullptr) {
+            return;
+        }
+
+        cv::Mat img{last_reconstruction->img.clone()};
+        reconstruction_texture_size = Eigen::Vector2i(img.cols, img.rows);
+        glBindTexture(GL_TEXTURE_2D, reconstruction_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.cols, img.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.ptr());
+    }
+
+    // Draw GUI window
+    void draw_GUI() {
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
 
@@ -87,7 +362,7 @@ public:
 
         ImGui::NewFrame();
 
-        // Init the window docked to the bottom left corner.
+        // Init the window docked to the bottom left corner
         ImGui::SetNextWindowPos(ImVec2(0.0f, ImGui::GetIO().DisplaySize.y), ImGuiCond_Once, ImVec2(0.0f, 1.0f));
         ImGui::Begin("ILLIXR Debug View");
 
@@ -191,74 +466,52 @@ public:
         ImGui::Text("Debug view eulers:");
         ImGui::Text("	(%f, %f)", view_euler.x(), view_euler.y());
 
-        ImGui::End();
+        ImGui::End(); // ILLIXR Debug View
 
-        ImGui::Begin("Camera + IMU");
-        ImGui::Text("Camera view buffers: ");
-        ImGui::Text("	Camera0: (%d, %d) \n		GL texture handle: %d", camera_texture_sizes[0].x(),
-                    camera_texture_sizes[0].y(), camera_textures[0]);
-        ImGui::Text("	Camera1: (%d, %d) \n		GL texture handle: %d", camera_texture_sizes[1].x(),
-                    camera_texture_sizes[1].y(), camera_textures[1]);
-        ImGui::End();
+        // Camera buffers
+        {
+            // Init the window docked to the top left corner
+            ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once, ImVec2(0.0f, 0.0f));
 
-        ImGui::SetNextWindowSize(ImVec2(700, 350), ImGuiCond_Once);
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y), ImGuiCond_Once,
-                                ImVec2(1.0f, 1.0f));
-        ImGui::Begin("Onboard camera views");
-        auto windowSize     = ImGui::GetWindowSize();
-        auto verticalOffset = ImGui::GetCursorPos().y;
-        ImGui::Image((void*) (intptr_t) camera_textures[0], ImVec2(windowSize.x / 2, windowSize.y - verticalOffset * 2));
-        ImGui::SameLine();
-        ImGui::Image((void*) (intptr_t) camera_textures[1], ImVec2(windowSize.x / 2, windowSize.y - verticalOffset * 2));
-        ImGui::End();
+            ImGui::Begin("Camera buffers");
+            ImGui::Text("	Camera0: (%d, %d) \n		GL texture handle: %d", camera_texture_sizes[0].x(),
+                        camera_texture_sizes[0].y(), camera_textures[0]);
+            ImGui::Text("	Camera1: (%d, %d) \n		GL texture handle: %d", camera_texture_sizes[1].x(),
+                        camera_texture_sizes[1].y(), camera_textures[1]);
+            ImGui::End(); // Camera buffers
+        }
+
+        // Stereo camera
+        {
+            // Init the window docked to the bottom right corner
+            ImGui::SetNextWindowSize(ImVec2(700, 350), ImGuiCond_Once);
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y), ImGuiCond_Once,
+                                    ImVec2(1.0f, 1.0f));
+
+            ImGui::Begin("Onboard camera views");
+            auto windowSize     = ImGui::GetWindowSize();
+            auto verticalOffset = ImGui::GetCursorPos().y;
+            ImGui::Image((void*) (intptr_t) camera_textures[0], ImVec2(windowSize.x / 2, windowSize.y - verticalOffset * 2));
+            ImGui::SameLine();
+            ImGui::Image((void*) (intptr_t) camera_textures[1], ImVec2(windowSize.x / 2, windowSize.y - verticalOffset * 2));
+            ImGui::End(); // Onboard camera views
+        }
+
+        // Scene reconstruction
+        {
+            // Init the window docked to the top right corner
+            ImGui::SetNextWindowSize(ImVec2(reconstruction_texture_size.x(), reconstruction_texture_size.y()), ImGuiCond_Once);
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, 0), ImGuiCond_Once, ImVec2(1.0f, 0.0f));
+
+            ImGui::Begin("Scene reconstruction");
+            ImGui::Image((void*) (intptr_t) reconstruction_texture, ImVec2(reconstruction_texture_size.x(), reconstruction_texture_size.y()));
+            ImGui::End(); // Scene reconstruction
+        }
 
         ImGui::Render();
-
-        RAC_ERRNO_MSG("debugview after ImGui render");
     }
 
-    bool load_camera_images() {
-        RAC_ERRNO_MSG("debugview at start of load_camera_images");
-
-        if (last_datum_with_images == nullptr) {
-            return false;
-        }
-
-        if (last_datum_with_images->img0.has_value()) {
-            glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
-            cv::Mat img0{last_datum_with_images->img0.value().clone()};
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img0.cols, img0.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img0.ptr());
-            camera_texture_sizes[0] = Eigen::Vector2i(img0.cols, img0.rows);
-            GLint swizzleMask[]     = {GL_RED, GL_RED, GL_RED, GL_RED};
-            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
-        } else {
-            std::cerr << "img0 has no value!" << std::endl;
-            glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE,
-                         &(test_pattern[0][0]));
-            glFlush();
-            camera_texture_sizes[0] = Eigen::Vector2i(TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT);
-        }
-
-        if (last_datum_with_images->img1.has_value()) {
-            glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
-            cv::Mat img1{last_datum_with_images->img1.value().clone()}; /// <- Adding this here to simulate the copy
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, img1.cols, img1.rows, 0, GL_RED, GL_UNSIGNED_BYTE, img1.ptr());
-            camera_texture_sizes[1] = Eigen::Vector2i(img1.cols, img1.rows);
-            GLint swizzleMask[]     = {GL_RED, GL_RED, GL_RED, GL_RED};
-            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
-        } else {
-            glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE,
-                         &(test_pattern[0][0]));
-            glFlush();
-            camera_texture_sizes[1] = Eigen::Vector2i(TEST_PATTERN_WIDTH, TEST_PATTERN_HEIGHT);
-        }
-
-        RAC_ERRNO_MSG("debugview at end of load_camera_images");
-        return true;
-    }
-
+    // Generate headset position in 3D space
     Eigen::Matrix4f generateHeadsetTransform(const Eigen::Vector3f& position, const Eigen::Quaternionf& rotation,
                                              const Eigen::Vector3f& positionOffset) {
         Eigen::Matrix4f headsetPosition;
@@ -272,117 +525,6 @@ public:
         rotationMatrixHomogeneous.block(0, 0, 3, 3) = rotationMatrix;
         // Then we apply the headset rotation.
         return headsetPosition * rotationMatrixHomogeneous;
-    }
-
-    void _p_thread_setup() override {
-        RAC_ERRNO_MSG("debugview at start of _p_thread_setup");
-
-        // Note: glfwMakeContextCurrent must be called from the thread which will be using it.
-        glfwMakeContextCurrent(gui_window);
-    }
-
-    void _p_one_iteration() override {
-        RAC_ERRNO_MSG("debugview at stat of _p_one_iteration");
-
-        RAC_ERRNO_MSG("debugview before glfwPollEvents");
-        glfwPollEvents();
-        RAC_ERRNO_MSG("debugview after glfwPollEvents");
-
-        if (glfwGetMouseButton(gui_window, GLFW_MOUSE_BUTTON_LEFT)) {
-            double xpos, ypos;
-
-            glfwGetCursorPos(gui_window, &xpos, &ypos);
-
-            Eigen::Vector2d new_pos = Eigen::Vector2d{xpos, ypos};
-            if (beingDragged == false) {
-                last_mouse_pos = new_pos;
-                beingDragged   = true;
-            }
-            mouse_velocity = new_pos - last_mouse_pos;
-            last_mouse_pos = new_pos;
-        } else {
-            beingDragged = false;
-        }
-
-        view_euler.y() += mouse_velocity.x() * 0.002f;
-        view_euler.x() += mouse_velocity.y() * 0.002f;
-
-        mouse_velocity = mouse_velocity * 0.95;
-
-        load_camera_images();
-
-        glUseProgram(demoShaderProgram);
-
-        Eigen::Matrix4f headsetPose = Eigen::Matrix4f::Identity();
-
-        const fast_pose_type predicted_pose = pp->get_fast_pose();
-        if (pp->fast_pose_reliable()) {
-            const pose_type    pose         = predicted_pose.pose;
-            Eigen::Quaternionf combinedQuat = pose.orientation;
-            headsetPose                     = generateHeadsetTransform(pose.position, combinedQuat, tracking_position_offset);
-        }
-
-        Eigen::Matrix4f modelMatrix = Eigen::Matrix4f::Identity();
-
-        // If we are following the headset, and have a valid pose, apply the optional offset.
-        Eigen::Vector3f optionalOffset = (follow_headset && pp->fast_pose_reliable())
-            ? (predicted_pose.pose.position + tracking_position_offset)
-            : Eigen::Vector3f{0.0f, 0.0f, 0.0f};
-
-        Eigen::Matrix4f userView =
-            lookAt(Eigen::Vector3f{(float) (view_dist * cos(view_euler.y())), (float) (view_dist * sin(view_euler.x())),
-                                   (float) (view_dist * sin(view_euler.y()))} +
-                       optionalOffset,
-                   optionalOffset, Eigen::Vector3f::UnitY());
-
-        Eigen::Matrix4f modelView = userView * modelMatrix;
-
-        glUseProgram(demoShaderProgram);
-
-        // Size viewport to window size.
-        int display_w, display_h;
-
-        glfwGetFramebufferSize(gui_window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-
-        float ratio = (float) display_h / (float) display_w;
-
-        // Construct a basic perspective projection
-        RAC_ERRNO_MSG("debugview before projection_fov");
-        math_util::projection_fov(&basicProjection, 40.0f, 40.0f, 40.0f * ratio, 40.0f * ratio, 0.03f, 20.0f);
-        RAC_ERRNO_MSG("debugview after projection_fov");
-
-        glEnable(GL_CULL_FACE);
-        glEnable(GL_DEPTH_TEST);
-
-        glClearDepth(1);
-
-        glUniformMatrix4fv(modelViewAttr, 1, GL_FALSE, (GLfloat*) modelView.data());
-        glUniformMatrix4fv(projectionAttr, 1, GL_FALSE, (GLfloat*) (basicProjection.data()));
-        glBindVertexArray(demo_vao);
-
-        // Draw things
-        glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
-
-        RAC_ERRNO_MSG("debugview before glClear");
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        RAC_ERRNO_MSG("debugview after glClear");
-
-        demoscene.Draw();
-
-        modelView = userView * headsetPose;
-
-        glUniformMatrix4fv(modelViewAttr, 1, GL_FALSE, (GLfloat*) modelView.data());
-
-        headset.Draw();
-
-        draw_GUI();
-
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        RAC_ERRNO_MSG("debugview before glfwSwapBuffers");
-        glfwSwapBuffers(gui_window);
-        RAC_ERRNO_MSG("debugview after glfwSwapBuffers");
     }
 
 private:
@@ -402,15 +544,18 @@ private:
     bool            beingDragged   = false;
 
     float view_dist = 2.0;
-
     bool follow_headset = true;
-
     Eigen::Vector3f tracking_position_offset = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
 
+    // Camera images
     switchboard::ptr<const imu_cam_type> last_datum_with_images;
-    // std::vector<std::optional<cv::Mat>> camera_data = {std::nullopt, std::nullopt};
     GLuint          camera_textures[2];
     Eigen::Vector2i camera_texture_sizes[2] = {Eigen::Vector2i::Zero(), Eigen::Vector2i::Zero()};
+
+    // Scene reconstruction
+    switchboard::ptr<const reconstruction_type> last_reconstruction;
+    GLuint reconstruction_texture;
+    Eigen::Vector2i reconstruction_texture_size = Eigen::Vector2i{320, 240};
 
     GLuint demo_vao;
     GLuint demoShaderProgram;
@@ -426,140 +571,6 @@ private:
     ObjScene headset;
 
     Eigen::Matrix4f basicProjection;
-
-public:
-    /* compatibility interface */
-
-    // Debug view application overrides _p_start to control its own lifecycle/scheduling.
-    virtual void start() override {
-        RAC_ERRNO_MSG("debugview at the top of start()");
-
-        // The "imu_cam" topic is not really a topic, in the current implementation.
-        // It serves more as an event stream. Camera frames are only available on this topic
-        // the very split second they are made available. Subsequently published packets to this
-        // topic do not contain the camera frames.
-        sb->schedule<imu_cam_type>(id, "imu_cam", [&](switchboard::ptr<const imu_cam_type> datum, std::size_t) {
-            this->imu_cam_handler(datum);
-        });
-
-        if (!glfwInit()) {
-            ILLIXR::abort("[debugview] Failed to initalize glfw");
-        }
-        RAC_ERRNO_MSG("debugview after glfwInit");
-
-        /// Registering error callback for additional debug info
-        glfwSetErrorCallback(glfw_error_callback);
-
-        /// Enable debug context for glDebugMessageCallback to work
-        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-        glfwWindowHint(GLFW_VISIBLE, GL_TRUE);
-
-        constexpr std::string_view glsl_version{"#version 330 core"};
-
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-        gui_window = glfwCreateWindow(1600, 1000, "ILLIXR Debug View", nullptr, nullptr);
-        if (gui_window == nullptr) {
-            std::cerr << "Debug view couldn't create window " << __FILE__ << ":" << __LINE__ << std::endl;
-            ILLIXR::abort();
-        }
-
-        glfwSetWindowSize(gui_window, 1600, 1000);
-
-        glfwMakeContextCurrent(gui_window);
-
-        RAC_ERRNO_MSG("debuview before vsync");
-        glfwSwapInterval(1); // Enable vsync!
-        RAC_ERRNO_MSG("debugview after vysnc");
-
-        glEnable(GL_DEBUG_OUTPUT);
-        glDebugMessageCallback(MessageCallback, 0);
-
-        // Init and verify GLEW
-        const GLenum glew_err = glewInit();
-        if (glew_err != GLEW_OK) {
-            std::cerr << "[debugview] GLEW Error: " << glewGetErrorString(glew_err) << std::endl;
-            glfwDestroyWindow(gui_window);
-            ILLIXR::abort("[debugview] Failed to initialize GLEW");
-        }
-        RAC_ERRNO_MSG("debugview after glewInit");
-
-        // Initialize IMGUI context.
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-
-        // Dark theme, of course.
-        ImGui::StyleColorsDark();
-
-        // Init IMGUI for OpenGL
-        ImGui_ImplGlfw_InitForOpenGL(gui_window, true);
-        ImGui_ImplOpenGL3_Init(glsl_version.data());
-
-        // Create and bind global VAO object
-        glGenVertexArrays(1, &demo_vao);
-        glBindVertexArray(demo_vao);
-
-        demoShaderProgram = init_and_link(demo_vertex_shader, demo_fragment_shader);
-#ifndef NDEBUG
-        std::cout << "Demo app shader program is program " << demoShaderProgram << std::endl;
-#endif
-
-        vertexPosAttr    = glGetAttribLocation(demoShaderProgram, "vertexPosition");
-        vertexNormalAttr = glGetAttribLocation(demoShaderProgram, "vertexNormal");
-        modelViewAttr    = glGetUniformLocation(demoShaderProgram, "u_modelview");
-        projectionAttr   = glGetUniformLocation(demoShaderProgram, "u_projection");
-        colorUniform     = glGetUniformLocation(demoShaderProgram, "u_color");
-        RAC_ERRNO_MSG("debugview after glGetUniformLocation");
-
-        // Load/initialize the demo scene.
-        char* obj_dir = std::getenv("ILLIXR_DEMO_DATA");
-        if (obj_dir == nullptr) {
-            ILLIXR::abort("Please define ILLIXR_DEMO_DATA.");
-        }
-
-        demoscene = ObjScene(std::string(obj_dir), "scene.obj");
-        headset   = ObjScene(std::string(obj_dir), "headset.obj");
-
-        // Generate fun test pattern for missing camera images.
-        for (unsigned x = 0; x < TEST_PATTERN_WIDTH; x++) {
-            for (unsigned y = 0; y < TEST_PATTERN_HEIGHT; y++) {
-                test_pattern[x][y] = ((x + y) % 6 == 0) ? 255 : 0;
-            }
-        }
-
-        glGenTextures(2, &(camera_textures[0]));
-        glBindTexture(GL_TEXTURE_2D, camera_textures[0]);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glBindTexture(GL_TEXTURE_2D, camera_textures[1]);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        // Construct a basic perspective projection
-        math_util::projection_fov(&basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f);
-
-        glfwMakeContextCurrent(nullptr);
-        threadloop::start();
-
-        RAC_ERRNO_MSG("debuview at bottom of start()");
-    }
-
-    virtual ~debugview() override {
-        RAC_ERRNO_MSG("debugview at start of destructor");
-
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-
-        glfwDestroyWindow(gui_window);
-
-        RAC_ERRNO_MSG("debugview during destructor");
-
-        glfwTerminate();
-    }
 };
 
 PLUGIN_MAIN(debugview);

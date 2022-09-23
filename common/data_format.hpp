@@ -22,7 +22,6 @@ using ullong = unsigned long long;
 
 // Data type that combines the IMU and camera data at a certain timestamp.
 // If there is only IMU data for a certain timestamp, img0 and img1 will be null
-// time is the current UNIX time where dataset_time is the time read from the csv
 struct imu_cam_type : public switchboard::event {
     time_point             time;
     Eigen::Vector3f        angular_v;
@@ -39,6 +38,7 @@ struct imu_cam_type : public switchboard::event {
         , img1{img1_} { }
 };
 
+// Gyroscope and accelerometer readings
 struct imu_type {
     time_point                  timestamp;
     Eigen::Matrix<double, 3, 1> wm;
@@ -50,6 +50,7 @@ struct imu_type {
         , am{am_} { }
 };
 
+// RGBD image for tracking and/or scene reconstruction
 class rgb_depth_type : public switchboard::event {
     [[maybe_unused]] time_point time;
     std::optional<cv::Mat>      rgb;
@@ -125,6 +126,7 @@ struct imu_raw_type : public switchboard::event {
         , imu_time{imu_time_} { }
 };
 
+// 6 DoF pose
 struct pose_type : public switchboard::event {
     time_point         sensor_time; // Recorded time of sensor data ingestion
     Eigen::Vector3f    position;
@@ -141,8 +143,9 @@ struct pose_type : public switchboard::event {
         , orientation{orientation_} { }
 };
 
+// Pose + useful timestamps
 typedef struct {
-    pose_type  pose;
+    pose_type  pose;                  // 6 DoF pose
     time_point predict_computed_time; // Time at which the prediction was computed
     time_point predict_target_time;   // Time that prediction targeted.
 } fast_pose_type;
@@ -168,6 +171,7 @@ struct rendered_frame : public switchboard::event {
         , render_time(render_time_) { }
 };
 
+// Sequence number to trigger hologram
 struct hologram_input : public switchboard::event {
     ullong seq;
 
@@ -177,8 +181,7 @@ struct hologram_input : public switchboard::event {
         : seq{seq_} { }
 };
 
-// High-level HMD specification, timewarp plugin
-// may/will calculate additional HMD info based on these specifications
+// High-level HMD specification, timewarp plugin may/will calculate additional HMD info based on these specifications
 struct hmd_physical_info {
     float ipd;
     int   displayPixelsWide;
@@ -193,6 +196,7 @@ struct hmd_physical_info {
     float metersPerTanAngleAtCenter;
 };
 
+// Rendered textures and their pose, used to save rendered images to disk for later analysis
 struct texture_pose : public switchboard::event {
     duration           offload_duration;
     unsigned char*     image;
@@ -211,5 +215,13 @@ struct texture_pose : public switchboard::event {
         , position{position_}
         , latest_quaternion{latest_quaternion_}
         , render_quaternion{render_quaternion_} { }
+};
+
+// Image containing a 3D reconstruction of the user's surroundings
+struct reconstruction_type : public switchboard::event {
+    cv::Mat img;
+    reconstruction_type(cv::Mat img_)
+        : img(img_)
+    { }
 };
 } // namespace ILLIXR
