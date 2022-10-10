@@ -22,17 +22,14 @@ namespace ILLIXR {
         _appsink_img0 = gst_element_factory_make("appsink", "appsink_img0");
         _appsink_img1 = gst_element_factory_make("appsink", "appsink_img1");
 
-        auto nvvideoconvert_0 = gst_element_factory_make("nvvideoconvert", "nvvideoconvert0");
-        auto nvvideoconvert_1 = gst_element_factory_make("nvvideoconvert", "nvvideoconvert1");
-
         auto videoconvert_0 = gst_element_factory_make("videoconvert", "videoconvert0");
         auto videoconvert_1 = gst_element_factory_make("videoconvert", "videoconvert1");
 
-        auto h265parse_0 = gst_element_factory_make("h265parse", "h265parse0");
-        auto h265parse_1 = gst_element_factory_make("h265parse", "h265parse1");
+        auto h265parse_0 = gst_element_factory_make("h264parse", "h265parse0");
+        auto h265parse_1 = gst_element_factory_make("h264parse", "h265parse1");
 
-        auto decoder_img0 = gst_element_factory_make("nvv4l2decoder", "decoder_img0");
-        auto decoder_img1 = gst_element_factory_make("nvv4l2decoder", "decoder_img1");
+        auto decoder_img0 = gst_element_factory_make("nvh264dec", "decoder_img0");
+        auto decoder_img1 = gst_element_factory_make("nvh264dec", "decoder_img1");
 
         auto caps_filter_0 = gst_element_factory_make("capsfilter", "caps_filter_0");
         auto caps_filter_1 = gst_element_factory_make("capsfilter", "caps_filter_1");
@@ -76,12 +73,12 @@ namespace ILLIXR {
         g_object_set(G_OBJECT(identity), "dump", TRUE, nullptr);
         g_object_set(G_OBJECT(identity), "signal-handoffs", TRUE, nullptr);
 
-        gst_bin_add_many(GST_BIN(_pipeline_img0), _appsrc_img0, h265parse_0, identity, decoder_img0, videoconvert_0, nvvideoconvert_0, caps_filter_0, _appsink_img0, nullptr);
-        gst_bin_add_many(GST_BIN(_pipeline_img1), _appsrc_img1, h265parse_1, decoder_img1, videoconvert_1, nvvideoconvert_1, caps_filter_1, _appsink_img1, nullptr);
+        gst_bin_add_many(GST_BIN(_pipeline_img0), _appsrc_img0, h265parse_0, identity, decoder_img0, videoconvert_0, caps_filter_0, _appsink_img0, nullptr);
+        gst_bin_add_many(GST_BIN(_pipeline_img1), _appsrc_img1, h265parse_1, decoder_img1, videoconvert_1, caps_filter_1, _appsink_img1, nullptr);
 
         // link elements
-        if (!gst_element_link_many(_appsrc_img0, decoder_img0, nvvideoconvert_0, videoconvert_0, caps_filter_0, _appsink_img0, nullptr) ||
-            !gst_element_link_many(_appsrc_img1, decoder_img1, nvvideoconvert_1, videoconvert_1, caps_filter_1, _appsink_img1, nullptr)) {
+        if (!gst_element_link_many(_appsrc_img0, h265parse_0, decoder_img0, videoconvert_0, caps_filter_0, _appsink_img0, nullptr) ||
+            !gst_element_link_many(_appsrc_img1, h265parse_1, decoder_img1, videoconvert_1, caps_filter_1, _appsink_img1, nullptr)) {
             abort("Failed to link elements");
         }
 
@@ -140,8 +137,8 @@ namespace ILLIXR {
             if (_img0_ready && _img1_ready) {
                 // _callback(cv::Mat(480, 752, CV_8UC1, _img0_map.data),
                 //           cv::Mat(480, 752,  CV_8UC1, _img1_map.data));
-                _callback(cv::Mat(376, 672, CV_8UC1, _img0_map.data),
-                          cv::Mat(376, 672,  CV_8UC1, _img1_map.data));
+                _callback(cv::Mat(480, 752, CV_8UC1, _img0_map.data),
+                          cv::Mat(480, 752,  CV_8UC1, _img1_map.data));
                 _img0_ready = false;
                 _img1_ready = false;
                 lock.unlock(); // unlock and notify the waiting thread to clean up

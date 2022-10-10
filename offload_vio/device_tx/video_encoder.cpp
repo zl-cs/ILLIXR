@@ -25,6 +25,8 @@ namespace ILLIXR {
 
     void video_encoder::create_pipelines() {
         gst_init(nullptr, nullptr);
+        const int WIDTH = 752;
+        const int HEIGHT = 480;
 
         _appsrc_img0 = gst_element_factory_make("appsrc", "appsrc_img0");
         _appsrc_img1 = gst_element_factory_make("appsrc", "appsrc_img1");
@@ -40,13 +42,15 @@ namespace ILLIXR {
         auto nvvideoconvert_0 = gst_element_factory_make("nvvideoconvert", "nvvideoconvert0");
         auto nvvideoconvert_1 = gst_element_factory_make("nvvideoconvert", "nvvideoconvert1");
 
-        auto encoder_img0 = gst_element_factory_make("nvv4l2h264enc", "encoder_img0");
-        auto encoder_img1 = gst_element_factory_make("nvv4l2h264enc", "encoder_img1");
+        auto encoder_img0 = gst_element_factory_make("nvh264enc", "encoder_img0");
+        auto encoder_img1 = gst_element_factory_make("nvh264enc", "encoder_img1");
 
         auto h265parse_0 = gst_element_factory_make("h265parse", "h265parse0");
         auto h265parse_1 = gst_element_factory_make("h265parse", "h265parse1");
 
-        auto caps_8uc1 = gst_caps_from_string("video/x-raw,format=NV12,width=672,height=376,framerate=0/1"); // 752/480 for euroc
+        auto caps_str = "video/x-raw,format=NV12,width=" + std::to_string(WIDTH) + ",height=" + std::to_string(HEIGHT);
+        std::cout << caps_str << std::endl;
+        auto caps_8uc1 = gst_caps_from_string(caps_str.c_str()); // 752/480 for euroc
         g_object_set(G_OBJECT(_appsrc_img0), "caps", caps_8uc1, nullptr);
         g_object_set(G_OBJECT(_appsrc_img1), "caps", caps_8uc1, nullptr);
         gst_caps_unref(caps_8uc1);
@@ -57,8 +61,8 @@ namespace ILLIXR {
         gst_caps_unref(caps_convert_to);
 
         // set bitrate
-        g_object_set(G_OBJECT(encoder_img0), "bitrate", 1100000, nullptr);
-        g_object_set(G_OBJECT(encoder_img1), "bitrate", 1100000, nullptr);
+        // g_object_set(G_OBJECT(encoder_img0), "bitrate", 1100000, nullptr);
+        // g_object_set(G_OBJECT(encoder_img1), "bitrate", 1100000, nullptr);
 
         g_object_set (G_OBJECT (_appsrc_img0),
                       "stream-type", 0,
@@ -86,12 +90,14 @@ namespace ILLIXR {
         _pipeline_img0 = gst_pipeline_new("pipeline_img0");
         _pipeline_img1 = gst_pipeline_new("pipeline_img1");
 
-        gst_bin_add_many(GST_BIN(_pipeline_img0), _appsrc_img0, nvvideoconvert_0, encoder_img0, h265parse_0, caps_filter_0, videoconvert_0, _appsink_img0, nullptr);
-        gst_bin_add_many(GST_BIN(_pipeline_img1), _appsrc_img1, nvvideoconvert_1, encoder_img1, h265parse_1, caps_filter_1, videoconvert_1, _appsink_img1, nullptr);
+        // gst_bin_add_many(GST_BIN(_pipeline_img0), _appsrc_img0, nvvideoconvert_0, encoder_img0, h265parse_0, caps_filter_0, videoconvert_0, _appsink_img0, nullptr);
+        // gst_bin_add_many(GST_BIN(_pipeline_img1), _appsrc_img1, nvvideoconvert_1, encoder_img1, h265parse_1, caps_filter_1, videoconvert_1, _appsink_img1, nullptr);
+        gst_bin_add_many(GST_BIN(_pipeline_img0), _appsrc_img0, encoder_img0, _appsink_img0, nullptr);
+        gst_bin_add_many(GST_BIN(_pipeline_img1), _appsrc_img1, encoder_img1, _appsink_img1, nullptr);
 
         // link elements
-        if (!gst_element_link_many(_appsrc_img0, nvvideoconvert_0, encoder_img0, _appsink_img0, nullptr) ||
-            !gst_element_link_many(_appsrc_img1, nvvideoconvert_1, encoder_img1, _appsink_img1, nullptr)) {
+        if (!gst_element_link_many(_appsrc_img0, encoder_img0, _appsink_img0, nullptr) ||
+            !gst_element_link_many(_appsrc_img1, encoder_img1, _appsink_img1, nullptr)) {
             abort("Failed to link elements");
         }
 
@@ -134,6 +140,7 @@ namespace ILLIXR {
                 ret_img1 != GST_FLOW_OK) {
             abort("Failed to push buffer");
         }
+        std::cout << "buffer pushed" << std::endl;
     }
 
     void video_encoder::init() {
@@ -142,6 +149,7 @@ namespace ILLIXR {
 
     GstFlowReturn video_encoder::cb_appsink(GstElement *sink) {
         // print thread id
+        std::cout << "sink" << std::endl;
         GstSample *sample;
         g_signal_emit_by_name(sink, "pull-sample", &sample);
         if (sample) {
