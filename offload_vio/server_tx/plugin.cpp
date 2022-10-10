@@ -34,7 +34,6 @@ public:
 		}
 
 		receiver_to_sender.open(data_path + "/receiver_to_sender_time.csv");
-		// hashed.open(data_path + "/hash_server_tx.txt");
 
 		last_send_time = timestamp();
 	}
@@ -156,13 +155,8 @@ public:
 			long int now = timestamp();
 			write_socket->write(data_to_be_sent + delimitter);
 			long int send_duration = timestamp() - now;
-			std::cout << "send_duration: " << send_duration << std::endl;
+			// std::cout << "send_duration: " << send_duration << std::endl;
 			last_send_time = now;
-
-			// hash<std::string> hasher;
-			// auto hash_result = hasher(data_to_be_sent);
-
-			// hashed << datum->frame_id << "\t" << hash_result << endl;
 
 			delete vio_output_params;
 		} else {
@@ -182,8 +176,6 @@ private:
 	long int last_send_time;
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
     std::ofstream receiver_to_sender;
-	// std::ofstream hashed;
-
 };
 
 PLUGIN_MAIN(server_writer)

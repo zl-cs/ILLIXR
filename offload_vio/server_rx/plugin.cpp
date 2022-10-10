@@ -46,7 +46,7 @@ public:
 		
 		receive_time.open(data_path + "/receive_time.csv");
 		// hashed_data.open(data_path + "/hash_server_rx.txt");
-		dec_latency.open(data_path + "/dec.csv");
+		// dec_latency.open(data_path + "/dec.csv");
 		socket.set_reuseaddr();
 		socket.bind(server_addr);
 	}
@@ -111,7 +111,7 @@ public:
 
             queue.consume_one([&](uint64_t& timestamp) {
                 uint64_t curr = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                std::cout << "=== latency: " << (curr - timestamp) / 1000000.0 << std::endl;
+                // std::cout << "=== latency: " << (curr - timestamp) / 1000000.0 << std::endl;
             });
             {
                 std::lock_guard<std::mutex> lock{mutex};
@@ -119,7 +119,7 @@ public:
                 this->img1 = std::forward<cv::Mat>(img1);
                 img_ready = true;
             }
-            std::cout << "notify" << std::endl;
+            // std::cout << "notify" << std::endl;
             cv.notify_one();
         });
         decoder->init();
@@ -127,12 +127,11 @@ public:
 
 private:
 	void ReceiveVioInput(const vio_input_proto::IMUCamVec& vio_input) {
-        std::cout << "Received VIO input" << std::endl;	
+        // std::cout << "Received VIO input" << std::endl;	
 
 		// Logging
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		double sec_to_trans = (curr_time - vio_input.real_timestamp()) / 1e9;
-		// receive_time << vio_input.frame_id() << "," << vio_input.real_timestamp() << "," << sec_to_trans * 1e3 << std::endl;
 		receive_time << vio_input.frame_id() << "," << vio_input.cam_time() << "," << sec_to_trans * 1e3 << std::endl;
 
 		// Loop through all IMU values first then the cam frame	
@@ -148,7 +147,7 @@ private:
 				auto img0_copy = std::string(curr_data.img0_data());
 				auto img1_copy = std::string(curr_data.img1_data());
 
-                std::cout << "img0 size: " << curr_data.img0_size() << std::endl;
+                // std::cout << "img0 size: " << curr_data.img0_size() << std::endl;
 
 				auto start_dcmp = timestamp();
                 uint64_t curr = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -157,7 +156,7 @@ private:
                 decoder->enqueue(img0_copy, img1_copy);
                 cv.wait(lock, [this]() { return img_ready; });
                 img_ready = false;
-				dec_latency << vio_input.frame_id() << "," << vio_input.cam_time() << "," << timestamp() - start_dcmp << std::endl;
+				// dec_latency << vio_input.frame_id() << "," << vio_input.cam_time() << "," << timestamp() - start_dcmp << std::endl;
 
 //				cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, img0_copy->data());
 //				cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, img1_copy->data());
@@ -165,7 +164,7 @@ private:
                 cam0 = std::make_optional<cv::Mat>(img0.clone());
                 cam1 = std::make_optional<cv::Mat>(img1.clone());
 
-                std::cout << "unlock" << std::endl;
+                // std::cout << "unlock" << std::endl;
                 lock.unlock();
 			}
 
@@ -204,7 +203,7 @@ private:
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
 	std::ofstream receive_time;
 	// std::ofstream hashed_data;
-	std::ofstream dec_latency;
+	// std::ofstream dec_latency;
 };
 
 PLUGIN_MAIN(server_reader)
