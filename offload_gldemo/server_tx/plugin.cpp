@@ -68,32 +68,34 @@ private:
 		std::cout << "*****Received a frame\n"; 
 		// std::cout << "*****Compressed_size before: " << compressed_size << std::endl; 
 		
-		startCompressionTime = _m_clock->now(); 
-		for (int eye_idx = 0; eye_idx < 2; eye_idx++) {
-			compressed_size = compressBound(uncompressed_size); 
-			if (outbuff[eye_idx] != nullptr) { free(outbuff[eye_idx]); outbuff[eye_idx] = nullptr; };
-			outbuff[eye_idx] = (unsigned char*)malloc(compressed_size);
-			int is_success = compress2(outbuff[eye_idx], &compressed_size, eye_idx == 0 ? datum->left : datum->right, uncompressed_size, Z_BEST_COMPRESSION); 
-			std::cout << "*****Compressed_size after: "<< compressed_size << "\t" << eye_idx << std::endl; 
-			if (is_success != Z_OK) {
-				std::cout << "*****Compressed_size after: "<< compressed_size << "\t" << eye_idx << std::endl; 
-				ILLIXR::abort("Image compression failed !!! ");
-			}
-			sizes[eye_idx] = compressed_size;
-		}
-		endCompressionTime = _m_clock->now(); 
-		std::cout << "!!!FRAME COMPRESSION TIME: " << (endCompressionTime-startCompressionTime).count() << "\n"; 
+		// startCompressionTime = _m_clock->now(); 
+		// for (int eye_idx = 0; eye_idx < 2; eye_idx++) {
+		// 	compressed_size = compressBound(uncompressed_size); 
+		// 	if (outbuff[eye_idx] != nullptr) { free(outbuff[eye_idx]); outbuff[eye_idx] = nullptr; };
+		// 	outbuff[eye_idx] = (unsigned char*)malloc(compressed_size);
+		// 	int is_success = compress2(outbuff[eye_idx], &compressed_size, eye_idx == 0 ? datum->left : datum->right, uncompressed_size, Z_BEST_COMPRESSION); 
+		// 	std::cout << "*****Compressed_size after: "<< compressed_size << "\t" << eye_idx << std::endl; 
+		// 	if (is_success != Z_OK) {
+		// 		std::cout << "*****Compressed_size after: "<< compressed_size << "\t" << eye_idx << std::endl; 
+		// 		ILLIXR::abort("Image compression failed !!! ");
+		// 	}
+		// 	sizes[eye_idx] = compressed_size;
+		// }
+		// endCompressionTime = _m_clock->now(); 
+		// std::cout << "!!!FRAME COMPRESSION TIME: " << (endCompressionTime-startCompressionTime).count() << "\n"; 
 
 		startSendFrame = _m_clock->now();
 		gldemo_output_proto::image* left_img = new gldemo_output_proto::image();
-		std::string left_to_transfer(reinterpret_cast<char*>(outbuff[0]), sizes[0]); 
+		// std::string left_to_transfer(reinterpret_cast<char*>(outbuff[0]), sizes[0]);
+		std::string left_to_transfer(reinterpret_cast<char*>(datum->left), uncompressed_size); 
 		left_img->set_pixels(left_to_transfer);
 		assert(left_to_transfer.size() == sizes[0] && "left image corrupted");
 		left_img->set_size(sizes[0]); 
 
 		gldemo_output_proto::image* right_img = new gldemo_output_proto::image();
-		std::string right_to_transfer(reinterpret_cast<char*>(outbuff[1]), sizes[1]); // FIXME unsigned char vs char
-		right_img->set_pixels(right_to_transfer); // FIXME should I dereference it or now? 
+		// std::string right_to_transfer(reinterpret_cast<char*>(outbuff[1]), sizes[1]); // FIXME unsigned char vs char
+		std::string right_to_transfer(reinterpret_cast<char*>(datum->right), uncompressed_size);
+		right_img->set_pixels(right_to_transfer); // FIXME should I dereference it or now?
 		assert(right_to_transfer.size() == sizes[1] && "right image corrupted");
 		right_img->set_size(sizes[1]); 
 

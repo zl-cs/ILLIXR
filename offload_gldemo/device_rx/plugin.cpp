@@ -116,26 +116,33 @@ private:
 		auto fast_pose = _m_fast_pose.dequeue(); 
 		if (fast_pose == nullptr) return;
 
-		startUncompressionTime = _m_clock->now();
-		// uncompress the texture images
-		for (int eye_idx = 0; eye_idx < 2; eye_idx++) {
-			if (outbuff[eye_idx] != nullptr) { free(outbuff[eye_idx]); outbuff[eye_idx] = nullptr; } 
-			outbuff[eye_idx] = (unsigned char*)malloc(uncompressed_size);
-			int is_success = uncompress(outbuff[eye_idx], &uncompressed_size, 
-										eye_idx == 0 ? reinterpret_cast<const unsigned char*>(frame.left().pixels().c_str()) : reinterpret_cast<const unsigned char*>(frame.right().pixels().c_str()), 
-										eye_idx == 0 ? frame.left().size() : frame.right().size()); 
-			if (is_success != Z_OK) { 
-				ILLIXR::abort("Image uncompression failed !!! ");
-			}
+		// startUncompressionTime = _m_clock->now();
+		// // uncompress the texture images
+		// for (int eye_idx = 0; eye_idx < 2; eye_idx++) {
+		// 	if (outbuff[eye_idx] != nullptr) { free(outbuff[eye_idx]); outbuff[eye_idx] = nullptr; } 
+		// 	outbuff[eye_idx] = (unsigned char*)malloc(uncompressed_size);
+		// 	int is_success = uncompress(outbuff[eye_idx], &uncompressed_size, 
+		// 								eye_idx == 0 ? reinterpret_cast<const unsigned char*>(frame.left().pixels().c_str()) : reinterpret_cast<const unsigned char*>(frame.right().pixels().c_str()), 
+		// 								eye_idx == 0 ? frame.left().size() : frame.right().size()); 
+		// 	if (is_success != Z_OK) { 
+		// 		ILLIXR::abort("Image uncompression failed !!! ");
+		// 	}
 			// copy texture image from CPU to GPU
-			glBindTexture(GL_TEXTURE_2D, eyetextures[eye_idx]);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, outbuff[eye_idx]);
-		}
-		endUncompressionTime = _m_clock->now(); 
-		uncompression_file << (endUncompressionTime-startUncompressionTime).count() << "\n"; 
+		// 	glBindTexture(GL_TEXTURE_2D, eyetextures[eye_idx]);
+		// 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, outbuff[eye_idx]);
+		// }
+		// endUncompressionTime = _m_clock->now(); 
+		// uncompression_file << (endUncompressionTime-startUncompressionTime).count() << "\n"; 
 
+		glBindTexture(GL_TEXTURE_2D, eyetextures[0]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, reinterpret_cast<const unsigned char*>(frame.left().pixels().c_str()));
 		// GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
 		// glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+
+		glBindTexture(GL_TEXTURE_2D, eyetextures[1]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, EYE_TEXTURE_WIDTH, EYE_TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, reinterpret_cast<const unsigned char*>(frame.right().pixels().c_str()));
+		// GLint swizzleMask1[] = {GL_RED, GL_RED, GL_RED, GL_RED};
+		// glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask1);
 
 	
 		_m_eyebuffer.put(_m_eyebuffer.allocate<rendered_frame>(
