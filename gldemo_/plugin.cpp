@@ -54,7 +54,7 @@ public:
 		, xwin{new xlib_gl_extended_window{1, 1, pb->lookup_impl<xlib_gl_extended_window>()->glc}}
 		, sb{pb->lookup_impl<switchboard>()}
 		//, xwin{pb->lookup_impl<xlib_gl_extended_window>()}
-		, pp{pb->lookup_impl<pose_prediction>()}
+		// , pp{pb->lookup_impl<pose_prediction>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
 		, _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}	
