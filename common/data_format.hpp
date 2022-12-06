@@ -350,4 +350,68 @@ namespace ILLIXR {
           , render_quaternion{render_quaternion_}
         { }
     };
+
+    struct feature : public switchboard::event {
+		/// Unique ID of this feature
+		size_t featid;
+
+		/// If this feature should be deleted
+		bool to_delete;
+
+		/// UV coordinates that this feature has been seen from (mapped by camera ID)
+		std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvs;
+
+		/// UV normalized coordinates that this feature has been seen from (mapped by camera ID)
+		std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvs_norm;
+
+		/// Timestamps of each UV measurement (mapped by camera ID)
+		std::unordered_map<size_t, std::vector<double>> timestamps;
+
+		/// What camera ID our pose is anchored in!! By default the first measurement is the anchor.
+		int anchor_cam_id = -1;
+
+		/// Timestamp of anchor clone
+		double anchor_clone_timestamp;
+
+		/// Triangulated position of this feature, in the anchor frame
+		Eigen::Vector3d p_FinA;
+
+		/// Triangulated position of this feature, in the global frame
+		Eigen::Vector3d p_FinG;
+
+		feature(size_t featid_, bool to_delete_, std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvs_,
+				std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvs_norm_, 
+				std::unordered_map<size_t, std::vector<double>> timestamps_,
+				int anchor_cam_id_, double anchor_clone_timestamp_,
+				Eigen::Vector3d p_FinA_, Eigen::Vector3d p_FinG_)
+			: featid{featid_}
+			, to_delete{to_delete_}
+			, uvs{uvs_}
+			, uvs_norm{uvs_norm_}
+			, timestamps{timestamps_}
+			, anchor_cam_id{anchor_cam_id_}
+			, anchor_clone_timestamp{anchor_clone_timestamp_}
+			, p_FinA{p_FinA_}
+			, p_FinG{p_FinG_} 
+		{ }
+    };
+
+	typedef struct {
+		size_t size;
+		long timestamp;
+		std::vector<feature> feats;
+	} features;
+
+    // struct IMU_state : public switchboard::event {
+    //     double timestamp;
+    //     Eigen::Matrix<double, 16, 1> imu;
+    //     IMU_state(double timestamp_, Eigen::Matrix<double, 16, 1> imu_)
+    //         : timestamp(timestamp_)
+    //         , imu(imu_) { }
+    // };
+
+    // typedef struct {
+    //     IMU_state state;
+    //     std::vector<feature> features;
+    // } vio_features;
 }

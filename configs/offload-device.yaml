@@ -1,7 +1,7 @@
 plugin_groups:
   - plugin_group:
       - path: offline_imu_cam/
-      - path: record_imu_cam/ # turn on for collecting datasets
+      # - path: record_imu_cam/ # turn on for collecting datasets
       # - path: zed/
       # - path: realsense/
       # - path: rk4_integrator/
@@ -12,7 +12,7 @@ plugin_groups:
       - path: gldemo/
       - path: debugview/
       # - path: offload_data/
-      - path: offload_vio/device_rx/
+      # - path: offload_vio/device_rx/
       - path: offload_vio/device_tx/
   - !include "core_plugins.yaml"
 
