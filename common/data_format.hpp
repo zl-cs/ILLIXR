@@ -102,6 +102,13 @@ namespace ILLIXR {
 		{ }
 	};
 
+	struct imu_buffer : public switchboard::event {
+		std::vector<imu_type> imus;
+		imu_buffer(std::vector<imu_type> imus_)
+			: imus{imus_}
+		{ }
+	};
+
     class rgb_depth_type : public switchboard::event {
         [[maybe_unused]] time_point time;
         std::optional<cv::Mat> rgb;
@@ -396,12 +403,16 @@ namespace ILLIXR {
 		{ }
     };
 
-	typedef struct {
+	struct features : public switchboard::event {
 		size_t size;
-		long timestamp;
+		time_point timestamp;
 		std::vector<feature> feats;
-	} features;
-
+		features(size_t size_, time_point timestamp_, std::vector<feature> feats_)
+			: size{size_}
+			, timestamp{timestamp_}
+			, feats{feats_}
+		{ }
+	};
     // struct IMU_state : public switchboard::event {
     //     double timestamp;
     //     Eigen::Matrix<double, 16, 1> imu;

@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include "vio_input.pb.h"
+#include "imu_features.pb.h"
 
 #include "common/network/socket.hpp"
 #include "common/network/net_config.hpp"
@@ -19,8 +19,10 @@ public:
 	server_reader(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
-		, _m_imu_cam{sb->get_writer<imu_cam_type_prof>("imu_cam")}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
+		, _m_imu_buffer{sb->get_writer<imu_buffer>("imu_buffer")}
 		, _conn_signal{sb->get_writer<connection_signal>("connection_signal")}
+		, _m_feats_MSCKF{sb->get_writer<features>("feats_MSCKF")}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, buffer_str("")
     { 
@@ -59,18 +61,17 @@ public:
 				while (end_position != string::npos) {
 					string before = buffer_str.substr(0, end_position);
 					buffer_str = buffer_str.substr(end_position + delimitter.size());
-					// cout << "Complete response = " << before.size() << endl;
 					// process the data
-					vio_input_proto::IMUCamVec vio_input;
+					imu_features_proto::IMUFeatures vio_input;
 					bool success = vio_input.ParseFromString(before);
 					if (!success) {
 						cout << "Error parsing the protobuf, vio input size = " << before.size() << endl;
 					} else {
-						// cout << "Received the protobuf data!" << endl;
-						hash<std::string> hasher;
-						auto hash_result = hasher(before);
-						hashed_data << vio_input.frame_id() << "\t" << hash_result << endl;
-						cout << "Receive frame id = " << vio_input.frame_id() << endl;
+						cout << "Received the protobuf data!" << endl;
+						// hash<std::string> hasher;
+						// auto hash_result = hasher(before);
+						// hashed_data << vio_input.frame_id() << "\t" << hash_result << endl;
+						// cout << "Receive frame id = " << vio_input.frame_id() << endl;
 						ReceiveVioInput(vio_input);
 					}
 					end_position = buffer_str.find(delimitter);
@@ -85,48 +86,89 @@ public:
 	}
 
 private:
-	void ReceiveVioInput(const vio_input_proto::IMUCamVec& vio_input) {	
+	void ReceiveVioInput(const imu_features_proto::IMUFeatures& vio_input) {
 
 		// Logging
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		double sec_to_trans = (curr_time - vio_input.real_timestamp()) / 1e9;
-		receive_time << vio_input.frame_id() << "," << vio_input.real_timestamp() << "," << sec_to_trans * 1e3 << std::endl;
+		receive_time << frame_id++ << "," << vio_input.real_timestamp() << "," << sec_to_trans * 1e3 << std::endl;
 
+		std::cout << "There are " << vio_input.imu_data_size() << " imu samples in this package\n";
+		time_point start = _m_clock->now();
 		// Loop through all IMU values first then the cam frame	
-		for (int i = 0; i < vio_input.imu_cam_data_size(); i++) {
-			vio_input_proto::IMUCamData curr_data = vio_input.imu_cam_data(i);
+		for (int i = 0; i < vio_input.imu_data_size(); i++) {
+			imu_features_proto::IMUData curr_data = vio_input.imu_data(i);
+			imus.emplace_back(time_point{std::chrono::nanoseconds{curr_data.timestamp()}}, 
+							   Eigen::Vector3d{curr_data.angular_vel().x(), curr_data.angular_vel().y(), curr_data.angular_vel().z()},
+							   Eigen::Vector3d{curr_data.linear_accel().x(), curr_data.linear_accel().y(), curr_data.linear_accel().z()});
 
-			std::optional<cv::Mat> cam0 = std::nullopt;
-			std::optional<cv::Mat> cam1 = std::nullopt;
 
-			if (curr_data.rows() != -1 && curr_data.cols() != -1) {
-
-				// Must do a deep copy of the received data (in the form of a string of bytes)
-				// auto img0_copy = std::make_shared<std::string>(std::string(curr_data.img0_data()));
-				// auto img1_copy = std::make_shared<std::string>(std::string(curr_data.img1_data()));
-
-				cv::Mat img0(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img0_data().data()));
-				cv::Mat img1(curr_data.rows(), curr_data.cols(), CV_8UC1, (void*)(curr_data.img1_data().data()));
-
-				cam0 = std::make_optional<cv::Mat>(img0.clone());
-				cam1 = std::make_optional<cv::Mat>(img1.clone());
-			}
-
-			_m_imu_cam.put(_m_imu_cam.allocate<imu_cam_type_prof>(
-				imu_cam_type_prof {
-					vio_input.frame_id(),
-					time_point{std::chrono::nanoseconds{curr_data.timestamp()}},
-					time_point{std::chrono::nanoseconds{vio_input.real_timestamp()}}, // Timestamp of when the device sent the packet
-					time_point{std::chrono::nanoseconds{curr_time}}, // Timestamp of receive time of the packet
-					time_point{std::chrono::nanoseconds{vio_input.dataset_timestamp()}}, // Timestamp of the sensor data
-					0,
-					Eigen::Vector3f{curr_data.angular_vel().x(), curr_data.angular_vel().y(), curr_data.angular_vel().z()},
-					Eigen::Vector3f{curr_data.linear_accel().x(), curr_data.linear_accel().y(), curr_data.linear_accel().z()},
-					cam0,
-					cam1
-				}
-			));	
+			
 		}
+		std::vector<feature> feats_MSCKF;
+		for (int i = 0; i < vio_input.feats_msckf_size(); i++) {
+			imu_features_proto::Feature f = vio_input.feats_msckf(i);
+			// reconstruct uv_map
+			std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uv_map;
+			for (int j = 0; j < f.uv_map_size(); j++) {
+				imu_features_proto::UVMapElem uv_map_elem = f.uv_map(j);
+				std::vector<Eigen::VectorXf> vec;
+				for (int k = 0; k < uv_map_elem.uv_size(); k++) {
+					imu_features_proto::Vec2 v = uv_map_elem.uv(k);
+					// vec.push_back(Eigen::VectorXf{v.x(), v.y()});
+					Eigen::VectorXf vxf(2);
+					vxf.x() = v.x();
+					vxf.y() = v.y();
+					vec.push_back(vxf);
+				}
+				uv_map.emplace(uv_map_elem.id(), vec);
+			}
+			// reconstruct uvn_map
+			std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvn_map;
+			for (int j = 0; j < f.uvn_map_size(); j++) {
+				imu_features_proto::UVMapElem uvn_map_elem = f.uvn_map(j);
+				std::vector<Eigen::VectorXf> vec;
+				for (int k = 0; k < uvn_map_elem.uv_size(); k++) {
+					imu_features_proto::Vec2 v = uvn_map_elem.uv(k);
+					Eigen::VectorXf vxf(2);
+					vxf.x() = v.x();
+					vxf.y() = v.y();
+					vec.push_back(vxf);
+				}
+				uvn_map.emplace(uvn_map_elem.id(), vec);
+			}
+			// reconstruct the timestamp map
+			std::unordered_map<size_t, std::vector<double>> timestamp_map;
+			for (int j = 0; j < f.ts_map_size(); j++) {
+				imu_features_proto::TimestampMapElem ts_map_elem = f.ts_map(j);
+				std::vector<double> vec;
+				for (int k = 0; k < ts_map_elem.timestamps_size(); k++) {
+					vec.push_back(ts_map_elem.timestamps(k));
+				}
+				timestamp_map.emplace(ts_map_elem.id(), vec);
+			}
+			feats_MSCKF.push_back(feature
+						{f.featid(), f.to_delete(), 
+						uv_map, uvn_map, timestamp_map, 
+						f.anchor_cam_id(), f.anchor_clone_timestamp(), 
+						Eigen::Vector3d{f.p_fina().x(), f.p_fina().y(), f.p_fina().z()},
+						Eigen::Vector3d{f.p_fing().x(), f.p_fing().y(), f.p_fing().z()}
+						});
+		}
+		std::cout << "Deserialization takes " << (_m_clock->now() - start).count() << "\n";
+		_m_feats_MSCKF.put(_m_feats_MSCKF.allocate<features>(
+			features{
+				feats_MSCKF.size(),
+				time_point{std::chrono::nanoseconds{vio_input.timestamp()}},
+				feats_MSCKF
+			}
+		));
+
+		_m_imu_buffer.put(_m_imu_buffer.allocate<imu_buffer>(
+			imu_buffer{imus}
+		));
+		imus.clear();
+
 
 		// unsigned long long after_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		// double sec_to_push = (after_time - curr_time) / 1e9;
@@ -134,8 +176,10 @@ private:
 	}
 
     const std::shared_ptr<switchboard> sb;
-	switchboard::writer<imu_cam_type_prof> _m_imu_cam;
+	const std::shared_ptr<RelativeClock> _m_clock;
+	switchboard::writer<imu_buffer> _m_imu_buffer;
 	switchboard::writer<connection_signal> _conn_signal;
+	switchboard::writer<features> _m_feats_MSCKF;
 
 	TCPSocket socket;
 	TCPSocket * read_socket = NULL;
@@ -145,6 +189,9 @@ private:
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
 	std::ofstream receive_time;
 	std::ofstream hashed_data;
+
+	std::vector<imu_type> imus;
+	int frame_id = 0;
 };
 
 PLUGIN_MAIN(server_reader)

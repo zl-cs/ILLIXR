@@ -13,7 +13,7 @@ find_package(OpenCV REQUIRED)
 add_library(plugin SHARED plugin.cpp)
 
 set(protobuf_files
-    ${CMAKE_CURRENT_SOURCE_DIR}/vio_input.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/imu_features.proto
 )
 PROTOBUF_TARGET_CPP(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${protobuf_files})
 

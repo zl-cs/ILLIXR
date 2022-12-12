@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package imu_features_proto;
+
+message Vec3
+{
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Vec2
+{
+  double x = 1;
+  double y = 2;
+}
+
+message UVMapElem
+{
+  uint32 id = 1;
+  repeated Vec2 uv = 2;
+}
+
+message TimestampMapElem
+{
+  uint32 id = 1;
+  repeated fixed64 timestamps = 2;  
+}
+
+message IMUData
+{
+  fixed64 timestamp = 1;
+  Vec3 angular_vel = 2;
+  Vec3 linear_accel = 3;
+}
+
+message Feature
+{
+  uint32 featid = 1;
+  bool to_delete = 2;
+  repeated UVMapElem uv_map = 3;
+  repeated UVMapElem uvn_map = 4;
+  repeated TimestampMapElem ts_map = 5;
+  int32 anchor_cam_id = 6;
+  double anchor_clone_timestamp = 7;
+  Vec3 p_FinA = 8;
+  Vec3 p_FinG = 9;
+}
+
+message IMUFeatures 
+{
+  repeated IMUData imu_data = 1;
+  repeated Feature feats_MSCKF = 2;
+  repeated Feature feats_slam_UPDATE = 3;
+  repeated Feature feats_slam_DELAYED = 4;
+  fixed64 timestamp = 5;
+  fixed64 real_timestamp = 6;
+}
