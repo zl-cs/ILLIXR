@@ -122,7 +122,11 @@ protected:
                 cam1
             }
         ));
-
+		// if (cam0.has_value() && cam1.has_value()) {
+		// 	std::cout << "Have image at " << dataset_now - dataset_first_time << "\n";
+		// } else {
+		// 	std::cout << "No image at " << dataset_now - dataset_first_time << "\n";
+		// }
 		ullong now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		auto dataset_relative_time = time_point{std::chrono::nanoseconds(dataset_now - dataset_first_time)};
 		long int diff_time = (now - initial_time) - dataset_relative_time.time_since_epoch().count();

@@ -19,10 +19,12 @@ public:
     offload_writer(std::string name_, phonebook* pb_)
 		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
+		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_feats_MSCKF{sb->get_reader<features>("feats_MSCKF")}
 		, _m_feats_slam_UPDATE{sb->get_reader<features>("feats_slam_UPDATE")}
 		, _m_feats_slam_DELAYED{sb->get_reader<features>("feats_slam_DELAYED")}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
+		, feats_timestamp{time_point{}}
     { 
 		socket.set_reuseaddr();
 		socket.bind(Address(CLIENT_IP, CLIENT_PORT_1));
@@ -37,7 +39,8 @@ public:
 		hashed_data.open(data_path + "/hash_device_tx.txt");
 		frame_info.open(data_path + "/frame_info.csv");
 
-		frame_info << "frame_id,created_to_sent_time_ms,duration_to_send_ms,is_dropped" << endl;
+		// frame_info << "frame_id,created_to_sent_time_ms,duration_to_send_ms,is_dropped" << endl;
+		frame_info << "frame_id, created_to_sent, created_to_sent_done, serialization_and_sent" << std::endl;
 	}
 
 
@@ -48,50 +51,59 @@ public:
 		socket.connect(server_addr);
 		cout << "Connected to " << server_addr.str(":") << endl;	
 
-        sb->schedule<imu_cam_type_prof>(id, "imu_cam", [this](switchboard::ptr<const imu_cam_type_prof> datum, std::size_t) {
+        sb->schedule<imu_buffer>(id, "imu_buffer", [this](switchboard::ptr<const imu_buffer> datum, std::size_t) {
 			this->send_imu_cam_data(datum);
 		});
 	}
 
 
-    void send_imu_cam_data(switchboard::ptr<const imu_cam_type_prof> datum) {
+    void send_imu_cam_data(switchboard::ptr<const imu_buffer> datum) {
 		// Ensures that slam doesnt start before valid IMU readings come in
         if (datum == nullptr) {
             assert(previous_timestamp == 0);
             return;
         }
 
-		assert(datum->time.time_since_epoch().count() > previous_timestamp);
-		previous_timestamp = datum->time.time_since_epoch().count();
+		// assert(datum->time.time_since_epoch().count() > previous_timestamp);
+		// previous_timestamp = datum->time.time_since_epoch().count();
 
-		imu_features_proto::IMUData* imu_data = data_buffer->add_imu_data();
-		imu_data->set_timestamp(datum->time.time_since_epoch().count());
+		for (imu_type sample : datum->imus) {
+			imu_features_proto::IMUData* imu_data = data_buffer->add_imu_data();
+			imu_data->set_timestamp(sample.timestamp.time_since_epoch().count());
 
-		imu_features_proto::Vec3* angular_vel = new imu_features_proto::Vec3();
-		angular_vel->set_x(datum->angular_v.x());
-		angular_vel->set_y(datum->angular_v.y());
-		angular_vel->set_z(datum->angular_v.z());
-		imu_data->set_allocated_angular_vel(angular_vel);
+			imu_features_proto::Vec3* angular_vel = new imu_features_proto::Vec3();
+			angular_vel->set_x(sample.wm.x());
+			angular_vel->set_y(sample.wm.y());
+			angular_vel->set_z(sample.wm.z());
+			imu_data->set_allocated_angular_vel(angular_vel);
 
-		imu_features_proto::Vec3* linear_accel = new imu_features_proto::Vec3();
-		linear_accel->set_x(datum->linear_a.x());
-		linear_accel->set_y(datum->linear_a.y());
-		linear_accel->set_z(datum->linear_a.z());
-		imu_data->set_allocated_linear_accel(linear_accel);
+			imu_features_proto::Vec3* linear_accel = new imu_features_proto::Vec3();
+			linear_accel->set_x(sample.am.x());
+			linear_accel->set_y(sample.am.y());
+			linear_accel->set_z(sample.am.z());
+			imu_data->set_allocated_linear_accel(linear_accel);
+		}
 
-		if (datum->img0.has_value() && datum->img1.has_value()) {
-			if (!cam_buffer_time.has_value()) {
-				cam_buffer_time = datum->time.time_since_epoch().count();
-				return;
-			}
+		// if (datum->img0.has_value() && datum->img1.has_value()) {
+			/* TODO
+			Would like to check the features' timestamps to make sure that they are well synced. 
+			But the logic is a bit hard to design.
+			*/
+			// if (!cam_buffer_time.has_value()) {
+			// 	cam_buffer_time = datum->time.time_since_epoch().count();
+			// 	return;
+			// }
 			auto feats_MSCKF = _m_feats_MSCKF.get_ro_nullable();
 			auto feats_slam_UPDATE = _m_feats_slam_UPDATE.get_ro_nullable();
 			auto feats_slam_DELAYED = _m_feats_slam_DELAYED.get_ro_nullable();
 
 			if (feats_MSCKF != nullptr && feats_slam_UPDATE != nullptr && feats_slam_DELAYED != nullptr) {
-				if (feats_MSCKF->timestamp == cam_buffer_time && feats_slam_UPDATE->timestamp == cam_buffer_time 
-					&& feats_slam_DELAYED->timestamp == cam_buffer_time) {
+				time_point start = _m_clock->now();
+				if (feats_MSCKF->timestamp != feats_timestamp) { // && feats_slam_UPDATE->timestamp == cam_buffer_time && feats_slam_DELAYED->timestamp == cam_buffer_time
+					feats_timestamp = feats_MSCKF->timestamp;
+					// std::cout << "Start serializing features: \n";
 						/* Serialize features */
+					data_buffer->set_timestamp(feats_MSCKF->timestamp.time_since_epoch().count());
 					std::vector<feature> features_MSCKF = feats_MSCKF->feats;
 					for (feature f : features_MSCKF) {
 						imu_features_proto::Feature* ft = data_buffer->add_feats_msckf();
@@ -136,51 +148,25 @@ public:
 							}
 						}
 					}
+					data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 					string data_to_be_sent = data_buffer->SerializeAsString();
+					std::cout << "data_to_be_sent size " << data_to_be_sent.length() << "\n";
 					string delimitter = "END!";
 
+					std::cout << "Serializationtakes " << (_m_clock->now() - start).count() << " ms\n";
+					long created_to_sent = (_m_clock->now() - feats_timestamp).count();
+					
 					socket.write(data_to_be_sent + delimitter);
+					time_point end = _m_clock->now();
+					frame_info << frame_id << "," << created_to_sent << "," << (end - feats_timestamp).count() << "," << (end - start).count() << std::endl;
+					// std::cout << "Serialization and Sending takes " << (_m_clock->now() - start).count() << " ms\n";
+					// std::cout << "feature timestamp is " << feats_timestamp.time_since_epoch().count() << " last imu timestamp is " << duration2double((datum->imus).at((datum->imus).size() - 1).timestamp.time_since_epoch()) << "\n";
 
 					delete data_buffer;
 					data_buffer = new imu_features_proto::IMUFeatures();
 				}
+				// cam_buffer_time = datum->time.time_since_epoch().count();
 			}
-		}
-			
-			// Prepare data delivery
-		// 	string data_to_be_sent = data_buffer->SerializeAsString();
-		// 	string delimitter = "END!";
-
-		// 	float created_to_sent = (std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - datum->created_time) / 1e6;
-		// 	// For packet dropping experiments. To disable it, replace the condition with "false".
-		// 	if (created_to_sent > 100) {
-		// 		std::cout << "Created to Send > 100\n";
-		// 		frame_info << frame_id << "," << created_to_sent << ",0,1" << endl;
-		// 	} else {
-		// 		auto start = timestamp();
-		// 		socket.write(data_to_be_sent + delimitter);
-		// 		auto send_duration = timestamp() - start;
-		// 		frame_info << frame_id << "," << created_to_sent << "," << send_duration << ",0" << endl;
-
-		// 		hash<std::string> hasher;
-		// 		auto hash_result = hasher(data_to_be_sent);
-		// 		hashed_data << frame_id << "\t" << hash_result << "\t" << data_buffer->dataset_timestamp() << endl;
-		// 	}
-
-		// 	// auto start = timestamp();
-		// 	// socket.write(data_to_be_sent + delimitter);
-		// 	// auto send_duration = timestamp() - start;
-		// 	// cam_data_created_to_send_time << created_to_sent << endl;
-		// 	// cout << "Frame id = " << frame_id << ", send time = " << send_duration << ", created_to_send = " << created_to_sent << endl;
-
-		// 	hash<std::string> hasher;
-		// 	auto hash_result = hasher(data_to_be_sent);
-		// 	hashed_data << frame_id << "\t" << hash_result << "\t" << data_buffer->dataset_timestamp() << endl;
-			
-		// 	frame_id++;
-
-		// 	delete data_buffer;
-		// 	data_buffer = new vio_input_proto::IMUCamVec();
 		// }
 		
     }
@@ -190,6 +176,7 @@ private:
 	int frame_id = 0;
 	imu_features_proto::IMUFeatures* data_buffer = new imu_features_proto::IMUFeatures();
     const std::shared_ptr<switchboard> sb;
+	const std::shared_ptr<RelativeClock> _m_clock;
 	switchboard::reader<features> _m_feats_MSCKF;
 	switchboard::reader<features> _m_feats_slam_UPDATE;
 	switchboard::reader<features> _m_feats_slam_DELAYED;
@@ -201,7 +188,8 @@ private:
 	std::ofstream hashed_data;
 	std::ofstream frame_info;
 
-	std::optional<long> cam_buffer_time;
+	// std::optional<long> cam_buffer_time;
+	time_point feats_timestamp;
 };
 
 PLUGIN_MAIN(offload_writer)

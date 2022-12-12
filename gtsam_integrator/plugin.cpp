@@ -285,9 +285,9 @@ private:
 
         auto seconds_since_epoch = std::chrono::duration<double>(real_time.time_since_epoch()).count();
 
-        auto to_dregrees = [](double radians) -> double {
-            return radians * 180 / M_PI;
-        };
+        // auto to_dregrees = [](double radians) -> double {
+        //     return radians * 180 / M_PI;
+        // };
 
         auto original_quaternion = out_pose.rotation().toQuaternion();
         Eigen::Matrix<double, 3, 1> rotation_angles = original_quaternion.toRotationMatrix().eulerAngles(0, 1, 2).cast<double>();
@@ -301,7 +301,7 @@ private:
             abs(rotation_angles[2] - prev_euler_angles[2]) > M_PI / 2)) {
             filters[6].clear();
             filters[7].clear();
-            std::cout << "clear filter" << std::endl;
+            // std::cout << "clear filter" << std::endl;
 //            std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
 //                      << to_dregrees(rotation_angles[2]) << "  --->  "
 //                      << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
@@ -316,10 +316,10 @@ private:
             has_prev = true;
         }
 
-        std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
-                  << to_dregrees(rotation_angles[2]) << "  --->  "
-                  << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
-                  << to_dregrees(filtered_angles[2]) << std::endl;
+        // std::cout << "roll " << to_dregrees(rotation_angles[0]) << " pitch " << to_dregrees(rotation_angles[1]) << " yaw "
+        //           << to_dregrees(rotation_angles[2]) << "  --->  "
+        //           << "filtered roll " << to_dregrees(filtered_angles[0]) << " filtered pitch " << to_dregrees(filtered_angles[1]) << " filtered yaw "
+        //           << to_dregrees(filtered_angles[2]) << std::endl;
 
         prev_euler_angles = std::move(rotation_angles);
 

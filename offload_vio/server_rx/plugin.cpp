@@ -25,7 +25,7 @@ public:
 		, _m_feats_MSCKF{sb->get_writer<features>("feats_MSCKF")}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, buffer_str("")
-    { 
+    {
 		if (!filesystem::exists(data_path)) {
 			if (!std::filesystem::create_directory(data_path)) {
 				std::cerr << "Failed to create data directory.";

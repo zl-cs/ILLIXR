@@ -42,7 +42,7 @@ message Feature
   repeated UVMapElem uvn_map = 4;
   repeated TimestampMapElem ts_map = 5;
   int32 anchor_cam_id = 6;
-  fixed64 anchor_clone_timestamp = 7;
+  double anchor_clone_timestamp = 7;
   Vec3 p_FinA = 8;
   Vec3 p_FinG = 9;
 }
@@ -53,4 +53,6 @@ message IMUFeatures
   repeated Feature feats_MSCKF = 2;
   repeated Feature feats_slam_UPDATE = 3;
   repeated Feature feats_slam_DELAYED = 4;
+  fixed64 timestamp = 5;
+  fixed64 real_timestamp = 6;
 }

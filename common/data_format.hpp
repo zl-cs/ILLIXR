@@ -413,16 +413,4 @@ namespace ILLIXR {
 			, feats{feats_}
 		{ }
 	};
-    // struct IMU_state : public switchboard::event {
-    //     double timestamp;
-    //     Eigen::Matrix<double, 16, 1> imu;
-    //     IMU_state(double timestamp_, Eigen::Matrix<double, 16, 1> imu_)
-    //         : timestamp(timestamp_)
-    //         , imu(imu_) { }
-    // };
-
-    // typedef struct {
-    //     IMU_state state;
-    //     std::vector<feature> features;
-    // } vio_features;
 }
