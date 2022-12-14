@@ -22,7 +22,9 @@ public:
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
 		, _m_imu_buffer{sb->get_writer<imu_buffer>("imu_buffer")}
 		, _conn_signal{sb->get_writer<connection_signal>("connection_signal")}
-		, _m_feats_MSCKF{sb->get_writer<features>("feats_MSCKF")}
+		// , _m_feats_MSCKF{sb->get_writer<features>("feats_MSCKF")}
+		, _m_left_pts{sb->get_writer<key_points>("left_pts")}
+		, _m_right_pts{sb->get_writer<key_points>("right_pts")}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, buffer_str("")
     {
@@ -62,7 +64,7 @@ public:
 					string before = buffer_str.substr(0, end_position);
 					buffer_str = buffer_str.substr(end_position + delimitter.size());
 					// process the data
-					imu_features_proto::IMUFeatures vio_input;
+					imu_features_proto::KeyPoints vio_input;
 					bool success = vio_input.ParseFromString(before);
 					if (!success) {
 						cout << "Error parsing the protobuf, vio input size = " << before.size() << endl;
@@ -86,7 +88,7 @@ public:
 	}
 
 private:
-	void ReceiveVioInput(const imu_features_proto::IMUFeatures& vio_input) {
+	void ReceiveVioInput(const imu_features_proto::KeyPoints& vio_input) {
 
 		// Logging
 		unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -105,64 +107,110 @@ private:
 
 			
 		}
-		std::vector<feature> feats_MSCKF;
-		for (int i = 0; i < vio_input.feats_msckf_size(); i++) {
-			imu_features_proto::Feature f = vio_input.feats_msckf(i);
-			// reconstruct uv_map
-			std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uv_map;
-			for (int j = 0; j < f.uv_map_size(); j++) {
-				imu_features_proto::UVMapElem uv_map_elem = f.uv_map(j);
-				std::vector<Eigen::VectorXf> vec;
-				for (int k = 0; k < uv_map_elem.uv_size(); k++) {
-					imu_features_proto::Vec2 v = uv_map_elem.uv(k);
-					// vec.push_back(Eigen::VectorXf{v.x(), v.y()});
-					Eigen::VectorXf vxf(2);
-					vxf.x() = v.x();
-					vxf.y() = v.y();
-					vec.push_back(vxf);
+		std::vector<key_point> left_pts;
+		std::vector<key_point> right_pts;
+		for (int i = 0; i < vio_input.left_pts_size(); i++) {
+			imu_features_proto::KeyPoint kpt_proto = vio_input.left_pts(i);
+			left_pts.emplace_back(key_point{
+				kpt_proto.id(),
+				cv::KeyPoint{
+					kpt_proto.x(),
+					kpt_proto.y(),
+					kpt_proto.size(),
+					kpt_proto.angle(),
+					kpt_proto.response(),
+					kpt_proto.octave(),
+					kpt_proto.class_id()
 				}
-				uv_map.emplace(uv_map_elem.id(), vec);
-			}
-			// reconstruct uvn_map
-			std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvn_map;
-			for (int j = 0; j < f.uvn_map_size(); j++) {
-				imu_features_proto::UVMapElem uvn_map_elem = f.uvn_map(j);
-				std::vector<Eigen::VectorXf> vec;
-				for (int k = 0; k < uvn_map_elem.uv_size(); k++) {
-					imu_features_proto::Vec2 v = uvn_map_elem.uv(k);
-					Eigen::VectorXf vxf(2);
-					vxf.x() = v.x();
-					vxf.y() = v.y();
-					vec.push_back(vxf);
+			});
+		}
+		for (int i = 0; i < vio_input.right_pts_size(); i++) {
+			imu_features_proto::KeyPoint kpt_proto = vio_input.right_pts(i);
+			right_pts.emplace_back(key_point{
+				kpt_proto.id(),
+				cv::KeyPoint{
+					kpt_proto.x(),
+					kpt_proto.y(),
+					kpt_proto.size(),
+					kpt_proto.angle(),
+					kpt_proto.response(),
+					kpt_proto.octave(),
+					kpt_proto.class_id()
 				}
-				uvn_map.emplace(uvn_map_elem.id(), vec);
-			}
-			// reconstruct the timestamp map
-			std::unordered_map<size_t, std::vector<double>> timestamp_map;
-			for (int j = 0; j < f.ts_map_size(); j++) {
-				imu_features_proto::TimestampMapElem ts_map_elem = f.ts_map(j);
-				std::vector<double> vec;
-				for (int k = 0; k < ts_map_elem.timestamps_size(); k++) {
-					vec.push_back(ts_map_elem.timestamps(k));
-				}
-				timestamp_map.emplace(ts_map_elem.id(), vec);
-			}
-			feats_MSCKF.push_back(feature
-						{f.featid(), f.to_delete(), 
-						uv_map, uvn_map, timestamp_map, 
-						f.anchor_cam_id(), f.anchor_clone_timestamp(), 
-						Eigen::Vector3d{f.p_fina().x(), f.p_fina().y(), f.p_fina().z()},
-						Eigen::Vector3d{f.p_fing().x(), f.p_fing().y(), f.p_fing().z()}
-						});
+			});
 		}
 		std::cout << "Deserialization takes " << (_m_clock->now() - start).count() << "\n";
-		_m_feats_MSCKF.put(_m_feats_MSCKF.allocate<features>(
-			features{
-				feats_MSCKF.size(),
+		_m_left_pts.put(_m_left_pts.allocate<key_points>(
+			key_points{
 				time_point{std::chrono::nanoseconds{vio_input.timestamp()}},
-				feats_MSCKF
+				left_pts
 			}
 		));
+		_m_right_pts.put(_m_right_pts.allocate<key_points>(
+			key_points{
+				time_point{std::chrono::nanoseconds{vio_input.timestamp()}},
+				right_pts
+			}
+		));
+
+		// std::vector<feature> feats_MSCKF;
+		// for (int i = 0; i < vio_input.feats_msckf_size(); i++) {
+		// 	imu_features_proto::Feature f = vio_input.feats_msckf(i);
+		// 	// reconstruct uv_map
+		// 	std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uv_map;
+		// 	for (int j = 0; j < f.uv_map_size(); j++) {
+		// 		imu_features_proto::UVMapElem uv_map_elem = f.uv_map(j);
+		// 		std::vector<Eigen::VectorXf> vec;
+		// 		for (int k = 0; k < uv_map_elem.uv_size(); k++) {
+		// 			imu_features_proto::Vec2 v = uv_map_elem.uv(k);
+		// 			// vec.push_back(Eigen::VectorXf{v.x(), v.y()});
+		// 			Eigen::VectorXf vxf(2);
+		// 			vxf.x() = v.x();
+		// 			vxf.y() = v.y();
+		// 			vec.push_back(vxf);
+		// 		}
+		// 		uv_map.emplace(uv_map_elem.id(), vec);
+		// 	}
+		// 	// reconstruct uvn_map
+		// 	std::unordered_map<size_t, std::vector<Eigen::VectorXf>> uvn_map;
+		// 	for (int j = 0; j < f.uvn_map_size(); j++) {
+		// 		imu_features_proto::UVMapElem uvn_map_elem = f.uvn_map(j);
+		// 		std::vector<Eigen::VectorXf> vec;
+		// 		for (int k = 0; k < uvn_map_elem.uv_size(); k++) {
+		// 			imu_features_proto::Vec2 v = uvn_map_elem.uv(k);
+		// 			Eigen::VectorXf vxf(2);
+		// 			vxf.x() = v.x();
+		// 			vxf.y() = v.y();
+		// 			vec.push_back(vxf);
+		// 		}
+		// 		uvn_map.emplace(uvn_map_elem.id(), vec);
+		// 	}
+		// 	// reconstruct the timestamp map
+		// 	std::unordered_map<size_t, std::vector<double>> timestamp_map;
+		// 	for (int j = 0; j < f.ts_map_size(); j++) {
+		// 		imu_features_proto::TimestampMapElem ts_map_elem = f.ts_map(j);
+		// 		std::vector<double> vec;
+		// 		for (int k = 0; k < ts_map_elem.timestamps_size(); k++) {
+		// 			vec.push_back(ts_map_elem.timestamps(k));
+		// 		}
+		// 		timestamp_map.emplace(ts_map_elem.id(), vec);
+		// 	}
+		// 	feats_MSCKF.push_back(feature
+		// 				{f.featid(), f.to_delete(),
+		// 				uv_map, uvn_map, timestamp_map,
+		// 				f.anchor_cam_id(), f.anchor_clone_timestamp(),
+		// 				Eigen::Vector3d{f.p_fina().x(), f.p_fina().y(), f.p_fina().z()},
+		// 				Eigen::Vector3d{f.p_fing().x(), f.p_fing().y(), f.p_fing().z()}
+		// 				});
+		// }
+		// std::cout << "Deserialization takes " << (_m_clock->now() - start).count() << "\n";
+		// _m_feats_MSCKF.put(_m_feats_MSCKF.allocate<features>(
+		// 	features{
+		// 		feats_MSCKF.size(),
+		// 		time_point{std::chrono::nanoseconds{vio_input.timestamp()}},
+		// 		feats_MSCKF
+		// 	}
+		// ));
 
 		_m_imu_buffer.put(_m_imu_buffer.allocate<imu_buffer>(
 			imu_buffer{imus}
@@ -179,7 +227,9 @@ private:
 	const std::shared_ptr<RelativeClock> _m_clock;
 	switchboard::writer<imu_buffer> _m_imu_buffer;
 	switchboard::writer<connection_signal> _conn_signal;
-	switchboard::writer<features> _m_feats_MSCKF;
+	// switchboard::writer<features> _m_feats_MSCKF;
+	switchboard::writer<key_points> _m_left_pts;
+	switchboard::writer<key_points> _m_right_pts;
 
 	TCPSocket socket;
 	TCPSocket * read_socket = NULL;

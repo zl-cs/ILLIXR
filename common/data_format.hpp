@@ -413,4 +413,22 @@ namespace ILLIXR {
 			, feats{feats_}
 		{ }
 	};
+
+	struct key_point : public switchboard::event {
+		size_t id;
+		cv::KeyPoint pt;
+		key_point(size_t id_, cv::KeyPoint pt_) 
+			: id{id_}
+			, pt{pt_}
+		{ }
+	};
+
+	struct key_points : public switchboard::event {
+		time_point timestamp;
+		std::vector<key_point> pts;
+		key_points(time_point timestamp_, std::vector<key_point> pts_)
+			: timestamp{timestamp_}
+			, pts{pts_}
+		{ }
+	};
 }

@@ -56,3 +56,24 @@ message IMUFeatures
   fixed64 timestamp = 5;
   fixed64 real_timestamp = 6;
 }
+
+message KeyPoint
+{
+  uint32 id = 1;
+  float angle = 2;
+  int32 octave = 3;
+  int32 class_id = 4;
+  float x = 5;
+  float y = 6;
+  float response = 7;
+  float size = 8;
+}
+
+message KeyPoints
+{
+  repeated IMUData imu_data = 1;
+  repeated KeyPoint left_pts = 2;
+  repeated KeyPoint right_pts = 3; 
+  fixed64 timestamp = 4;
+  fixed64 real_timestamp = 5;
+}
