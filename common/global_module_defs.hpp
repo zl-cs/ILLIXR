@@ -59,7 +59,7 @@ struct rendering_params {
 
     // Far plane distance in meters
     static constexpr float far_z = 20.0f;
-}
+};
 // CONFIGURABLE FUNCS from branch issue-94
 
 
