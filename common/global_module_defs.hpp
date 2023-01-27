@@ -59,7 +59,7 @@ struct rendering_params {
 
     // Far plane distance in meters
     static constexpr float far_z = 20.0f;
-
+}
 // CONFIGURABLE FUNCS from branch issue-94
 
 
@@ -106,11 +106,10 @@ inline bool str_to_bool(std::string var) {
                            : throw std::runtime_error("Invalid conversion from std::string to bool");
 }
 
-
 DECLARE_CONST(DEFAULT_FB_WIDTH,     int,    std::stoi,  2560); // Pixels
 DECLARE_CONST(DEFAULT_FB_HEIGHT,    int,    std::stoi,  1440); // Pixels
 DECLARE_CONST(DEFAULT_RUN_DURATION, long,   std::stol,  60L ); // Seconds
 DECLARE_CONST(DEFAULT_REFRESH_RATE, double, std::stod,  60.0); // Hz
 
+
 }
-};
