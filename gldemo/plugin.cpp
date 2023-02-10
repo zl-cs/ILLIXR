@@ -37,10 +37,16 @@ public:
         : threadloop{name_, pb_}
         , xwin{new xlib_gl_extended_window{1, 1, pb->lookup_impl<xlib_gl_extended_window>()->glc}}
         , sb{pb->lookup_impl<switchboard>()}
-        , pp{pb->lookup_impl<pose_prediction>()}
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
-        , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")} { }
+        , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}
+        , _m_fast_pose{sb->get_reader<pose_type>("fast_pose")} { 
+            try {
+                pp = pb->lookup_impl<pose_prediction>();
+            } catch (const std::exception& e) {
+                
+            }
+        }
 
     // Essentially, a crude equivalent of XRWaitFrame.
     void wait_vsync() {
@@ -125,8 +131,19 @@ public:
 
         Eigen::Matrix4f modelMatrix = Eigen::Matrix4f::Identity();
 
-        const fast_pose_type fast_pose = pp->get_fast_pose();
-        pose_type            pose      = fast_pose.pose;
+        fast_pose_type fast_pose;
+        pose_type pose;
+        if (pp != nullptr) {
+            fast_pose = pp->get_fast_pose();
+            pose      = fast_pose.pose;
+        } else {
+            auto pose_ptr = _m_fast_pose.get_ro_nullable();
+            if (pose_ptr == nullptr) {
+                return;
+            } else {
+                pose = *pose_ptr;
+            }
+        }
 
         Eigen::Matrix3f head_rotation_matrix = pose.orientation.toRotationMatrix();
 
@@ -180,7 +197,7 @@ public:
         }
 #endif
         lastTime = _m_clock->now();
-
+        
         /// Publish our submitted frame handle to Switchboard!
         _m_eyebuffer.put(_m_eyebuffer.allocate<rendered_frame>(rendered_frame{
             // Somehow, C++ won't let me construct this object if I remove the `rendered_frame{` and `}`.
@@ -208,7 +225,7 @@ public:
 private:
     const std::unique_ptr<const xlib_gl_extended_window>              xwin;
     const std::shared_ptr<switchboard>                                sb;
-    const std::shared_ptr<pose_prediction>                            pp;
+    std::shared_ptr<pose_prediction>                            pp;
     const std::shared_ptr<const RelativeClock>                        _m_clock;
     const switchboard::reader<switchboard::event_wrapper<time_point>> _m_vsync;
 
@@ -217,6 +234,7 @@ private:
     // we're just atomically writing the handle to the
     // correct eye/framebuffer in the "swapchain".
     switchboard::writer<rendered_frame> _m_eyebuffer;
+    switchboard::reader<pose_type>      _m_fast_pose;
 
     GLuint eyeTextures[2];
     GLuint eyeTextureFBO;
