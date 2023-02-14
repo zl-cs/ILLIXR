@@ -27,7 +27,7 @@ action:
 
   # run in GDB:
   # command: env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
-  command: env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
+  command: strace -rT env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
 
   # Print cmd for external use:
   # command: printf %s\n $env_cmd
@@ -35,4 +35,4 @@ action:
   # Capture stdout for metrics
   # log_stdout: metrics/output.log
 
-profile: dbg
+profile: opt

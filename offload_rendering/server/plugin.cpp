@@ -44,6 +44,10 @@ private:
         tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), render_server_port));
         socket = acceptor.accept();
 
+        // set socket buffer size
+        boost::asio::socket_base::send_buffer_size option(1024 * 1024 * 32);
+        socket.set_option(option);
+
         // Print out client ip and port
         std::cout << PREFIX << "Client connected from " << socket.remote_endpoint().address().to_string() << ":" << socket.remote_endpoint().port() << "." << std::endl;
 
@@ -67,7 +71,6 @@ private:
 
         unsigned char* gl_texture_bytes = (unsigned char*) malloc(sizeof(unsigned char)*gl_texture_width*gl_texture_height*3);
         glGetTexImage(GL_TEXTURE_2D, 0 /* mipmap level */, GL_BGR, GL_UNSIGNED_BYTE, gl_texture_bytes);
-        auto timestamp2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
         // create unique pointer for cv::Mat
         return std::make_shared<cv::Mat>(gl_texture_height, gl_texture_width, CV_8UC3, gl_texture_bytes);
@@ -83,17 +86,25 @@ private:
                 io_context.run();
             });
         }
-        read_strand.post([this] {
-            read_packet();
-        });
+        read_packet();
 
         sb->schedule<rendered_frame>(id, "eyebuffer", [this](switchboard::ptr<const rendered_frame> datum, std::size_t) {
-            // timestamp
-            auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            if (write_in_progress) {
+                std::cout << PREFIX << "Rendered frame queueing up!" << std::endl;
+            }
+            while (write_in_progress) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            write_in_progress = true;
             process_rendered_frame(std::move(datum));
-            // timestamp
-            auto timestamp2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-            std::cout << "time: " << timestamp2 - timestamp << std::endl;
+            
+            frame_count++;
+            auto timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            if (timestamp_ms - last_frame_count_time > 1000) {
+                std::cout << PREFIX << frame_count << " fps" << std::endl;
+                frame_count = 0;
+                last_frame_count_time = timestamp_ms;
+            }
         });
     }
 
@@ -106,10 +117,7 @@ private:
         std::shared_ptr<cv::Mat> left_img = get_ocv_img_from_gl_img(left);
         std::shared_ptr<cv::Mat> right_img = get_ocv_img_from_gl_img(right);
 
-        write_strand.post([this, left_img, right_img] {
-            write_uncompressed_frame(left_img, right_img);
-        });
-        
+        write_uncompressed_frame(left_img, right_img);
     }
 
     void read_packet() {
@@ -127,8 +135,9 @@ private:
                 pose_type pose = *(pose_type*)pose_buf.data();
 
                 // Print pose
-                std::cout << PREFIX << "Received pose: " << pose.position[0] << ", " << pose.position[1] << ", " << pose.position[2] << std::endl;
+                // std::cout << PREFIX << "Received pose: " << pose.position[0] << ", " << pose.position[1] << ", " << pose.position[2] << std::endl;
 
+                // Write pose to switchboard
                 _m_fast_pose.put(_m_fast_pose.allocate<pose_type>(std::move(pose)));
 
                 read_packet();
@@ -136,9 +145,8 @@ private:
         );
     }
 
-    void write_uncompressed_frame(std::shared_ptr<cv::Mat> left, std::shared_ptr<cv::Mat> right) {
+    void write_uncompressed_frame(std::shared_ptr<cv::Mat> left, std::shared_ptr<cv::Mat> right) {        
         // Create buffer for rendered_frame_header
-        rendered_frame_header header;
         header.type = UNCOMPRESSED;
         header.size_left = left->cols * left->rows * 3;
         header.size_right = right->cols * right->rows * 3;
@@ -147,8 +155,11 @@ private:
 
         std::vector<boost::asio::const_buffer> buffers;
         buffers.push_back(boost::asio::buffer(&header, sizeof(rendered_frame_header)));
-        buffers.push_back(boost::asio::buffer(left->data, header.size_left));
-        buffers.push_back(boost::asio::buffer(right->data, header.size_right));
+        buffers.push_back(boost::asio::buffer(left->data, left->cols * left->rows * 3));
+        buffers.push_back(boost::asio::buffer(right->data, right->cols * right->rows * 3));
+
+        write_begin = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
         boost::asio::async_write(
             socket,
             buffers,
@@ -158,7 +169,12 @@ private:
                     return;
                 }
 
-                std::cout << PREFIX << "Sent uncompressed frame to client, bytes transferred: " << bytes_transferred << std::endl;
+                // print time taken to send frame using write_begin
+                auto timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                auto diff = timestamp_ms - write_begin;
+                std::cout << PREFIX << "Sent uncompressed frame to client with size: " << bytes_transferred << " in " << diff << " ms" << std::endl;
+                
+                // std::cout << PREFIX << "Sent uncompressed frame to client with size: " << bytes_transferred << std::endl;
                 write_in_progress = false;
             })
         );
@@ -190,6 +206,10 @@ private:
 
     // write strand accessible
     std::atomic<bool> write_in_progress {false};
+    rendered_frame_header header;
+    int frame_count = 0;
+    int64_t last_frame_count_time = 0;
+    int64_t write_begin = 0;
 };
 
 PLUGIN_MAIN(offload_rendering_server)

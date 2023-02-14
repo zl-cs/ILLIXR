@@ -41,22 +41,26 @@ private:
             });
         }
         
-        read_strand.post([this] {
-            read_packet();
-        });
+        read_packet();
     }
 
     void _p_one_iteration() override {
         if (write_in_progress) {
+            std::cout << PREFIX << "OUTBOUND POSE QUEUEING UP" << std::endl;
             return;
         } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds((int) (1000.0 / 30.0)));
-
             write_in_progress = true;
-            write_strand.post([this] {
-                write_packet();
-            });
+            write_packet();
         }
+    }
+
+    skip_option _p_should_skip() override {
+        auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        if (timestamp - last_pose_time > (1000.0 / 60.0)) {
+            last_pose_time = timestamp;
+            return skip_option::run;
+        }
+        return skip_option::skip_and_yield;
     }
 
     void stop() override {
@@ -73,6 +77,9 @@ private:
         tcp::resolver resolver(io_context);
         tcp::resolver::results_type endpoints = resolver.resolve(render_server_addr, std::to_string(render_server_port));
         boost::asio::connect(socket, endpoints);
+        // set socket buffer size
+        boost::asio::socket_base::receive_buffer_size option(1024 * 1024 * 32);
+        socket.set_option(option);
         
         std::cout << PREFIX << "Connected to server " << render_server_addr << ":" << render_server_port << std::endl;
 
@@ -119,8 +126,8 @@ private:
                 // Create cv::Mat from render_transfer_buf
                 cv::Mat left {header.rows, header.cols, CV_8UC3, render_transfer_buf.data()};
                 cv::Mat right {header.rows, header.cols, CV_8UC3, render_transfer_buf.data() + header.size_left};
-                cv::imshow("left", left);
-                cv::waitKey(1);
+                // cv::imshow("left", left);
+                // cv::waitKey(1);
 
                 read_packet();
             })
@@ -132,7 +139,7 @@ private:
         const pose_type fast_pose = pp->get_fast_pose().pose;
 
         // Print pose
-        std::cout << PREFIX << "Position: " << fast_pose.position[0] << ", " << fast_pose.position[1] << ", " << fast_pose.position[2] << std::endl;
+        // std::cout << PREFIX << "Position: " << fast_pose.position[0] << ", " << fast_pose.position[1] << ", " << fast_pose.position[2] << std::endl;
 
         // Create buffer and send pose to server
         boost::asio::async_write(
@@ -169,6 +176,8 @@ private:
 
     boost::asio::io_context::strand read_strand {io_context};
     boost::asio::io_context::strand write_strand {io_context};
+
+    int64_t last_pose_time = 0;
 
     // read_strand accessible
     std::array<char, sizeof(rendered_frame_header)> render_header_buf;

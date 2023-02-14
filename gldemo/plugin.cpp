@@ -110,8 +110,22 @@ public:
     }
 
     void _p_one_iteration() override {
-        // Essentially, XRWaitFrame.
-        wait_vsync();
+        fast_pose_type fast_pose;
+        pose_type pose;
+        if (pp != nullptr) {
+            // Essentially, XRWaitFrame.
+            // wait_vsync();
+            fast_pose = pp->get_fast_pose();
+            pose      = fast_pose.pose;
+        } else {
+            // dequeue should be blocking here
+            auto pose_ptr = _m_fast_pose.dequeue();
+            assert(pose_ptr);
+            pose = *pose_ptr;
+
+            // print queue size
+            // std::cout << "\033[1;32m[GL DEMO APP]\033[0m Fast pose queue size: " << _m_fast_pose.size() << std::endl;
+        }
 
         glUseProgram(demoShaderProgram);
         glBindFramebuffer(GL_FRAMEBUFFER, eyeTextureFBO);
@@ -130,21 +144,6 @@ public:
         Eigen::Matrix4f modelViewMatrix;
 
         Eigen::Matrix4f modelMatrix = Eigen::Matrix4f::Identity();
-
-        fast_pose_type fast_pose;
-        pose_type pose;
-        if (pp != nullptr) {
-            fast_pose = pp->get_fast_pose();
-            pose      = fast_pose.pose;
-        } else {
-            // dequeue should be blocking here
-            auto pose_ptr = _m_fast_pose.dequeue();
-            assert(pose_ptr);
-            pose = *pose_ptr;
-
-            // print queue size
-            std::cout << "\033[1;32m[GL DEMO APP]\033[0m Fast pose queue size: " << _m_fast_pose.size() << std::endl;
-        }
 
         Eigen::Matrix3f head_rotation_matrix = pose.orientation.toRotationMatrix();
 
