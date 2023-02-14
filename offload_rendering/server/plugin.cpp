@@ -1,25 +1,35 @@
-#include "common/threadloop.hpp"
+#include "common/plugin.hpp"
 
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
 #include "common/switchboard.hpp"
 #include "common/utils/ansi_colors.hpp"
+#include "common/extended_window.hpp"
+// Both X11 and opencv2 define the Complex type, so we need to undefine it
+#undef Complex
 #include "../shared/packets.h"
 
 #include <boost/asio.hpp>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
+#include <boost/lockfree/queue.hpp>
+#include <filesystem>
 
 using namespace ILLIXR;
 using boost::asio::ip::tcp;
 
 #define PREFIX BMAG << "[Rendering Offload Server] " << CRESET
 
-class offload_rendering_server : public threadloop {
+class offload_rendering_server : public plugin {
 public:
 
     offload_rendering_server(std::string name_, phonebook* pb_)
-        : threadloop{name_, pb_}
+        : plugin{name_, pb_}
         , sb{pb->lookup_impl<switchboard>()}
+        , xwin{pb->lookup_impl<xlib_gl_extended_window>()}
         , _m_fast_pose{sb->get_writer<pose_type>("fast_pose")}
+        , _m_rendered_frame{sb->get_writer<rendered_frame>("rendered_frame")}
         , render_server_addr{std::getenv("RENDER_SERVER_ADDR")}
         , render_server_port{std::stoi(std::getenv("RENDER_SERVER_PORT"))} {
             start_server();
@@ -47,7 +57,25 @@ private:
         boost::asio::write(socket, boost::asio::buffer(pong_buf, 1));
     }
 
-    void _p_thread_setup() override {
+    std::shared_ptr<cv::Mat> get_ocv_img_from_gl_img(GLuint ogl_texture_id)
+    {
+        glBindTexture(GL_TEXTURE_2D, ogl_texture_id);
+        GLenum gl_texture_width, gl_texture_height;
+
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, (GLint*)&gl_texture_width);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, (GLint*)&gl_texture_height);
+
+        unsigned char* gl_texture_bytes = (unsigned char*) malloc(sizeof(unsigned char)*gl_texture_width*gl_texture_height*3);
+        glGetTexImage(GL_TEXTURE_2D, 0 /* mipmap level */, GL_BGR, GL_UNSIGNED_BYTE, gl_texture_bytes);
+        auto timestamp2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+        // create unique pointer for cv::Mat
+        return std::make_shared<cv::Mat>(gl_texture_height, gl_texture_width, CV_8UC3, gl_texture_bytes);
+    }
+
+    void start() override {
+        plugin::start();
+
         // Start io_context worker threads
         boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard {io_context.get_executor()};
         for (int i = 0; i < 2; i++) {
@@ -55,10 +83,32 @@ private:
                 io_context.run();
             });
         }
-        io_context.post([this] { read_packet(); });
+        read_strand.post([this] {
+            read_packet();
+        });
+
+        sb->schedule<rendered_frame>(id, "eyebuffer", [this](switchboard::ptr<const rendered_frame> datum, std::size_t) {
+            // timestamp
+            auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            process_rendered_frame(std::move(datum));
+            // timestamp
+            auto timestamp2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            std::cout << "time: " << timestamp2 - timestamp << std::endl;
+        });
     }
 
-    void _p_one_iteration() override {
+    void process_rendered_frame(switchboard::ptr<const rendered_frame> datum) {
+        [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
+
+        auto left = datum->texture_handles[0];
+        auto right = datum->texture_handles[1];
+
+        std::shared_ptr<cv::Mat> left_img = get_ocv_img_from_gl_img(left);
+        std::shared_ptr<cv::Mat> right_img = get_ocv_img_from_gl_img(right);
+
+        write_strand.post([this, left_img, right_img] {
+            write_uncompressed_frame(left_img, right_img);
+        });
         
     }
 
@@ -75,12 +125,41 @@ private:
 
                 // Parse pose
                 pose_type pose = *(pose_type*)pose_buf.data();
-                std::cout << PREFIX << "Received pose from client." << std::endl;
 
-                // Write pose to switchboard
+                // Print pose
+                std::cout << PREFIX << "Received pose: " << pose.position[0] << ", " << pose.position[1] << ", " << pose.position[2] << std::endl;
+
                 _m_fast_pose.put(_m_fast_pose.allocate<pose_type>(std::move(pose)));
 
                 read_packet();
+            })
+        );
+    }
+
+    void write_uncompressed_frame(std::shared_ptr<cv::Mat> left, std::shared_ptr<cv::Mat> right) {
+        // Create buffer for rendered_frame_header
+        rendered_frame_header header;
+        header.type = UNCOMPRESSED;
+        header.size_left = left->cols * left->rows * 3;
+        header.size_right = right->cols * right->rows * 3;
+        header.rows = left->rows;
+        header.cols = left->cols;
+
+        std::vector<boost::asio::const_buffer> buffers;
+        buffers.push_back(boost::asio::buffer(&header, sizeof(rendered_frame_header)));
+        buffers.push_back(boost::asio::buffer(left->data, header.size_left));
+        buffers.push_back(boost::asio::buffer(right->data, header.size_right));
+        boost::asio::async_write(
+            socket,
+            buffers,
+            boost::asio::bind_executor(write_strand, [this](boost::system::error_code ec, std::size_t bytes_transferred) {
+                if (ec) {
+                    std::cout << PREFIX << "Error writing to socket: " << ec.message() << std::endl;
+                    return;
+                }
+
+                std::cout << PREFIX << "Sent uncompressed frame to client, bytes transferred: " << bytes_transferred << std::endl;
+                write_in_progress = false;
             })
         );
     }
@@ -93,6 +172,7 @@ private:
 
 private:
     const std::shared_ptr<switchboard> sb;
+    const std::shared_ptr<const xlib_gl_extended_window> xwin;
     const std::string render_server_addr;
     const int render_server_port;
 
@@ -106,6 +186,10 @@ private:
     // read strand accessible
     std::array<char, sizeof(pose_type)> pose_buf;
     switchboard::writer<pose_type> _m_fast_pose;
+    switchboard::writer<rendered_frame> _m_rendered_frame;
+
+    // write strand accessible
+    std::atomic<bool> write_in_progress {false};
 };
 
 PLUGIN_MAIN(offload_rendering_server)

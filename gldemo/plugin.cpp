@@ -40,7 +40,7 @@ public:
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
         , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}
-        , _m_fast_pose{sb->get_reader<pose_type>("fast_pose")} { 
+        , _m_fast_pose{sb->get_buffered_reader<pose_type>("fast_pose")} { 
             try {
                 pp = pb->lookup_impl<pose_prediction>();
             } catch (const std::exception& e) {
@@ -137,12 +137,13 @@ public:
             fast_pose = pp->get_fast_pose();
             pose      = fast_pose.pose;
         } else {
-            auto pose_ptr = _m_fast_pose.get_ro_nullable();
-            if (pose_ptr == nullptr) {
-                return;
-            } else {
-                pose = *pose_ptr;
-            }
+            // dequeue should be blocking here
+            auto pose_ptr = _m_fast_pose.dequeue();
+            assert(pose_ptr);
+            pose = *pose_ptr;
+
+            // print queue size
+            std::cout << "\033[1;32m[GL DEMO APP]\033[0m Fast pose queue size: " << _m_fast_pose.size() << std::endl;
         }
 
         Eigen::Matrix3f head_rotation_matrix = pose.orientation.toRotationMatrix();
@@ -234,7 +235,7 @@ private:
     // we're just atomically writing the handle to the
     // correct eye/framebuffer in the "swapchain".
     switchboard::writer<rendered_frame> _m_eyebuffer;
-    switchboard::reader<pose_type>      _m_fast_pose;
+    switchboard::buffered_reader<pose_type>      _m_fast_pose;
 
     GLuint eyeTextures[2];
     GLuint eyeTextureFBO;

@@ -7,6 +7,10 @@
 #include "../shared/packets.h"
 
 #include <boost/asio.hpp>
+#undef Complex
+#include <opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 
 using namespace ILLIXR;
 using boost::asio::ip::tcp;
@@ -37,18 +41,21 @@ private:
             });
         }
         
-        io_context.post([this] { read_packet(); });
+        read_strand.post([this] {
+            read_packet();
+        });
     }
 
     void _p_one_iteration() override {
         if (write_in_progress) {
             return;
         } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds((int) (1000.0 / 30.0)));
 
             write_in_progress = true;
-            // sleep for 1 second
-            io_context.post([this] { write_packet(); });
+            write_strand.post([this] {
+                write_packet();
+            });
         }
     }
 
@@ -89,25 +96,31 @@ private:
     void read_packet() {
         boost::asio::async_read(
             socket, 
-            boost::asio::buffer(render_header_buf, 12), 
-            boost::asio::transfer_exactly(12), 
+            boost::asio::buffer(render_header_buf, sizeof(rendered_frame_header)), 
+            boost::asio::transfer_exactly(sizeof(rendered_frame_header)), 
             boost::asio::bind_executor(read_strand, [this](boost::system::error_code ec, std::size_t bytes_transferred) {
                 if (ec) {
                     std::cout << PREFIX << "Error reading from socket: " << ec.message() << std::endl;
                     return;
                 }
 
-                // Read packet size
-                ImageType type = (ImageType) render_header_buf[0];
-                int size_left = *(int*) (render_header_buf.data() + 4);
-                int size_right = *(int*) (render_header_buf.data() + 8);
+                // Decode struct rendered_frame_header
+                rendered_frame_header header = *(rendered_frame_header*)render_header_buf.data();
+                // print size_left and size_right
+                std::cout << PREFIX << "Received frame with size_left: " << header.size_left << ", size_right: " << header.size_right << std::endl;
 
-                auto size = size_left + size_right;
+                auto size = header.size_left + header.size_right;
                 if (size > render_transfer_buf.size()) {
                     render_transfer_buf.resize(size);
                 }
 
                 boost::asio::read(socket, boost::asio::buffer(render_transfer_buf, size), boost::asio::transfer_exactly(size));
+
+                // Create cv::Mat from render_transfer_buf
+                cv::Mat left {header.rows, header.cols, CV_8UC3, render_transfer_buf.data()};
+                cv::Mat right {header.rows, header.cols, CV_8UC3, render_transfer_buf.data() + header.size_left};
+                cv::imshow("left", left);
+                cv::waitKey(1);
 
                 read_packet();
             })
@@ -115,14 +128,17 @@ private:
     }
 
     void write_packet() {
-        std::cout << PREFIX << "Sending pose to server" << std::endl;
+        // std::cout << PREFIX << "Sending pose to server" << std::endl;
         const pose_type fast_pose = pp->get_fast_pose().pose;
+
+        // Print pose
+        std::cout << PREFIX << "Position: " << fast_pose.position[0] << ", " << fast_pose.position[1] << ", " << fast_pose.position[2] << std::endl;
 
         // Create buffer and send pose to server
         boost::asio::async_write(
             socket, 
-            boost::asio::buffer(&fast_pose, sizeof(fast_pose_type)), 
-            boost::asio::transfer_exactly(sizeof(fast_pose_type)), 
+            boost::asio::buffer(&fast_pose, sizeof(pose_type)), 
+            boost::asio::transfer_exactly(sizeof(pose_type)), 
             boost::asio::bind_executor(write_strand, [this](boost::system::error_code ec, std::size_t bytes_transferred) {
                 if (ec) {
                     std::cout << PREFIX << "Error writing to socket: " << ec.message() << std::endl;
@@ -155,7 +171,7 @@ private:
     boost::asio::io_context::strand write_strand {io_context};
 
     // read_strand accessible
-    std::array<char, 12> render_header_buf;
+    std::array<char, sizeof(rendered_frame_header)> render_header_buf;
     std::vector<char> render_transfer_buf;
 
     // write_strand accessible
