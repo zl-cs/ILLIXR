@@ -61,7 +61,7 @@ private:
         boost::asio::write(socket, boost::asio::buffer(pong_buf, 1));
     }
 
-    std::shared_ptr<cv::Mat> get_ocv_img_from_gl_img(GLuint ogl_texture_id)
+    std::shared_ptr<cv::Mat> gl_tex_to_cv_mat(GLuint ogl_texture_id)
     {
         glBindTexture(GL_TEXTURE_2D, ogl_texture_id);
         GLenum gl_texture_width, gl_texture_height;
@@ -89,13 +89,16 @@ private:
         read_packet();
 
         sb->schedule<rendered_frame>(id, "eyebuffer", [this](switchboard::ptr<const rendered_frame> datum, std::size_t) {
-            if (write_in_progress) {
-                std::cout << PREFIX << "Rendered frame queueing up!" << std::endl;
-            }
-            while (write_in_progress) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            write_in_progress = true;
+            // TODO: writing is originally blocked after receiving a frame from the gldemo. we're now blocking the pose from being fed into gldemo if we're still writing the previous frame.
+            // Ideally we would need a swapchain
+
+            // if (write_in_progress) {
+            //     std::cout << PREFIX << "Rendered frame queueing up!" << std::endl;
+            // }
+            // while (write_in_progress) {
+            //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            // }
+            // write_in_progress = true;
             process_rendered_frame(std::move(datum));
             
             frame_count++;
@@ -114,8 +117,8 @@ private:
         auto left = datum->texture_handles[0];
         auto right = datum->texture_handles[1];
 
-        std::shared_ptr<cv::Mat> left_img = get_ocv_img_from_gl_img(left);
-        std::shared_ptr<cv::Mat> right_img = get_ocv_img_from_gl_img(right);
+        std::shared_ptr<cv::Mat> left_img = gl_tex_to_cv_mat(left);
+        std::shared_ptr<cv::Mat> right_img = gl_tex_to_cv_mat(right);
 
         write_uncompressed_frame(left_img, right_img);
     }
@@ -130,6 +133,14 @@ private:
                     std::cout << PREFIX << "Error reading from socket: " << ec.message() << std::endl;
                     return;
                 }
+
+                if (write_in_progress) {
+                    std::cout << PREFIX << "Dropping pose due to unfinished last frame" << std::endl;
+                    read_packet();
+                    return;
+                }
+
+                write_in_progress = true;
 
                 // Parse pose
                 pose_type pose = *(pose_type*)pose_buf.data();
@@ -159,6 +170,12 @@ private:
         buffers.push_back(boost::asio::buffer(right->data, right->cols * right->rows * 3));
 
         write_begin = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+        // boost::asio::write(socket, buffers, boost::asio::transfer_exactly(sizeof(rendered_frame_header) + header.size_left + header.size_right));
+        // auto timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        // auto diff = timestamp_ms - write_begin;
+        // std::cout << PREFIX << "Sent uncompressed frame to client in " << diff << " ms" << std::endl;
+        // write_in_progress = false;
 
         boost::asio::async_write(
             socket,

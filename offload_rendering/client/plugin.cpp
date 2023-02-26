@@ -7,6 +7,8 @@
 #include "../shared/packets.h"
 
 #include <boost/asio.hpp>
+#include "common/extended_window.hpp"
+// Both X11 and opencv2 define the Complex type, so we need to undefine it
 #undef Complex
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -24,6 +26,7 @@ public:
         : threadloop{name_, pb_}
         , sb{pb->lookup_impl<switchboard>()}
         , pp{pb->lookup_impl<pose_prediction>()}
+        , xwin{pb->lookup_impl<xlib_gl_extended_window>()}
         , render_server_addr{std::getenv("RENDER_SERVER_ADDR")}
         , render_server_port{std::stoi(std::getenv("RENDER_SERVER_PORT"))} {
         // Connect to the render server
@@ -33,6 +36,10 @@ public:
 private:
 
     void _p_thread_setup() override {
+        // Create shared memory for eye textures
+        createSharedEyebuffer(&(eyeTextures[0]));
+        createSharedEyebuffer(&(eyeTextures[1]));
+
         // Prevent io_context from exiting when there are no more work to do
         boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard {io_context.get_executor()};
         for (int i = 0; i < 2; i++) {
@@ -163,9 +170,31 @@ private:
         return *(T*)buf.data();
     }
 
+    void createSharedEyebuffer(GLuint* texture_handle) {
+        // Create the shared eye texture handle
+        glGenTextures(1, texture_handle);
+        glBindTexture(GL_TEXTURE_2D, *texture_handle);
+
+        // Set the texture parameters for the texture that the FBO will be mapped into
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, display_params::width_pixels, display_params::height_pixels, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, 0);
+
+        // Unbind texture
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+
 private:
     const std::shared_ptr<switchboard> sb;
     const std::shared_ptr<pose_prediction> pp;
+    const std::shared_ptr<xlib_gl_extended_window> xwin;
+
+    GLuint eyeTextures[2];
 
     const std::string render_server_addr;
     const int render_server_port;

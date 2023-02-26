@@ -1,11 +1,9 @@
 plugin_groups:
   - !include "rt_slam_plugins.yaml"
   - plugin_group:
-      - path: ground_truth_slam/
-      - path: gldemo/
-      - path: offload_data/
-      - path: offload_rendering/client
-  - !include "core_plugins.yaml"
+    - path: offload_data/
+    - path: offload_rendering/client
+    - path: timewarp_gl/
 
 data:
   subpath: mav0
@@ -27,7 +25,7 @@ action:
 
   # run in GDB:
   # command: env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
-  command: strace -rT env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
+  command: env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
 
   # Print cmd for external use:
   # command: printf %s\n $env_cmd
