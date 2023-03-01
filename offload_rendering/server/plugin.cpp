@@ -28,7 +28,7 @@ public:
         : plugin{name_, pb_}
         , sb{pb->lookup_impl<switchboard>()}
         , xwin{pb->lookup_impl<xlib_gl_extended_window>()}
-        , _m_fast_pose{sb->get_writer<pose_type>("fast_pose")}
+        , _m_fast_pose{sb->get_writer<fast_pose_type>("fast_pose")}
         , _m_rendered_frame{sb->get_writer<rendered_frame>("rendered_frame")}
         , render_server_addr{std::getenv("RENDER_SERVER_ADDR")}
         , render_server_port{std::stoi(std::getenv("RENDER_SERVER_PORT"))} {
@@ -112,22 +112,14 @@ private:
     }
 
     void process_rendered_frame(switchboard::ptr<const rendered_frame> datum) {
-        [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
-
-        auto left = datum->texture_handles[0];
-        auto right = datum->texture_handles[1];
-
-        std::shared_ptr<cv::Mat> left_img = gl_tex_to_cv_mat(left);
-        std::shared_ptr<cv::Mat> right_img = gl_tex_to_cv_mat(right);
-
-        write_uncompressed_frame(left_img, right_img);
+        write_uncompressed_frame(datum);
     }
 
     void read_packet() {
         boost::asio::async_read(
             socket,
-            boost::asio::buffer(pose_buf, sizeof(pose_type)),
-            boost::asio::transfer_exactly(sizeof(pose_type)),
+            boost::asio::buffer(pose_buf, sizeof(pose_transfer)),
+            boost::asio::transfer_exactly(sizeof(pose_transfer)),
             boost::asio::bind_executor(read_strand, [this](boost::system::error_code ec, std::size_t bytes_transferred) {
                 if (ec) {
                     std::cout << PREFIX << "Error reading from socket: " << ec.message() << std::endl;
@@ -143,26 +135,46 @@ private:
                 write_in_progress = true;
 
                 // Parse pose
-                pose_type pose = *(pose_type*)pose_buf.data();
+                pose_transfer pose;
+                memcpy(&pose, pose_buf.data(), sizeof(pose_transfer));
 
                 // Print pose
                 // std::cout << PREFIX << "Received pose: " << pose.position[0] << ", " << pose.position[1] << ", " << pose.position[2] << std::endl;
 
                 // Write pose to switchboard
-                _m_fast_pose.put(_m_fast_pose.allocate<pose_type>(std::move(pose)));
+                _m_fast_pose.put(_m_fast_pose.allocate<fast_pose_type>(fast_pose_type {
+                    pose.pose,
+                    time_point {std::chrono::duration<long, std::nano>(pose.predict_computed_time)},
+                    time_point {std::chrono::duration<long, std::nano>(pose.predict_target_time)}
+                }));
 
                 read_packet();
             })
         );
     }
 
-    void write_uncompressed_frame(std::shared_ptr<cv::Mat> left, std::shared_ptr<cv::Mat> right) {        
+    void write_uncompressed_frame(switchboard::ptr<const rendered_frame> datum) {    
+        [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
+
+        auto left_ptr = datum->texture_handles[0];
+        auto right_ptr = datum->texture_handles[1];
+
+        std::shared_ptr<cv::Mat> left = gl_tex_to_cv_mat(left_ptr);
+        std::shared_ptr<cv::Mat> right = gl_tex_to_cv_mat(right_ptr); 
+
         // Create buffer for rendered_frame_header
         header.type = UNCOMPRESSED;
         header.size_left = left->cols * left->rows * 3;
         header.size_right = right->cols * right->rows * 3;
         header.rows = left->rows;
         header.cols = left->cols;
+        header.pose = pose_transfer {
+            .pose = datum->render_pose.pose,
+            .predict_computed_time = datum->render_pose.predict_computed_time.time_since_epoch().count(),
+            .predict_target_time = datum->render_pose.predict_target_time.time_since_epoch().count(),
+        };
+        header.render_time = datum->render_time.time_since_epoch().count();
+        header.sample_time = datum->sample_time.time_since_epoch().count();
 
         std::vector<boost::asio::const_buffer> buffers;
         buffers.push_back(boost::asio::buffer(&header, sizeof(rendered_frame_header)));
@@ -217,8 +229,8 @@ private:
     boost::asio::io_context::strand write_strand {io_context};
 
     // read strand accessible
-    std::array<char, sizeof(pose_type)> pose_buf;
-    switchboard::writer<pose_type> _m_fast_pose;
+    std::array<char, sizeof(pose_transfer)> pose_buf;
+    switchboard::writer<fast_pose_type> _m_fast_pose;
     switchboard::writer<rendered_frame> _m_rendered_frame;
 
     // write strand accessible

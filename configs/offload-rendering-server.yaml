@@ -22,6 +22,7 @@ action:
   name: native
 
   # run in GDB:
+  # command: gdb --args env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
   command: env RENDER_SERVER_ADDR=127.0.0.1 RENDER_SERVER_PORT=11111 $cmd
 
   # Print cmd for external use:

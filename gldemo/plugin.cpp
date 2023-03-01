@@ -40,7 +40,7 @@ public:
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
         , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")}
-        , _m_fast_pose{sb->get_buffered_reader<pose_type>("fast_pose")} { 
+        , _m_fast_pose{sb->get_buffered_reader<fast_pose_type>("fast_pose")} { 
             try {
                 pp = pb->lookup_impl<pose_prediction>();
             } catch (const std::exception& e) {
@@ -102,7 +102,7 @@ public:
     }
 
     void _p_thread_setup() override {
-        lastTime = _m_clock->now();
+        lastTime = _m_clock->now(); 
 
         // Note: glXMakeContextCurrent must be called from the thread which will be using it.
         [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
@@ -121,7 +121,8 @@ public:
             // dequeue should be blocking here
             auto pose_ptr = _m_fast_pose.dequeue();
             assert(pose_ptr);
-            pose = *pose_ptr;
+            fast_pose = *pose_ptr;
+            pose      = fast_pose.pose;
 
             // print queue size
             // std::cout << "\033[1;32m[GL DEMO APP]\033[0m Fast pose queue size: " << _m_fast_pose.size() << std::endl;
@@ -234,7 +235,7 @@ private:
     // we're just atomically writing the handle to the
     // correct eye/framebuffer in the "swapchain".
     switchboard::writer<rendered_frame> _m_eyebuffer;
-    switchboard::buffered_reader<pose_type>      _m_fast_pose;
+    switchboard::buffered_reader<fast_pose_type>      _m_fast_pose;
 
     GLuint eyeTextures[2];
     GLuint eyeTextureFBO;

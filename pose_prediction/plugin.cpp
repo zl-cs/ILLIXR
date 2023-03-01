@@ -75,10 +75,10 @@ public:
             printf("FAST POSE IS SLOW POSE!\n");
 #endif
             // No imu_raw, return slow_pose
-            return fast_pose_type{
-                .pose                  = correct_pose(*slow_pose),
-                .predict_computed_time = _m_clock->now(),
-                .predict_target_time   = future_timestamp,
+            return fast_pose_type {
+                correct_pose(*slow_pose),
+                _m_clock->now(),
+                future_timestamp,
             };
         }
 
@@ -113,7 +113,7 @@ public:
         //       - the prediction compute time (time when this prediction was computed, i.e., now)
         //       - the prediction target (the time that was requested for this pose.)
         return fast_pose_type{
-            .pose = predicted_pose, .predict_computed_time = _m_clock->now(), .predict_target_time = future_timestamp};
+            predicted_pose, _m_clock->now(), future_timestamp};
     }
 
     virtual void set_offset(const Eigen::Quaternionf& raw_o_times_offset) override {
