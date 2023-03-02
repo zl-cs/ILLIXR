@@ -137,7 +137,7 @@ private:
                 // cv::Mat left{header.rows, header.cols, CV_8UC3, left_data.data()};
                 // cv::Mat right{header.rows, header.cols, CV_8UC3, right_data.data()};
 
-                process_uncompressed_frame(header, left_data, right_data);
+                process_uncompressed_frame(header, std::move(left_data), std::move(right_data));
             }
         }
     }
@@ -233,8 +233,8 @@ private:
     void process_uncompressed_frame(rendered_frame_header& header, std::vector<char> left, std::vector<char> right) {
         [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
         // Create cv::Mat from render_transfer_buf
-        copyToSharedEyebuffer(&(eyeTextures[0]), left);
         copyToSharedEyebuffer(&(eyeTextures[1]), right);
+        copyToSharedEyebuffer(&(eyeTextures[0]), left);
         glFinish();
 
         // imshow
