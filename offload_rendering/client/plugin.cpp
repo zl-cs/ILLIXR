@@ -137,7 +137,7 @@ private:
                 // cv::Mat left{header.rows, header.cols, CV_8UC3, left_data.data()};
                 // cv::Mat right{header.rows, header.cols, CV_8UC3, right_data.data()};
 
-                process_uncompressed_frame(header, std::move(left_data), std::move(right_data));
+                process_frame(header, std::move(left_data), std::move(right_data));
             }
         }
     }
@@ -230,19 +230,8 @@ private:
             }));
     }
 
-    void process_uncompressed_frame(rendered_frame_header& header, std::vector<char> left, std::vector<char> right) {
-        [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
-        // Create cv::Mat from render_transfer_buf
-        copyToSharedEyebuffer(&(eyeTextures[1]), right);
-        copyToSharedEyebuffer(&(eyeTextures[0]), left);
-        glFinish();
+    void process_frame(rendered_frame_header& header, std::vector<char>&& left, std::vector<char>&& right) {
 
-        // imshow
-        // cv::imshow("left", left);
-        // cv::waitKey(1);
-
-        // sleep 2ms
-        // std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
         fast_pose_type fp = fast_pose_type{
             header.pose.pose,
@@ -263,11 +252,7 @@ private:
     void write_packet() {
         auto fp = pp->get_fast_pose();
         // std::cout << PREFIX << "Sending pose to server" << std::endl;
-        pose_transfer_packet = pose_transfer{
-            .pose                  = fp.pose,
-            .predict_computed_time = fp.predict_computed_time.time_since_epoch().count(),
-            .predict_target_time   = fp.predict_target_time.time_since_epoch().count(),
-        };
+        pose_transfer_packet = pose_transfer::serialize(fp.pose, fp.predict_computed_time.time_since_epoch().count(), fp.predict_target_time.time_since_epoch().count());
 
         // Print pose
         // std::cout << PREFIX << "Position: " << fast_pose.position[0] << ", " << fast_pose.position[1] << ", " <<
