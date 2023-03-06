@@ -15,6 +15,7 @@
 #undef Complex
 
 #include "../shared/packets.h"
+#include "video_decoder.h"
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/highgui.hpp>
@@ -82,11 +83,23 @@ private:
     void _p_thread_setup() override {
         lastTime = _m_clock->now();
 
+        decoder = std::make_unique<video_decoder>(
+            [this](video_decoder::gl_tex&& tex0, video_decoder::gl_tex&& tex1) {
+                boost::lock_guard<boost::mutex> lock{render_mutex};
+            });
+
         [[maybe_unused]] const bool gl_result = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
 
-        // Create shared memory for eye textures
-        createSharedEyebuffer(&(eyeTextures[0]));
-        createSharedEyebuffer(&(eyeTextures[1]));
+        // We need a front and a back buffer since we can't ensure that decoding will be done in time for the next frame
+        // Case 1: decoding is done before vsync, we swap bufferes
+        // Case 2: decoding is done after vsync, we either drop frame or warp the same frame again with a new pose
+
+        // front buffer
+        createSharedEyebuffer(&(eyeTextures[0][0]));
+        createSharedEyebuffer(&(eyeTextures[0][1]));
+        // back buffer
+        createSharedEyebuffer(&(eyeTextures[1][0]));
+        createSharedEyebuffer(&(eyeTextures[1][1]));
 
         // Prevent io_context from exiting when there are no more work to do
         boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard{io_context.get_executor()};
@@ -231,10 +244,8 @@ private:
     }
 
     void process_frame(rendered_frame_header& header, std::vector<char>&& left, std::vector<char>&& right) {
-
-
         fast_pose_type fp = fast_pose_type{
-            header.pose.pose,
+            header.pose.deserialize(),
             time_point{std::chrono::duration<long, std::nano>(header.pose.predict_computed_time)},
             time_point{std::chrono::duration<long, std::nano>(header.pose.predict_target_time)},
         };
@@ -324,7 +335,10 @@ private:
     switchboard::writer<rendered_frame>                               _m_eyebuffer;
     time_point                                                        lastTime;
 
-    GLuint eyeTextures[2];
+    std::unique_ptr<video_decoder> decoder;
+
+    GLuint eyeTextures[2][2];
+    char buffer_id = 0;
 
     const std::string render_server_addr;
     const int         render_server_port;
