@@ -9,10 +9,16 @@ plugin_group:
   #   path:
   #     git_repo: https://github.com/ILLIXR/Kimera-VIO.git
   #     version: "3.3"
-  - name: OpenVINS
-    path:
-      git_repo: https://github.com/ILLIXR/open_vins.git
-      version: "3.2"
+  # - name: OpenVINS
+  #   path:
+  #     git_repo: https://github.com/ILLIXR/open_vins.git
+  #     version: "3.2"
+  - name: ORB_SLAM3
+    path: 
+      git_repo: https://github.com/ILLIXR/ORB_SLAM3.git
+      version: "create-illixr-plugin"
+  # - path: /home/henrydc/tinker/ILLIXR/ILLIXR-Repos/OB/ORB_SLAM3
+  # - path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sORB_SLAM3.git
   # - path: rk4_integrator/
   # - path: passthrough_integrator/
   - path: gtsam_integrator/
