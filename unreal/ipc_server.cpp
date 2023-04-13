@@ -42,6 +42,11 @@ public:
 
     void setupServer()
     {
+        socketAddress.sin_family = AF_INET;
+        socketAddress.sin_addr.s_addr = INADDR_ANY;
+        socketAddress.sin_port = htons(PORT);
+        int addrlen = sizeof(socketAddress);
+
         int option = 1;
         // Creating socket file descriptor
         socketServer = socket(AF_INET, SOCK_STREAM, 0);
@@ -216,13 +221,9 @@ public:
 
 private:
 
-    int socketServer, socketConnection, port;
-    struct sockaddr_in socketAddress {
-        .sin_family = AF_INET,
-        .sin_addr.s_addr = INADDR_ANY,
-        .sin_port = htons(PORT)
-    };    
-    int addrlen = sizeof(socketAddress);
+    int socketServer, socketConnection;
+    struct sockaddr_in socketAddress;
+    int addrlen;
 
     bool isConnected = false;
 
