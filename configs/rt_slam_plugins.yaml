@@ -2,26 +2,36 @@ plugin_group:
   # load dataset
   # - path: offline_imu/
   # - path: offline_cam/
+  - path: offline_rgbd/
 
   # sensors
   # - path: zed/
   # - path: realsense/
-  - path: openni/
+  # - path: openni/
   # - path: depthai/
 
   # recorder
   # - path: record_imu_cam/
-  - path: record_rgb_depth/
+  # - path: record_rgb_depth/
 
   # head tracking
   # - name: Kimera-VIO/
   #   path:
   #     git_repo: https://github.com/ILLIXR/Kimera-VIO.git
   #     version: "3.3"
-  - name: OpenVINS
-    path:
-      git_repo: https://github.com/ILLIXR/open_vins.git
-      version: "3.2"
+  # - name: OpenVINS
+  #   path:
+  #     git_repo: https://github.com/ILLIXR/open_vins.git
+  #     version: "3.2"
+
+  # scene reconstruction
+  # - name: InfiniTAM
+  #   path:
+  #     subpath: InfiniTAM 
+  #     relative_to:
+  #       git_repo: https://github.com/ILLIXR/InfiniTAM.git
+  #       version: "create-illixr-plugin"
+  # - path: /home/henrydc/tinker/ILLIXR/ILLIXR-Repos/InfiniTAM/InfiniTAM
 
   # pose prediction
   # - path: rk4_integrator/

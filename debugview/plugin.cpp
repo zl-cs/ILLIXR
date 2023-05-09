@@ -226,6 +226,15 @@ public:
             ImGui::End();
         }
 
+        if (use_scene_recon) {
+            ImGui::SetNextWindowSize(ImVec2(reconstruction_texture_size.x()*1.5, reconstruction_texture_size.y()*1.5), ImGuiCond_Once);
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, 0), ImGuiCond_Once, ImVec2(1.0f, 0.0f));
+
+            ImGui::Begin("Scene reconstruction");
+            ImGui::Image((void*) (intptr_t) reconstruction_texture, ImVec2(reconstruction_texture_size.x()*1.5, reconstruction_texture_size.y()*1.5));
+            ImGui::End(); // Scene reconstruction
+        }
+
         ImGui::Render();
 
         RAC_ERRNO_MSG("debugview after ImGui render");
@@ -288,6 +297,23 @@ public:
         return true;
     }
 
+    bool load_reconstruction() {
+        RAC_ERRNO_MSG("debugview at start of load_rgb_depth");
+        if (last_reconstruction == nullptr) {
+            return false;
+        }
+
+        if (!use_scene_recon)
+            use_scene_recon = true;
+
+        glBindTexture(GL_TEXTURE_2D, reconstruction_texture);
+        cv::Mat img{last_reconstruction->img.clone()};
+        reconstruction_texture_size = Eigen::Vector2i(img.cols, img.rows);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.cols, img.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.ptr());
+        RAC_ERRNO_MSG("debugview at end of load_rgb_depth");
+        return true;
+    }
+
     Eigen::Matrix4f generateHeadsetTransform(const Eigen::Vector3f& position, const Eigen::Quaternionf& rotation,
                                              const Eigen::Vector3f& positionOffset) {
         Eigen::Matrix4f headsetPosition;
@@ -340,6 +366,7 @@ public:
 
         load_camera_images();
         load_rgb_depth();
+        load_reconstruction();
 
         glUseProgram(demoShaderProgram);
 
@@ -439,15 +466,21 @@ private:
 
     Eigen::Vector3f tracking_position_offset = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
 
-    switchboard::ptr<const cam_type>       cam;
-    switchboard::ptr<const rgb_depth_type> rgbd;
-    bool                                   use_cam  = false;
-    bool                                   use_rgbd = false;
-    // std::vector<std::optional<cv::Mat>> camera_data = {std::nullopt, std::nullopt};
+    // rgbd and stereo images
+    switchboard::ptr<const cam_type>            cam;
+    switchboard::ptr<const rgb_depth_type>      rgbd;
+    switchboard::ptr<const reconstruction_type> last_reconstruction;
+
+    bool use_cam         = false;
+    bool use_rgbd        = false;
+    bool use_scene_recon = false;
+
     GLuint          camera_textures[2];
     Eigen::Vector2i camera_texture_sizes[2] = {Eigen::Vector2i::Zero(), Eigen::Vector2i::Zero()};
     GLuint          rgbd_textures[2];
     Eigen::Vector2i rgbd_texture_sizes[2] = {Eigen::Vector2i::Zero(), Eigen::Vector2i::Zero()};
+    GLuint          reconstruction_texture;
+    Eigen::Vector2i reconstruction_texture_size = Eigen::Vector2i{320, 240};
 
     GLuint demo_vao;
     GLuint demoShaderProgram;
@@ -574,6 +607,13 @@ public:
         glBindTexture(GL_TEXTURE_2D, rgbd_textures[1]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glGenTextures(1, &reconstruction_texture);
+        glBindTexture(GL_TEXTURE_2D, reconstruction_texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
         // Construct a basic perspective projection
         math_util::projection_fov(&basicProjection, 40.0f, 40.0f, 40.0f, 40.0f, 0.03f, 20.0f);

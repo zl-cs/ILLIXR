@@ -202,4 +202,10 @@ struct texture_pose : public switchboard::event {
         , latest_quaternion{latest_quaternion_}
         , render_quaternion{render_quaternion_} { }
 };
+
+// Image containing a 3D reconstruction of the user's surroundings
+struct reconstruction_type : public switchboard::event {
+    cv::Mat img;
+    reconstruction_type(cv::Mat img_) : img(img_) { }
+};
 } // namespace ILLIXR
