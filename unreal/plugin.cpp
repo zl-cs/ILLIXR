@@ -28,7 +28,7 @@ public:
         _m_ipcServer = new IPCServer;
         _m_ipcServer->setupServer();
         // Add mesh to payload
-        // mesh = _m_ipcServer->payload->add_meshes();
+        // _m_mesh = _m_ipcServer->payload->add_meshes();
         std::cout << "SERVER THREAD SETUP COMPLETE" << std::endl;
     }
 
@@ -51,7 +51,7 @@ public:
         //_m_ipcServer->payload->set_dracomesh(buffer.str());
 
         // Use to decode draco buffer into ipc payload mesh
-        // dracoDecode(buffer.str(), mesh);
+        // dracoDecode(buffer.str(), _m_mesh);
 
         _m_ipcServer->handleConnection();
     }

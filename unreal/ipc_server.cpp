@@ -43,7 +43,7 @@ public:
         socketAddress.sin_family = AF_INET;
         socketAddress.sin_addr.s_addr = INADDR_ANY;
         socketAddress.sin_port = htons(PORT);
-        int addrlen = sizeof(socketAddress);
+        addrlen = sizeof(socketAddress);
 
         int option = 1;
         // Creating socket file descriptor
@@ -63,7 +63,7 @@ public:
         }
 
         // Forcefully attaching socket to the port        
-        if (bind(socketServer, (struct sockaddr*)&socketAddress, sizeof(socketAddress)) < 0) {
+        if (bind(socketServer, (struct sockaddr*)&socketAddress, addrlen) < 0) {
             perror("bind failed");
             exit(EXIT_FAILURE);
         }
