@@ -31,7 +31,7 @@ public:
 
     IPCServer()
     {
-        payload = new ILLIXRIPC::IPCPayload;        
+        payload = new ILLIXRIPC::IPCPayload;
     }
 
     ~IPCServer()
@@ -102,8 +102,7 @@ public:
             std::string msg;
 
             if (request == "data")
-            {       
-                readPayloadFromFile("mesh.objp");
+            {
                 msg = serializeMessage();
             }
             else
@@ -135,6 +134,9 @@ public:
 
     void parseObjToPayload(std::string filename)
     {
+        delete payload;
+        payload = new ILLIXRIPC::IPCPayload;
+        
         auto start = std::chrono::high_resolution_clock::now();
 
         ILLIXRIPC::Mesh* mesh = payload->add_meshes();
@@ -154,10 +156,12 @@ public:
             iss >> type;        
             if (type == "v")
             {
-                float x, y, z;
-                iss >> x >> y >> z;
+                float x, y, z, r, g, b;
+                iss >> x >> y >> z >> r >> g >> b;
                 ILLIXRIPC::Vector3* vertex = mesh->add_vertices();
+                ILLIXRIPC::Color* vertexColor = mesh->add_vertexcolors();
                 vertex->set_x(x); vertex->set_y(y); vertex->set_z(z);
+                vertexColor->set_r(r); vertexColor->set_g(g); vertexColor->set_b(b);
             }
             else if (type == "vn")
             {

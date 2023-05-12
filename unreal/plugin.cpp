@@ -29,20 +29,24 @@ public:
         std::cout << "SERVER THREAD SETUP COMPLETE" << std::endl;
     }
 
-    virtual skip_option _p_should_skip() override {
-        std::cout << "SERVER SHOULD SKIP" << std::endl;
+    virtual skip_option _p_should_skip() override {        
         // Ideally, we check if the buffer has any meaningful information first.
         // Otherwise, we can just skip.
-
+        // std::cout << "SERVER SHOULD SKIP" << std::endl;
         // if (strcmp(_m_buffer, "close") == 0) {
         //     return skip_option::stop;
         // } else {
         //     return skip_option::run;
         // }
+        return skip_option::run;
     }
 
     virtual void _p_one_iteration() override {
         std::cout << "SERVER ONE ITERATION" << std::endl;
+        
+        // Use to set latest draco buffer
+        //_m_ipcServer->payload->set_dracomesh(buffer.str()); 
+
         _m_ipcServer->handleConnection();
     }
 
