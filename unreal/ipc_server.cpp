@@ -22,8 +22,6 @@
 #define PORT 12345
 #define MESSAGE_SIZE 1024
 
-std::mutex m;
-
 class IPCServer {
 
 public:
