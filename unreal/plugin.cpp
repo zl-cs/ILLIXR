@@ -20,12 +20,15 @@ public:
 
 private:
     IPCServer* _m_ipcServer;
+    ILLIXRIPC::Mesh* _m_mesh;
 
 public:
     virtual void _p_thread_setup() override {
         std::cout << "SERVER THREAD SETUP" << std::endl;
         _m_ipcServer = new IPCServer;
         _m_ipcServer->setupServer();
+        // Add mesh to payload
+        // mesh = _m_ipcServer->payload->add_meshes();
         std::cout << "SERVER THREAD SETUP COMPLETE" << std::endl;
     }
 
@@ -45,7 +48,10 @@ public:
         std::cout << "SERVER ONE ITERATION" << std::endl;
         
         // Use to set latest draco buffer
-        //_m_ipcServer->payload->set_dracomesh(buffer.str()); 
+        //_m_ipcServer->payload->set_dracomesh(buffer.str());
+
+        // Use to decode draco buffer into ipc payload mesh
+        // dracoDecode(buffer.str(), mesh);
 
         _m_ipcServer->handleConnection();
     }
