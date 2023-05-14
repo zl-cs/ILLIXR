@@ -30,6 +30,11 @@ struct cam_type : switchboard::event {
         , img1{_img1} { }
 };
 
+struct reconstruction_type : public switchboard::event {
+        cv::Mat img;
+        reconstruction_type(cv::Mat img_) : img(img_) { }
+};
+
 struct imu_type : switchboard::event {
     time_point      time;
     Eigen::Vector3d angular_v;
@@ -130,6 +135,70 @@ struct pose_type : public switchboard::event {
         : sensor_time{sensor_time_}
         , position{position_}
         , orientation{orientation_} { }
+};
+struct payload_type : public switchboard::event{
+    std::string payload;
+    unsigned id;
+    payload_type(std::string input_payload, unsigned id_)
+        : payload{input_payload}
+        , id{id_}{}
+};
+
+struct mesh_demo_type : public switchboard::event{
+    const std::vector<float> index_x;
+    const std::vector<float> index_y;
+    const std::vector<float> index_z;
+    const std::vector<unsigned> color_r;
+    const std::vector<unsigned> color_g;
+    const std::vector<unsigned> color_b;
+    const std::vector<unsigned> face_1;
+    const std::vector<unsigned> face_2;
+    const std::vector<unsigned> face_3;
+    unsigned id;
+    mesh_demo_type(
+            const std::vector<float>& index_x_,
+            const std::vector<float>& index_y_,
+            const std::vector<float>& index_z_,
+            const std::vector<unsigned>& color_r_,
+            const std::vector<unsigned>& color_g_,
+            const std::vector<unsigned>& color_b_,
+            const std::vector<unsigned>& face_1_,
+            const std::vector<unsigned>& face_2_,
+            const std::vector<unsigned>& face_3_,
+            unsigned id_)
+        : index_x{index_x_}
+        , index_y{index_y_}
+        , index_z{index_z_}
+        , color_r{color_r_}
+        , color_g{color_g_}
+        , color_b{color_b_}
+        , face_1{face_1_}
+        , face_2{face_2_}
+        , face_3{face_3_}
+        , id{id_}{}
+};
+struct mesh_type : public switchboard::event{
+    const std::vector<char> mesh;
+    bool compressed;
+    unsigned id;
+    mesh_type(const std::vector<char>& input_mesh, bool is_compressed, unsigned id_)
+        : mesh(input_mesh)
+        , compressed{is_compressed}
+        , id{id_}{}
+};
+
+struct scene_recon_type : public switchboard::event{
+    [[maybe_unused]] time_point time; 
+    pose_type pose;
+    cv::Mat depth;
+    [[maybe_unused]] cv::Mat rgb; //rgb is only you need colored mesh
+    bool last_frame;
+    scene_recon_type(time_point camera_time, pose_type pose_, cv::Mat depth_, cv::Mat rgb_, bool is_last_frame)
+        : time{camera_time}
+        , pose{pose_}
+        , depth{depth_} 
+        , rgb{rgb_}
+        , last_frame{is_last_frame}{}
 };
 
 typedef struct {
