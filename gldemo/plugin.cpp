@@ -331,6 +331,8 @@ public:
         }
 
         demoscene = ObjScene(std::string(obj_dir), "scene.obj");
+        //pyh: probably subscribe path from switchboard
+        //demoscene = ObjScene(std::string(obj_dir), "scannet_0005_constant_30.obj");
 
         // Construct perspective projection matrix
         math_util::projection_fov(&basicProjection, display_params::fov_x / 2.0f, display_params::fov_x / 2.0f,

@@ -492,6 +492,8 @@ public:
         }
 
         demoscene = ObjScene(std::string(obj_dir), "scene.obj");
+        //pyh what if I subscribe to the obj published by InfiniTAM
+        //demoscene = ObjScene(std::string(obj_dir), "ITM-BE_scene0005.obj");
         headset   = ObjScene(std::string(obj_dir), "headset.obj");
 
         // Generate fun test pattern for missing camera images.

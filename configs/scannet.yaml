@@ -2,14 +2,11 @@ plugin_groups:
     - plugin_group:
         - path: offline_scannet/
         - path: InfiniTAM/
-        #- path: unreal_ar_yihan/ 
         - path: payload_generation/
         - path: ipc_server/ 
           #- path: mesh_compression/
           #- path: mesh_compression_v1/
           #- path: test_mesh/
-        #- path: debugview/
-          #- path: gtsam_integrator/
 
 data: /media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005/
 demo_data: demo_data/
