@@ -155,6 +155,7 @@ struct mesh_demo_type : public switchboard::event{
     const std::vector<unsigned> face_2;
     const std::vector<unsigned> face_3;
     unsigned id;
+    std::string path;
     mesh_demo_type(
             const std::vector<float>& index_x_,
             const std::vector<float>& index_y_,
@@ -165,7 +166,8 @@ struct mesh_demo_type : public switchboard::event{
             const std::vector<unsigned>& face_1_,
             const std::vector<unsigned>& face_2_,
             const std::vector<unsigned>& face_3_,
-            unsigned id_)
+            unsigned id_,
+            std::string path_)
         : index_x{index_x_}
         , index_y{index_y_}
         , index_z{index_z_}
@@ -175,7 +177,8 @@ struct mesh_demo_type : public switchboard::event{
         , face_1{face_1_}
         , face_2{face_2_}
         , face_3{face_3_}
-        , id{id_}{}
+        , id{id_}
+        , path{path_}{}
 };
 struct mesh_type : public switchboard::event{
     const std::vector<char> mesh;
