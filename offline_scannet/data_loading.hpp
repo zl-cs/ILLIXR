@@ -58,9 +58,9 @@ static std::map<ullong, sensor_types> load_data() {
         std::cerr << "Please define ILLIXR_DATA" << std::endl;
         ILLIXR::abort();
     }
-    //std::string illixr_data = std::string{illixr_data_c_str};
+    std::string illixr_data = std::string{illixr_data_c_str};
     //pyh gldemo test
-    std::string illixr_data = "/media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005";
+    //std::string illixr_data = "/media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005";
 
     std::map<ullong, sensor_types> data;
 
