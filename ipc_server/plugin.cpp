@@ -45,21 +45,27 @@ public:
     virtual void _p_one_iteration() override {
         //std::cout << "IPC SERVER ONE ITERATION" << std::endl;
         
+        //519 only accept connection when necessary
+        //std::cout<<"IPC server reached setupConnection\n";
+        _m_ipcServer->setupConnection();
+        //std::cout<<"IPC server finished setupConnection\n";
+        
+        
         switchboard::ptr<const payload_type> latest_payload = _m_payload.get_ro_nullable(); 
-        if (latest_payload != nullptr)
+        if (latest_payload != nullptr && latest_payload->id > latest_id)
         {
-            printf("new payload detected, old id: %u, new id: %u \n", latest_id, latest_payload->id);
+            printf("new payload detected, old id: %u, old size: %zu, new id: %u, new size: %zu \n", latest_id, _m_ipcServer->payload_msg.size(), latest_payload->id, latest_payload->payload.size());
             latest_id = latest_payload->id;
             _m_ipcServer->payload_msg = latest_payload->payload;
             _m_ipcServer->payload_id = latest_payload->id;
+        }else if (latest_payload !=nullptr)
+        {
+        //    printf("payload detected with id: %u\n", latest_payload->id);
         }
-        // Use to set latest draco buffer
-        //_m_ipcServer->payload->set_dracomesh(buffer.str());
-
-        // Use to decode draco buffer into ipc payload mesh
-        //dracoDecode(buffer.str(), _m_mesh);
-
-        _m_ipcServer->handleConnection();
+        //std::cout<<"IPC server reached recvMessage\n";
+        _m_ipcServer->recvMessage();
+        
+        //_m_ipcServer->handleConnection();
     }
 
     virtual void stop() override {        
