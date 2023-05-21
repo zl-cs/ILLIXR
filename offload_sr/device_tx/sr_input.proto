@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package sr_input_proto;
+
+message Pose {
+  //position info
+  double p_x = 1;
+  double p_y = 2;
+  double p_z = 3;
+  //orientation info
+  double o_x = 4;
+  double o_y = 5;
+  double o_z = 6;
+  double o_w = 7;
+}
+
+message ImgData{
+    bytes img_data = 1;
+    int32 rows = 2;
+    int32 columns = 3;
+}
+
+message SRData
+{
+  Pose input_pose = 1;
+  ImgData depth_img_data = 2;
+  ImgData rgb_img_data = 3;
+}

@@ -65,6 +65,7 @@ static std::map<ullong, sensor_types> load_data() {
     std::map<ullong, sensor_types> data;
 
     const std::string groundtruth_subpath = "/poses/groundtruth.txt";
+    //const std::string groundtruth_subpath = "/poses/groundtruth_rgb.txt";
     std::ifstream groundtruth_file{illixr_data + groundtruth_subpath};
     printf("groundtruth pose path: %s\n", (illixr_data+groundtruth_subpath).c_str());    
     if (!groundtruth_file.good()) {
