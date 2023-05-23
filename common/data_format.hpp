@@ -346,4 +346,144 @@ namespace ILLIXR {
           , render_quaternion{render_quaternion_}
         { }
     };
+    struct mesh_type : public switchboard::event{
+        const std::vector<char> mesh;
+        bool compressed;
+        unsigned id;
+        mesh_type(const std::vector<char>& input_mesh, bool is_compressed, unsigned id_)
+            : mesh(input_mesh)
+              , compressed{is_compressed}
+        , id{id_}{}
+    };
+
+    struct scene_recon_type : public switchboard::event{
+        [[maybe_unused]] time_point time;
+        pose_type pose;
+        cv::Mat depth;
+        cv::Mat rgb; //rgb is only you need colored mesh
+        bool last_frame;
+        scene_recon_type(time_point camera_time, pose_type pose_, cv::Mat depth_, cv::Mat rgb_, bool is_last_frame)
+            : time{camera_time}
+        , pose{pose_}
+        , depth{depth_}
+        , rgb{rgb_}
+        , last_frame{is_last_frame}{}
+    };
+
+    struct mesh_demo_type : public switchboard::event{
+        const std::vector<float> index_x;
+        const std::vector<float> index_y;
+        const std::vector<float> index_z;
+        const std::vector<unsigned> color_r;
+        const std::vector<unsigned> color_g;
+        const std::vector<unsigned> color_b;
+        const std::vector<float> color_fr;
+        const std::vector<float> color_fg;
+        const std::vector<float> color_fb;
+        const std::vector<int> face_1;
+        const std::vector<int> face_2;
+        const std::vector<int> face_3;
+        //5/18 add normal calculation
+        const std::vector<float> normal_x;
+        const std::vector<float> normal_y;
+        const std::vector<float> normal_z;
+
+        unsigned id;
+        std::string path;
+        mesh_demo_type(
+                const std::vector<float>& index_x_,
+                const std::vector<float>& index_y_,
+                const std::vector<float>& index_z_,
+                const std::vector<unsigned>& color_r_,
+                const std::vector<unsigned>& color_g_,
+                const std::vector<unsigned>& color_b_,
+                const std::vector<int>& face_1_,
+                const std::vector<int>& face_2_,
+                const std::vector<int>& face_3_,
+                unsigned id_)
+            : index_x{index_x_}
+        , index_y{index_y_}
+        , index_z{index_z_}
+        , color_r{color_r_}
+        , color_g{color_g_}
+        , color_b{color_b_}
+        , face_1{face_1_}
+        , face_2{face_2_}
+        , face_3{face_3_}
+        , id{id_}{}
+        mesh_demo_type(
+                const std::vector<float>& index_x_,
+                const std::vector<float>& index_y_,
+                const std::vector<float>& index_z_,
+                const std::vector<float>& color_r_,
+                const std::vector<float>& color_g_,
+                const std::vector<float>& color_b_,
+                const std::vector<int>& face_1_,
+                const std::vector<int>& face_2_,
+                const std::vector<int>& face_3_,
+                unsigned id_)
+            : index_x{index_x_}
+        , index_y{index_y_}
+        , index_z{index_z_}
+        , color_fr{color_r_}
+        , color_fg{color_g_}
+        , color_fb{color_b_}
+        , face_1{face_1_}
+        , face_2{face_2_}
+        , face_3{face_3_}
+        , id{id_}{}
+        mesh_demo_type(
+                const std::vector<float>& index_x_,
+                const std::vector<float>& index_y_,
+                const std::vector<float>& index_z_,
+                const std::vector<unsigned>& color_r_,
+                const std::vector<unsigned>& color_g_,
+                const std::vector<unsigned>& color_b_,
+                const std::vector<int>& face_1_,
+                const std::vector<int>& face_2_,
+                const std::vector<int>& face_3_,
+                unsigned id_,
+                std::string path_)
+            : index_x{index_x_}
+        , index_y{index_y_}
+        , index_z{index_z_}
+        , color_r{color_r_}
+        , color_g{color_g_}
+        , color_b{color_b_}
+        , face_1{face_1_}
+        , face_2{face_2_}
+        , face_3{face_3_}
+        , id{id_}
+        , path{path_}{}
+        mesh_demo_type(
+                const std::vector<float>& index_x_,
+                const std::vector<float>& index_y_,
+                const std::vector<float>& index_z_,
+                const std::vector<unsigned>& color_r_,
+                const std::vector<unsigned>& color_g_,
+                const std::vector<unsigned>& color_b_,
+                const std::vector<int>& face_1_,
+                const std::vector<int>& face_2_,
+                const std::vector<int>& face_3_,
+                const std::vector<float>& normal_x_,
+                const std::vector<float>& normal_y_,
+                const std::vector<float>& normal_z_,
+                unsigned id_,
+                std::string path_)
+            : index_x{index_x_}
+        , index_y{index_y_}
+        , index_z{index_z_}
+        , color_r{color_r_}
+        , color_g{color_g_}
+        , color_b{color_b_}
+        , face_1{face_1_}
+        , face_2{face_2_}
+        , face_3{face_3_}
+        , normal_x{normal_x_}
+        , normal_y{normal_y_}
+        , normal_z{normal_z_}
+        , id{id_}
+        , path{path_}{}
+    };
+
 }

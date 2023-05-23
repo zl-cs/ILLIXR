@@ -1,0 +1,2 @@
+# Hashes of file build rules.
+01925b54926d4d0cf6b09f7325e52b90 protobuf/sr_input.pb.cc

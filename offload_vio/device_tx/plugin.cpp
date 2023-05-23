@@ -168,11 +168,11 @@ public:
 			/** WITH COMPRESSION END **/
 
 			/** NO COMPRESSION **/
-			// imu_cam_data->set_img0_size(img0_size);
-			// imu_cam_data->set_img1_size(img0_size);
+			//imu_cam_data->set_img0_size(img0_size);
+			//imu_cam_data->set_img1_size(img0_size);
 
-			// imu_cam_data->set_img0_data((void*) img0.data, img0_size);
-			// imu_cam_data->set_img1_data((void*) img1.data, img0_size);
+			//imu_cam_data->set_img0_data((void*) img0.data, img0_size);
+			//imu_cam_data->set_img1_data((void*) img1.data, img0_size);
 			/** No compression END **/
 
 			data_buffer->set_real_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
