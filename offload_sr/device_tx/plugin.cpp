@@ -24,12 +24,12 @@ using namespace ILLIXR;
 
 class offload_writer : public threadloop {
 private:
-    boost::lockfree::spsc_queue<uint64_t> queue {1000};
-    std::vector<int32_t> sizes;
+    //boost::lockfree::spsc_queue<uint64_t> queue {1000};
+    //std::vector<int32_t> sizes;
     std::mutex mutex;
-    std::condition_variable cv;
-    GstMapInfo img0;
-    GstMapInfo img1;
+    //std::condition_variable cv;
+    //GstMapInfo img0;
+    //GstMapInfo img1;
     bool img_ready = false;
 
 public:
@@ -46,8 +46,8 @@ public:
 		}
 		
 		enc_latency.open(data_path + "/enc_latency.csv");
-		compression_csv.open(data_path + "/compression_info.csv");
-		compression_csv << "compression ratio" << "," << "size"<< "," << "average size" << std::endl;
+		//compression_csv.open(data_path + "/compression_info.csv");
+		//compression_csv << "compression ratio" << "," << "size"<< "," << "average size" << std::endl;
 
 		socket.set_reuseaddr();
 		socket.bind(Address(CLIENT_IP, CLIENT_PORT_1));
@@ -59,20 +59,20 @@ public:
     virtual void start() override {
         threadloop::start();
 
-        encoder = std::make_unique<video_encoder>([this](const GstMapInfo& img0, const GstMapInfo& img1) {
-            queue.consume_one([&](uint64_t& timestamp) {
-                uint64_t curr = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                // std::cout << "=== latency: " << (curr - timestamp) / 1000000.0 << std::endl;
-            });
-            {
-                std::lock_guard<std::mutex> lock{mutex};
-                this->img0 = img0;
-                this->img1 = img1;
-                img_ready = true;
-            }
-            cv.notify_one();
-        });
-        encoder->init();
+        //encoder = std::make_unique<video_encoder>([this](const GstMapInfo& img0, const GstMapInfo& img1) {
+        //    queue.consume_one([&](uint64_t& timestamp) {
+        //        uint64_t curr = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        //        // std::cout << "=== latency: " << (curr - timestamp) / 1000000.0 << std::endl;
+        //    });
+        //    {
+        //        std::lock_guard<std::mutex> lock{mutex};
+        //        this->img0 = img0;
+        //        this->img1 = img1;
+        //        img_ready = true;
+        //    }
+        //    cv.notify_one();
+        //});
+        //encoder->init();
 
 		cout << "TEST: Connecting to " << server_addr.str(":") << endl;
 		socket.connect(server_addr);
@@ -172,7 +172,7 @@ public:
 	// }
 
 private:
-    std::unique_ptr<video_encoder> encoder = nullptr;
+    //std::unique_ptr<video_encoder> encoder = nullptr;
 	long previous_timestamp = 0;
 	int frame_id = 0;
 	//vio_input_proto::IMUCamVec* data_buffer = new vio_input_proto::IMUCamVec();
@@ -187,7 +187,7 @@ private:
 	std::ofstream enc_latency;
 	// std::vector<int> ratios;
 	// std::vector<int> sizes_avg;
-	std::ofstream compression_csv;
+	//std::ofstream compression_csv;
 };
 
 PLUGIN_MAIN(offload_writer)

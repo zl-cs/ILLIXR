@@ -10,7 +10,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include "video_decoder.h"
+//#include "video_decoder.h"
 
 #include "common/network/socket.hpp"
 #include "common/network/net_config.hpp"
@@ -20,14 +20,13 @@ using namespace ILLIXR;
 
 class server_reader : public threadloop {
 private:
-    std::unique_ptr<video_decoder> decoder;
-
-    boost::lockfree::spsc_queue<uint64_t> queue {1000};
-    std::mutex mutex;
-    std::condition_variable cv;
-    cv::Mat img0;
-    cv::Mat img1;
-    bool img_ready = false;
+    //std::unique_ptr<video_decoder> decoder;
+    //boost::lockfree::spsc_queue<uint64_t> queue {1000};
+    //std::mutex mutex;
+    //std::condition_variable cv;
+    //cv::Mat img0;
+    //cv::Mat img1;
+    //bool img_ready = false;
 public:
 	server_reader(std::string name_, phonebook* pb_)
 		: threadloop{name_, pb_}
@@ -43,9 +42,9 @@ public:
 			}
 		}
 		
-		receive_time.open(data_path + "/receive_time.csv");
+		//receive_time.open(data_path + "/receive_time.csv");
 		// hashed_data.open(data_path + "/hash_server_rx.txt");
-		dec_latency.open(data_path + "/dec.csv");
+		//dec_latency.open(data_path + "/dec.csv");
 		socket.set_reuseaddr();
 		socket.bind(server_addr);
 	}
@@ -103,27 +102,27 @@ public:
     void start() override {
         threadloop::start();
 
-        decoder = std::make_unique<video_decoder>([this](cv::Mat&& img0, cv::Mat&& img1) {
-            // std::cout << "callback" << std::endl;
+        //decoder = std::make_unique<video_decoder>([this](cv::Mat&& img0, cv::Mat&& img1) {
+        //    // std::cout << "callback" << std::endl;
 
-            // show img0
-            // cv::imshow("img0", img0);
-            // cv::waitKey(1);
+        //    // show img0
+        //    // cv::imshow("img0", img0);
+        //    // cv::waitKey(1);
 
-            queue.consume_one([&](uint64_t& timestamp) {
-                uint64_t curr = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                // std::cout << "=== latency: " << (curr - timestamp) / 1000000.0 << std::endl;
-            });
-            {
-                std::lock_guard<std::mutex> lock{mutex};
-                this->img0 = std::forward<cv::Mat>(img0);
-                this->img1 = std::forward<cv::Mat>(img1);
-                img_ready = true;
-            }
-            // std::cout << "notify" << std::endl;
-            cv.notify_one();
-        });
-        decoder->init();
+        //    queue.consume_one([&](uint64_t& timestamp) {
+        //        uint64_t curr = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        //        // std::cout << "=== latency: " << (curr - timestamp) / 1000000.0 << std::endl;
+        //    });
+        //    {
+        //        std::lock_guard<std::mutex> lock{mutex};
+        //        this->img0 = std::forward<cv::Mat>(img0);
+        //        this->img1 = std::forward<cv::Mat>(img1);
+        //        img_ready = true;
+        //    }
+        //    // std::cout << "notify" << std::endl;
+        //    cv.notify_one();
+        //});
+        //decoder->init();
     }
 
 private:
@@ -165,9 +164,9 @@ private:
 	string buffer_str;
 
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
-	std::ofstream receive_time;
+	//std::ofstream receive_time;
 	// std::ofstream hashed_data;
-	std::ofstream dec_latency;
+	//std::ofstream dec_latency;
 };
 
 PLUGIN_MAIN(server_reader)
