@@ -14,8 +14,8 @@
 #include <ctime>
 #include <cstdlib>
 
-#include "video_encoder.h"
-#include <boost/lockfree/spsc_queue.hpp>
+//#include "video_encoder.h"
+//#include <boost/lockfree/spsc_queue.hpp>
 #include "common/network/socket.hpp"
 #include "common/network/timestamp.hpp"
 #include "common/network/net_config.hpp"
@@ -26,7 +26,7 @@ class offload_writer : public threadloop {
 private:
     //boost::lockfree::spsc_queue<uint64_t> queue {1000};
     //std::vector<int32_t> sizes;
-    std::mutex mutex;
+    //std::mutex mutex;
     //std::condition_variable cv;
     //GstMapInfo img0;
     //GstMapInfo img1;
