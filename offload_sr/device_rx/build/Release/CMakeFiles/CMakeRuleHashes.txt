@@ -1,2 +1,0 @@
-# Hashes of file build rules.
-cc433d10243f63cc824ce21bd3a31c0b protobuf/vio_output.pb.cc

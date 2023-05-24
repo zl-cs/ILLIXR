@@ -22,8 +22,7 @@ public:
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_clock{pb->lookup_impl<RelativeClock>()}
-		, _m_pose{sb->get_writer<pose_type>("slow_pose")}
-		, _m_imu_integrator_input{sb->get_writer<imu_integrator_input>("imu_integrator_input")}
+		, _m_pose{sb->get_writer<mesh_type>("compressed_scene")}
 		, server_addr(SERVER_IP, SERVER_PORT_2)
     { 
 		pose_type datum_pose_tmp{

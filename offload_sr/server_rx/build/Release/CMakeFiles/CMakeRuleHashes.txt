@@ -1,0 +1,2 @@
+# Hashes of file build rules.
+613dfef54e7cd7a73d691d289ab4e224 sr_input.pb.h
