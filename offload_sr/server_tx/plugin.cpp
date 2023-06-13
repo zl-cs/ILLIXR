@@ -3,7 +3,7 @@
 #include "common/data_format.hpp"
 #include "common/phonebook.hpp"
 #include "common/switchboard.hpp"
-#include "sr_input.pb.h"
+#include "sr_output.pb.h"
 
 #include <filesystem>
 #include <fstream>
@@ -19,7 +19,6 @@ public:
     server_writer(std::string name_, phonebook* pb_)
 		: plugin{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
-		, _m_generated_mesh{sb->get_reader<scene_recon_type>("ScanNet_Data")}
 		, client_addr(CLIENT_IP, CLIENT_PORT_2)
     { 
 		socket.set_reuseaddr();
@@ -31,7 +30,7 @@ public:
 				std::cerr << "Failed to create data directory.";
 			}
 		}
-
+        frame_count=0;
 		//receiver_to_sender.open(data_path + "/receiver_to_sender_time.csv");
 		// hashed.open(data_path + "/hash_server_tx.txt");
 
@@ -43,7 +42,7 @@ public:
     // the callbeing being triggered before any data is written to slow_pose. This needs debugging.
     virtual void start() override {
         plugin::start();
-        sb->schedule<scene_recon_type>(id, "ScanNet_Data", [this](switchboard::ptr<const scene_recon_type> datum, std::size_t) {
+        sb->schedule<mesh_type>(id, "compressed_scene", [this](switchboard::ptr<const mesh_type> datum, std::size_t) {
 			this->send_sr_output(datum);
 		});
 		sb->schedule<connection_signal>(id, "connection_signal", [this](switchboard::ptr<const connection_signal> datum, std::size_t) {
@@ -59,7 +58,7 @@ public:
 	}
 
 
-    void send_sr_output(switchboard::ptr<const scene_recon_type> datum) {
+    void send_sr_output(switchboard::ptr<const mesh_type> datum) {
 		// Check if a socket connection has been established
 		if (write_socket != NULL) {
 			/* Logging */
@@ -68,7 +67,9 @@ public:
 			//receiver_to_sender << datum->frame_id << "," << datum->start_time.time_since_epoch().count() << "," << sec_to_trans * 1e3 << std::endl;
 
 			// Construct mesh for output
-
+            server_outgoing_payload = new sr_output_proto::CompressMeshData();
+            std::string str(datum->mesh.begin(), datum->mesh.end());
+            server_outgoing_payload->set_draco_data(str); 
 			// This will get the time elapsed of the full roundtrip loop
 
 			//unsigned long long end_pose_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -76,10 +77,15 @@ public:
 
 			// Prepare data delivery
 			//string data_to_be_sent = vio_output_params->SerializeAsString();
+            string data_to_be_sent = server_outgoing_payload->SerializeAsString();
 			string delimitter = "END!";
 
 			// long int now = timestamp();
-			//write_socket->write(data_to_be_sent + delimitter);
+			write_socket->write(data_to_be_sent + delimitter);
+            std::cout<<"server send payload : "<<frame_count<<std::endl;
+            delete server_outgoing_payload;
+            frame_count++;
+           
 			// long int send_duration = timestamp() - now;
 			// std::cout << "send_duration: " << send_duration << std::endl;
 			// last_send_time = now;
@@ -97,12 +103,12 @@ public:
 
 private:
     const std::shared_ptr<switchboard> sb;
-	switchboard::reader<scene_recon_type> _m_generated_mesh;
-	
+    sr_output_proto::CompressMeshData* server_outgoing_payload;
+
 	TCPSocket socket;
 	TCPSocket * write_socket = NULL;
 	Address client_addr;
-
+    unsigned frame_count;
 	// long int last_send_time;
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
     //std::ofstream receiver_to_sender;

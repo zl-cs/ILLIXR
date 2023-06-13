@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package sr_input_proto;
+package sr_output_proto;
 
 message Pose {
   //position info
