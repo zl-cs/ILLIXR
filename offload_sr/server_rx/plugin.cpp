@@ -7,6 +7,7 @@
 
 #include <boost/lockfree/spsc_queue.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/opencv.hpp>
 #include <filesystem>
 #include <fstream>
 
@@ -32,6 +33,7 @@ public:
 		: threadloop{name_, pb_}
 		, sb{pb->lookup_impl<switchboard>()}
 		, _m_scannet{sb->get_writer<scene_recon_type>("ScanNet_Data")}
+		//, _m_scannet{sb->get_writer<scene_recon_path>("ScanNet_Data_Path")}
 		, _conn_signal{sb->get_writer<connection_signal>("connection_signal")}
 		, server_addr(SERVER_IP, SERVER_PORT_1)
 		, buffer_str("")
@@ -47,6 +49,7 @@ public:
 		//dec_latency.open(data_path + "/dec.csv");
 		socket.set_reuseaddr();
 		socket.bind(server_addr);
+        frame_count=0;
 	}
 
 	virtual skip_option _p_should_skip() override {
@@ -64,7 +67,7 @@ public:
 			cout << "server_rx: Connection is established with " << read_socket->peer_address().str(":") << endl;
 		} else {
 			auto now = timestamp();
-			string delimitter = "EEND!";
+            string delimitter = "EEND!";
 			string recv_data = read_socket->read(); /* Blocking operation, wait for the data to come */
 			buffer_str = buffer_str + recv_data;
 			if (recv_data.size() > 0) {
@@ -127,7 +130,7 @@ public:
 
 private:
 	void ReceiveSRInput(const sr_input_proto::SRSendData& sr_input) {
-        // std::cout << "Received VIO input" << std::endl;
+         std::cout << "Received SR input frame "<< frame_count << std::endl;
 
 		// Logging
 		//unsigned long long curr_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -136,33 +139,63 @@ private:
 		//receive_time << vio_input.frame_id() << "," << vio_input.cam_time() << "," << sec_to_trans * 1e3 << std::endl;
 
 		// Loop through all IMU values first then the cam frame	
+        //std::cout<<"test pose: x: "<<sr_input.input_pose().p_x()<<" y: "<<sr_input.input_pose().p_y()<<" z: "<<sr_input.input_pose().p_z()<<" ox: "<<sr_input.input_pose().o_x() <<" oy: "<< sr_input.input_pose().o_y() <<" oz: "<<sr_input.input_pose().o_z()<<" ow: "<<sr_input.input_pose().o_w()<<std::endl;
         Eigen::Vector3f incoming_position{sr_input.input_pose().p_x(), sr_input.input_pose().p_y(), sr_input.input_pose().p_z()};
-        Eigen::Quaternionf incoming_orientation{sr_input.input_pose().o_x(), sr_input.input_pose().o_y(), sr_input.input_pose().o_z(), sr_input.input_pose().o_x()};
+        Eigen::Quaternionf incoming_orientation{sr_input.input_pose().o_x(), sr_input.input_pose().o_y(), sr_input.input_pose().o_z(), sr_input.input_pose().o_w()};
         pose_type pose = {time_point{}, incoming_position, incoming_orientation};
 
 		// Must do a deep copy of the received data (in the form of a string of bytes)
+		//auto depth_copy = std::string(sr_input.depth_img_data().img_data(), sr_input.depth_img_data().size());
+		//auto rgb_copy = std::string(sr_input.rgb_img_data().img_data(), sr_input.rgb_img_data().size());
 		auto depth_copy = std::string(sr_input.depth_img_data().img_data());
 		auto rgb_copy = std::string(sr_input.rgb_img_data().img_data());
-		cv::Mat img_depth(sr_input.depth_img_data().rows(), sr_input.depth_img_data().columns(), CV_16UC1, depth_copy.data());
+		
+        
+        cv::Mat img_depth(sr_input.depth_img_data().rows(), sr_input.depth_img_data().columns(), CV_16UC1, depth_copy.data());
 		cv::Mat img_rgb(sr_input.rgb_img_data().rows(), sr_input.rgb_img_data().columns(), CV_8UC3, rgb_copy.data());
-        std::string test_depth = std::to_string(sr_input.id()) + "_depth.pgm";
-        std::string color_depth = std::to_string(sr_input.id()) + "_color.png";
-		// unsigned long long after_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        std::cout<<"depth total:  "<< img_depth.total()<<" depth element size: "<<img_depth.elemSize()<<std::endl;
+        std::cout<<"rgb total:  "<< img_rgb.total()<<" rgb element size: "<<img_rgb.elemSize()<<std::endl;
+		//cv::Mat img_rgb(sr_input.rgb_img_data().rows(), sr_input.rgb_img_data().columns(), CV_8UC4, rgb_copy.data());
+        
+        std::string depth_img = "dump_images/"+std::to_string(sr_input.id()) + "_depth.pgm";
+        std::string color_img = "dump_images/"+std::to_string(sr_input.id()) + "_color.png";
+        //cv::imwrite(depth_img,img_depth);
+        //cv::imwrite(color_img,img_rgb);
+        
+        cv::Mat converted_mat(img_rgb.size(), CV_8UC4, cv::Scalar(0, 0, 0, 255));
+        cv::cvtColor(img_rgb,converted_mat,cv::COLOR_RGB2BGRA,0);
+        
+        cv::Mat test_depth = img_depth.clone();
+        cv::Mat test_rgb = converted_mat.clone(); 
+        std::cout << "Address of test_depth: " << &test_depth <<" test rgb: "<< &test_rgb<< std::endl;
+        std::cout << "test Reference count: " << test_depth.u->refcount << std::endl;
+
+        //529 test
+        //cv::imwrite(depth_img,img_depth);
+        //cv::imwrite(color_img,converted_mat);
+        //_m_scannet.put(_m_scannet.allocate<scene_recon_path>(scene_recon_path{time_point{}, pose, depth_img, color_img}));
+        
+        //_m_scannet.put(_m_scannet.allocate<scene_recon_type>(scene_recon_type{time_point{}, pose, img_depth.clone(), converted_mat.clone(),false}));
+        _m_scannet.put(_m_scannet.allocate<scene_recon_type>(scene_recon_type{time_point{}, pose, test_depth, test_rgb,false}));
+        //_m_scannet.put(_m_scannet.allocate<scene_recon_type>(scene_recon_type{time_point{}, pose, img_depth, converted_mat,false}));
+        // unsigned long long after_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		// double sec_to_push = (after_time - curr_time) / 1e9;
 		// std::cout << vio_input.frame_id() << ": Seconds to push data (ms): " << sec_to_push * 1e3 << std::endl;
+        frame_count++;
 	}
 
 private:
 
     const std::shared_ptr<switchboard> sb;
 	switchboard::writer<scene_recon_type> _m_scannet;
+	//switchboard::writer<scene_recon_path> _m_scannet;
 	switchboard::writer<connection_signal> _conn_signal;
 
 	TCPSocket socket;
 	TCPSocket * read_socket = NULL;
 	Address server_addr;
 	string buffer_str;
-
+    unsigned frame_count ;
 	const std::string data_path = filesystem::current_path().string() + "/recorded_data";
 	//std::ofstream receive_time;
 	// std::ofstream hashed_data;

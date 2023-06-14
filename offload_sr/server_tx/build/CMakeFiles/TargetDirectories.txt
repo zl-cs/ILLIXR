@@ -1,3 +1,0 @@
-/media/yihan/Hy_SSD/523/ILLIXR_device/offload_sr/server_tx/build/CMakeFiles/rebuild_cache.dir
-/media/yihan/Hy_SSD/523/ILLIXR_device/offload_sr/server_tx/build/CMakeFiles/edit_cache.dir
-/media/yihan/Hy_SSD/523/ILLIXR_device/offload_sr/server_tx/build/CMakeFiles/plugin.dir
