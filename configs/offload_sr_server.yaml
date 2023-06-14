@@ -3,7 +3,7 @@ plugin_groups:
         #- path: offload_sr/server_rx/
         - path: offline_scannet/
         - path: InfiniTAM/
-          #- path: mesh_compression/
+        - path: mesh_compression/
           #- path: offload_sr/server_tx/
 
 
