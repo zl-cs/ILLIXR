@@ -1,7 +1,11 @@
 plugin_groups:
     - plugin_group:
+        - path: ipc_server/
         - path: offline_scannet/
         - path: offload_sr/device_tx/
+        - path: offload_sr/device_rx/
+        - path: mesh_decompression/
+        - path: payload_generation_compress/
 
 data: /media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005/
 demo_data: demo_data/

@@ -79,6 +79,7 @@ public:
 		cout << "Connected to " << server_addr.str(":") << endl;	
 
         sb->schedule<scene_recon_type>(id, "ScanNet_RGB_Data", [this](switchboard::ptr<const scene_recon_type> datum, std::size_t) {
+        //sb->schedule<scene_recon_type>(id, "ScanNet_Data", [this](switchboard::ptr<const scene_recon_type> datum, std::size_t) {
 			this->send_scene_recon_data(datum);
 		});
 	}
@@ -98,10 +99,12 @@ protected:
 public:
 
     void send_scene_recon_data(switchboard::ptr<const scene_recon_type> datum) {
+        std::cout<<"send frame: "<< frame_id <<std::endl;
         outgoing_payload = new sr_input_proto::SRSendData();
         sr_input_proto::Pose* pose = outgoing_payload->mutable_input_pose();
         
         //set pose
+        //std::cout<<"test pose: x: "<<datum->pose.position.x()<<" y: "<<datum->pose.position.y()<<" z: "<<datum->pose.position.z()<<" ox: "<<datum->pose.orientation.x() <<" oy: "<< datum->pose.orientation.y() <<" oz: "<<datum->pose.orientation.z()<<" ow: "<<datum->pose.orientation.w()<<std::endl;
         pose->set_p_x(datum->pose.position.x());
         pose->set_p_y(datum->pose.position.y());
         pose->set_p_z(datum->pose.position.z());
@@ -123,12 +126,17 @@ public:
         rgb_img->set_columns(cur_rgb.cols);
         
         double cur_depth_size = cur_depth.total() *  cur_depth.elemSize();
+        std::cout<<"depth total:  "<< cur_depth.total()<<" depth element size: "<<cur_depth.elemSize()<<std::endl;
         double cur_rgb_size = cur_rgb.total() *  cur_rgb.elemSize();
+        std::cout<<"rgb total:  "<< cur_rgb.total()<<" rgb element size: "<<cur_rgb.elemSize()<<std::endl;
         //std::cout<<"rgb: size "<<cur_rgb.size<<" calculated: "<<cur_rgb_size<<std::endl;
         depth_img->set_img_data((void*) cur_depth.data, cur_depth_size);
         rgb_img->set_img_data((void*) cur_rgb.data, cur_rgb_size);
+        depth_img->set_size(cur_depth_size);
+        rgb_img->set_size(cur_rgb_size);
 
-        outgoing_payload->set_id(frame_id);    
+        outgoing_payload->set_id(frame_id); 
+           
         
         //cv::Mat img0 = (datum->img0.value()).clone();
         //cv::Mat img1 = (datum->img1.value()).clone();
