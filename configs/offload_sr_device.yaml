@@ -1,7 +1,8 @@
 plugin_groups:
     - plugin_group:
         - path: ipc_server/
-        - path: offline_scannet/
+        #pyh remove due to cv::Mat issue, server directly read the dataset
+        #- path: offline_scannet/
         - path: offload_sr/device_tx/
         - path: offload_sr/device_rx/
         - path: mesh_decompression/

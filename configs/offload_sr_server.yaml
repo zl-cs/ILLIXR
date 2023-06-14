@@ -1,9 +1,10 @@
 plugin_groups:
     - plugin_group:
         - path: offload_sr/server_rx/
-          #- path: offline_scannet/
+          #pyh: this is for loading dataset directly from server
+        - path: offline_scannet/
         - path: InfiniTAM/
-          #- path: mesh_compression/
+        - path: mesh_compression/
         - path: offload_sr/server_tx/
 
 
