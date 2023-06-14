@@ -1,0 +1,33 @@
+plugin_groups:
+    - plugin_group:
+        - path: offload_sr/server_rx/
+          #- path: offline_scannet/
+        - path: InfiniTAM/
+          #- path: mesh_compression/
+        - path: offload_sr/server_tx/
+
+
+data: /media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005/
+demo_data: demo_data/
+
+enable_offload:   False
+enable_alignment: False
+enable_verbose_errors: False
+enable_pre_sleep: False
+# realsense_cam: auto
+
+action:
+  kimera_path: .cache/paths/https%c%s%sgithub.com%sILLIXR%sKimera-VIO.git/
+  audio_path:  .cache/paths/https%c%s%sgithub.com%sILLIXR%saudio_pipeline.git/
+  name: native
+  ILLIXR_RUN_DURATION: 2400
+  # run in GDB:
+  #command: gdb -q --args $cmd
+
+  # Print cmd for external use:
+  # command: printf %s\n $env_cmd
+
+  # Capture stdout for metrics
+  # log_stdout: metrics/output.log
+
+profile: opt
