@@ -304,7 +304,9 @@ private:
         const std::type_info&                               _m_ty;
         const std::shared_ptr<record_logger>                _m_record_logger;
         std::atomic<size_t>                                 _m_latest_index;
-        static constexpr std::size_t                        _m_latest_buffer_size = 256;
+        //static constexpr std::size_t                        _m_latest_buffer_size = 256;
+        //pyh increase size 
+        static constexpr std::size_t                        _m_latest_buffer_size = 2056;
         std::array<ptr<const event>, _m_latest_buffer_size> _m_latest_buffer;
         std::list<topic_subscription>                       _m_subscriptions;
         std::shared_mutex                                   _m_subscriptions_lock;

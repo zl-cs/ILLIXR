@@ -356,6 +356,17 @@ namespace ILLIXR {
         , id{id_}{}
     };
 
+    struct scene_recon_path: public switchboard::event{
+        [[maybe_unused]] time_point time;
+        pose_type pose;
+        std::string depth_path;
+        std::string rgb_path;
+        scene_recon_path(time_point camera_time, pose_type pose_, std::string depth_path_, std::string rgb_path_)
+            : time{camera_time}
+            , pose{pose_}
+            , depth_path{depth_path_}
+            , rgb_path{rgb_path_}{}
+    };
     struct scene_recon_type : public switchboard::event{
         [[maybe_unused]] time_point time;
         pose_type pose;
@@ -368,6 +379,14 @@ namespace ILLIXR {
         , depth{depth_}
         , rgb{rgb_}
         , last_frame{is_last_frame}{}
+    };
+
+    struct payload_type : public switchboard::event{
+        std::string payload;
+        unsigned id;
+        payload_type(std::string input_payload, unsigned id_)
+            : payload{input_payload}
+        , id{id_}{}
     };
 
     struct mesh_demo_type : public switchboard::event{
