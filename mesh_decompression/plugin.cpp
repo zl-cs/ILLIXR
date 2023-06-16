@@ -118,13 +118,11 @@ class mesh_decompression : public plugin {
                    }
                } 
                //Test by printing out the decoded mesh
-               std::string out_mesh = std::to_string(datum->id) + ".ply";
-               draco::PlyEncoder *ply_encoder = new draco::PlyEncoder();
-               ply_encoder->EncodeToFile(*dracoMesh, out_mesh);
-               std::string merge_name = std::to_string(datum->id);
+               //std::string out_mesh = std::to_string(datum->id) + ".ply";
+               //draco::PlyEncoder *ply_encoder = new draco::PlyEncoder();
+               //ply_encoder->EncodeToFile(*dracoMesh, out_mesh);
 
                _m_mesh.put(_m_mesh.allocate<mesh_demo_type>(mesh_demo_type{v_x,v_y,v_z,c_r,c_g,c_b,f_1,f_2,f_3, datum->id})); 
-                                          //
                //_m_compressed_mesh.put(_m_compressed_mesh.allocate<mesh_type>(mesh_type{*(draco_buffer.buffer()),true, datum->id})); 
                currentTime = std::time(nullptr);
                timeString = std::ctime(&currentTime);
