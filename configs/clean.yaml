@@ -43,6 +43,13 @@ plugin_groups:
     - path: offload_vio/device_rx
     - path: offload_vio/server_tx
     - path: offload_vio/server_rx
+    ## offload scenereconstruction plugins
+    - path: offload_sr/device_tx
+    - path: offload_sr/device_rx
+    - path: offload_sr/server_tx
+    - path: offload_sr/server_rx
+    - path: InfiniTAM
+    - path: mesh_compression
 
 action:
   name: clean
