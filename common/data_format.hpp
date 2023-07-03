@@ -8,7 +8,7 @@
 #undef Success // For 'Success' conflict
 #include <eigen3/Eigen/Dense>
 #include <GL/gl.h>
-//#undef Complex // For 'Complex' conflict
+// #undef Complex // For 'Complex' conflict
 #include "phonebook.hpp"
 #include "relative_clock.hpp"
 #include "switchboard.hpp"
