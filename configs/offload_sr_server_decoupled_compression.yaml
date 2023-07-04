@@ -1,13 +1,13 @@
 plugin_groups:
     - plugin_group:
           #
-          #- path: offload_sr/server_rx/
-          - path: offline_scannet/
+          - path: offload_sr/server_rx/
+            #- path: offline_scannet/
           - path: InfiniTAM/
             #- path: mesh_compression/
           - path: mesh_preprocessing/
           - path: mesh_encoding
-          #- path: offload_sr/server_tx/
+          - path: offload_sr/server_tx/
 
 
 data: /media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005/
