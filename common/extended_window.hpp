@@ -1,5 +1,6 @@
 #pragma once
-
+//ensure that Draco's Status class not to be redefined by X11's 
+#include "draco/mesh/mesh.h" 
 #include "error_util.hpp"
 #include "global_module_defs.hpp"
 #include "phonebook.hpp"
