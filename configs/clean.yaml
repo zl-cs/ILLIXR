@@ -50,6 +50,8 @@ plugin_groups:
     - path: offload_sr/server_rx
     - path: InfiniTAM
     - path: mesh_compression
+    - path: mesh_preprocessing
+    - path: mesh_encoding
 
 action:
   name: clean

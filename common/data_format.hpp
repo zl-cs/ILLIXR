@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DATA_FORMAT_HPP
+#define DATA_FORMAT_HPP
 
 #include <boost/optional.hpp>
 #include <chrono>
@@ -13,6 +14,8 @@
 #include "relative_clock.hpp"
 #include "switchboard.hpp"
 
+#include "draco/mesh/mesh.h"
+
 // Tell gldemo and timewarp_gl to use two texture handle for left and right eye
 #define USE_ALT_EYE_FORMAT
 
@@ -20,7 +23,16 @@ namespace ILLIXR {
 
 	using ullong = unsigned long long;
 
-	// Data type that combines the IMU and camera data at a certain timestamp.
+    struct draco_type : public switchboard::event{
+        std::unique_ptr<draco::Mesh> preprocessed_mesh;
+        unsigned frame_id;
+        draco_type(std::unique_ptr<draco::Mesh> input_mesh,unsigned id)
+            : preprocessed_mesh(std::move(input_mesh))
+            , frame_id(id)
+        {}
+    };
+	
+    // Data type that combines the IMU and camera data at a certain timestamp.
 	// If there is only IMU data for a certain timestamp, img0 and img1 will be null
 	// time is the current UNIX time where dataset_time is the time read from the csv
 	struct imu_cam_type : public switchboard::event {
@@ -506,3 +518,4 @@ namespace ILLIXR {
     };
 
 }
+#endif // DATA_FORMAT_HPP
