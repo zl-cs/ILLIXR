@@ -61,7 +61,14 @@ class mesh_compression : public plugin {
                ply_decoder->buffer_.Init(datum->mesh.data(), datum->mesh.size());
                
                std::unique_ptr<draco::Mesh> draco_mesh(new draco::Mesh()); 
+               //7/1 Decouple DecodeFromBuffer (pre-processing) from EncodeToBuffer (Mesh Compression)
+               //auto startTime = std::chrono::high_resolution_clock::now();
                ply_decoder->DecodeFromBuffer(&ply_decoder->buffer_, draco_mesh.get());
+               //auto endTime = std::chrono::high_resolution_clock::now();
+               //auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
+               //std::cout << "DecodeFromBuffer Time taken: " << duration << " seconds" << std::endl;
+
+               //7/1 idea use protobuf to serialize the string
 
                std::unique_ptr<draco::PointCloud> draco_pc;
                draco::Mesh *temp_mesh = draco_mesh.get();
@@ -69,9 +76,16 @@ class mesh_compression : public plugin {
                
                expert_encoder.reset(new draco::ExpertEncoder(*temp_mesh));
                expert_encoder->Reset(encoder.CreateExpertEncoderOptions(*draco_pc));
-               
                draco::EncoderBuffer draco_buffer;
+               
+               
+               //startTime = std::chrono::high_resolution_clock::now();
                const draco::Status status = expert_encoder->EncodeToBuffer(&draco_buffer);
+               //endTime = std::chrono::high_resolution_clock::now();
+               //duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
+               //std::cout << "EncodeToBuffer Time taken: " << duration << " seconds" << std::endl;
+
+
                if(!status.ok()){
                    printf("Failed to encode the mesh\n");
                }
