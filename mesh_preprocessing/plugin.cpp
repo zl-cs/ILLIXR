@@ -30,10 +30,12 @@ class mesh_preprocessing : public plugin {
         mesh_preprocessing(std::string name_, phonebook* pb_)
             : plugin{name_, pb_}
         , sb{pb->lookup_impl<switchboard>()}
-        , _m_mesh{sb->get_reader<mesh_type>("original_scene")}
+        //, _m_mesh{sb->get_reader<mesh_type>("original_scene")}
+        , _m_mesh{sb->get_reader<mesh_type>("decimated_scene")}
         , _m_preprocessed_mesh{sb->get_writer<draco_type>("preprocessed_scene")}
         {
-            sb->schedule<mesh_type>(id,"original_scene",[&](switchboard::ptr<const mesh_type> datum, std::size_t){
+            //sb->schedule<mesh_type>(id,"original_scene",[&](switchboard::ptr<const mesh_type> datum, std::size_t){
+            sb->schedule<mesh_type>(id,"decimated_scene",[&](switchboard::ptr<const mesh_type> datum, std::size_t){
                     this->ProcessFrame(datum);
             });
         }
