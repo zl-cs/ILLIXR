@@ -126,9 +126,9 @@ public:
         rgb_img->set_columns(cur_rgb.cols);
         
         double cur_depth_size = cur_depth.total() *  cur_depth.elemSize();
-        std::cout<<"depth total:  "<< cur_depth.total()<<" depth element size: "<<cur_depth.elemSize()<<std::endl;
+        //std::cout<<"depth total:  "<< cur_depth.total()<<" depth element size: "<<cur_depth.elemSize()<<std::endl;
         double cur_rgb_size = cur_rgb.total() *  cur_rgb.elemSize();
-        std::cout<<"rgb total:  "<< cur_rgb.total()<<" rgb element size: "<<cur_rgb.elemSize()<<std::endl;
+        //std::cout<<"rgb total:  "<< cur_rgb.total()<<" rgb element size: "<<cur_rgb.elemSize()<<std::endl;
         //std::cout<<"rgb: size "<<cur_rgb.size<<" calculated: "<<cur_rgb_size<<std::endl;
         depth_img->set_img_data((void*) cur_depth.data, cur_depth_size);
         rgb_img->set_img_data((void*) cur_rgb.data, cur_rgb_size);
