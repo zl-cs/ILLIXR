@@ -4,18 +4,18 @@
 #include <cstring>
 #include <glm/detail/qualifier.hpp>
 #include <vulkan/vulkan_core.h>
-#include "common/plugin.hpp"
+#include "illixr/plugin.hpp"
 
-#include "common/data_format.hpp"
-#include "common/error_util.hpp"
-#include "common/global_module_defs.hpp"
-#include "common/math_util.hpp"
-#include "common/phonebook.hpp"
-#include "common/pose_prediction.hpp"
-#include "common/switchboard.hpp"
-#include "common/vk_util/display_sink.hpp"
-#include "common/vk_util/render_pass.hpp"
-#include "common/vk_util/vulkan_utils.hpp"
+#include "illixr/data_format.hpp"
+#include "illixr/error_util.hpp"
+#include "illixr/global_module_defs.hpp"
+#include "illixr/math_util.hpp"
+#include "illixr/phonebook.hpp"
+#include "illixr/pose_prediction.hpp"
+#include "illixr/switchboard.hpp"
+#include "illixr/vk_util/display_sink.hpp"
+#include "illixr/vk_util/render_pass.hpp"
+#include "illixr/vk_util/vulkan_utils.hpp"
 
 #include <array>
 #include <chrono>
