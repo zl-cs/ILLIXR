@@ -15,3 +15,5 @@ install/
 data_record/
 .idea/
 cmake-*/
+
+illixr.yaml
