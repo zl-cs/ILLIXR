@@ -13,3 +13,5 @@ metrics/
 install/
 .deps
 data_record/
+.idea/
+cmake-*/
