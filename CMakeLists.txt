@@ -105,7 +105,7 @@ option(DATA_FILE "The data file to get" ON)
 set(DATA_FILE "http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip")
 
 # full list of available local plugins
-set(PLUGIN_LIST debugview depthai gldemo ground_truth_slam gtsam_integrator offline_cam offline_imu offload_data offload_vio passthrough_integrator pose_lookup pose_prediction realsense record_imu_cam rk4_integrator timewarp_gl)
+set(PLUGIN_LIST debugview depthai display_vk gldemo ground_truth_slam gtsam_integrator native_renderer offline_cam offline_imu offload_data offload_vio passthrough_integrator pose_lookup pose_prediction realsense record_imu_cam rk4_integrator timewarp_gl timewarp_vk vkdemo)
 # full list of available external plugins
 set(EXT_PLUGIN_LIST Kimera_vio Audio_Pipeline OpenXR_APP ORB_SLAM Monado)
 set(YAML_FILE "" CACHE STRING "Yaml file to specify build parameters")
