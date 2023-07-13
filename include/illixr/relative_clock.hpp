@@ -102,16 +102,15 @@ public:
     using rep                       = _clock_rep;
     using period                    = _clock_period;
     using duration                  = _clock_duration;
-    using time_point                = time_point;
     static constexpr bool is_steady = true;
     static_assert(std::chrono::steady_clock::is_steady);
 
-    time_point now() const {
+    ILLIXR::time_point now() const {
         assert(this->is_started() && "Can't call now() before this clock has been start()ed.");
-        return time_point{std::chrono::steady_clock::now() - _m_start};
+        return ILLIXR::time_point{std::chrono::steady_clock::now() - _m_start};
     }
 
-    int64_t absolute_ns(time_point relative) {
+    int64_t absolute_ns(ILLIXR::time_point relative) {
         return std::chrono::nanoseconds{_m_start.time_since_epoch()}.count() +
             std::chrono::nanoseconds{relative.time_since_epoch()}.count();
     }
@@ -133,8 +132,8 @@ public:
     /**
      * @brief Get the start time of the clock.
      */
-    time_point start_time() const {
-        return time_point{_m_start.time_since_epoch()};
+    ILLIXR::time_point start_time() const {
+        return ILLIXR::time_point{_m_start.time_since_epoch()};
     }
 
 private:

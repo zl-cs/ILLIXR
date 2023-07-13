@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
 #include <typeindex>
