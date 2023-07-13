@@ -1,7 +1,10 @@
 # module to download, build and install the ORM_SLAM ILLIXR plugin
 
 # get dependencies
-pkg_check_modules(glslang REQUIRED glslang)
+pkg_check_modules(glslang glslang)
+if(NOT ${glslang_FOUND})
+    find_package(glslang REQUIRED)
+endif()
 find_package(gflags REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(PNG REQUIRED)
