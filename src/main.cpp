@@ -1,11 +1,51 @@
-#include "common/global_module_defs.hpp"
+#include "cxxopts.hpp"
+#include "illixr/global_module_defs.hpp"
 #include "runtime_impl.hpp"
+#include "yaml-cpp/yaml.h"
 
 #include <csignal>
-#include <unistd.h> /// Not portable
+
+#define GET_STRING(NAME, ENV)                                        \
+    if (result.count(#NAME)) {                                       \
+        setenv(#ENV, result[#NAME].as<std::string>().c_str(), true); \
+    } else if (config[#NAME]) {                                      \
+        setenv(#ENV, config[#NAME].as<std::string>().c_str(), true); \
+    }
+
+#define GET_BOOL(NAME, ENV)                     \
+    if (result.count(#NAME) || config[#NAME]) { \
+        bool val;                               \
+        if (result.count(#NAME)) {              \
+            val = result[#NAME].as<bool>();     \
+        } else {                                \
+            val = config[#NAME].as<bool>();     \
+        }                                       \
+        if (val) {                              \
+            setenv(#ENV, "True", true);         \
+        } else {                                \
+            setenv(#ENV, "False", false);       \
+        }                                       \
+    }
+#define _STR(y)      #y
+#define STRINGIZE(x) _STR(x)
+#define GET_LONG(NAME, ENV)                                                   \
+    if (result.count(#NAME)) {                                                \
+        setenv(#ENV, std::to_string(result[#NAME].as<long>()).c_str(), true); \
+    } else if (config[#NAME]) {                                               \
+        setenv(#ENV, std::to_string(config[#NAME].as<long>()).c_str(), true); \
+    }
 
 constexpr std::chrono::seconds          ILLIXR_RUN_DURATION_DEFAULT{60};
 [[maybe_unused]] constexpr unsigned int ILLIXR_PRE_SLEEP_DURATION{10};
+
+const std::vector<std::string> core_plugins = {"audio_pipeline", "timewarp_gl"},
+                               rt_plugins = {"gtsam_integrator", "kimera_vio", "offline_imu", "offline_cam", "pose_prediction"},
+                               monado_plugins = core_plugins + rt_plugins + std::vector<std::string>{"monado"},
+                               native_plugins = core_plugins + rt_plugins +
+    std::vector<std::string>{"ground_truth_slam", "gldemo", "debugview", "offload_data"},
+                               ci_plugins = core_plugins + rt_plugins + std::vector<std::string>{"ground_truth_slam", "gldemo"},
+                               all_plugins = core_plugins + rt_plugins +
+    std::vector<std::string>{"monado", "ground_truth_slam", "gldemo", "debugview", "offload_data"};
 
 ILLIXR::runtime* r;
 
@@ -64,7 +104,28 @@ private:
     std::atomic<bool> _m_terminate{false};
 };
 
-int main(int argc, char* const* argv) {
+int main(int argc, const char* argv[]) {
+    cxxopts::Options options("ILLIXR", "Main program");
+    options.show_positional_help();
+    std::chrono::seconds run_duration;
+    // std::string illixr_data, illixr_demo_data, realsense_cam;
+    // illixr_data = illixr_demo_data = realsense_cam = "";
+    // bool offload_enable, alignment_enable, enable_verbose_errors, enable_pre_sleep;
+    // offload_enable = alignment_enable = enable_verbose_errors = enable_pre_sleep = false;
+    // long run_dur = 0;
+    std::vector<std::string> plugins;
+    options.add_options()("d,duration", "The duration to run for", cxxopts::value<long>())(
+        "data", "The data", cxxopts::value<std::string>())("demo_data", "The demo data", cxxopts::value<std::string>())(
+        "enable_offload", "")("enable_alignment", "")("enable_verbose_errors", "")("enable_pre_sleep", "")(
+        "h,help", "Produce help message")("realsense_cam", "", cxxopts::value<std::string>()->default_value("auto"))(
+        "p,plugins", "The plugins to use", cxxopts::value<std::vector<std::string>>())(
+        "g,group", "The group of plugins to use: monado, native, ci, all",
+        cxxopts::value<std::string>())("y,yaml", "Yaml config file", cxxopts::value<std::string>());
+    auto result = options.parse(argc, argv);
+    if (result.count("help")) {
+        std::cout << options.help() << std::endl;
+        return EXIT_SUCCESS;
+    }
 #ifdef ILLIXR_MONADO_MAINLINE
     r = ILLIXR::runtime_factory();
 #else
@@ -93,18 +154,74 @@ int main(int argc, char* const* argv) {
         std::cout << "[main] Resuming ..." << std::endl;
     }
 #endif /// NDEBUG
+    // read in yaml config file
+    YAML::Node config;
+    if (result.count("yaml")) {
+        config = YAML::LoadFile(result["yaml"].as<std::string>());
+    }
+    if (result.count("duration")) {
+        run_duration = std::chrono::seconds{result["duration"].as<long>()};
+    } else if (config["duration"]) {
+        run_duration = std::chrono::seconds{config["duration"].as<long>()};
+    } else {
+        run_duration = getenv("ILLIXR_RUN_DURATION")
+            ? std::chrono::seconds{std::stol(std::string{getenv("ILLIXR_RUN_DURATION")})}
+            : ILLIXR_RUN_DURATION_DEFAULT;
+    }
+    GET_STRING(data, ILLIXR_DATA)
+    GET_STRING(demo_data, ILLIXR_DEMO_DATA)
+    GET_BOOL(enable_offload, ILLIXR_OFFLOAD_ENABLE)
+    GET_BOOL(alignment_enable, ILLIXR_ALIGNMENT_ENABLE)
+    GET_BOOL(enable_verbose_errors, ILLIXR_ENABLE_VERBOSE_ERRORS)
+    GET_BOOL(enable_pre_sleep, ILLIXR_ENABLE_PRE_SLEEP)
+    GET_STRING(realsense_cam, REALSENSE_CAM)
 
-    /// Shutting down method 2: Run timer
-    std::chrono::seconds run_duration = getenv("ILLIXR_RUN_DURATION")
-        ? std::chrono::seconds{std::stol(std::string{getenv("ILLIXR_RUN_DURATION")})}
-        : ILLIXR_RUN_DURATION_DEFAULT;
+    setenv("__GL_MaxFramesAllowed", "1", false);
+    setenv("__GL_SYNC_TO_VBLANK", "1", false);
+    bool have_group;
+    if (result.count("group") || config["group"]) {
+        std::string group;
+        if (result.count("group")) {
+            group = result["group"].as<std::string>();
+        } else {
+            group = config["group"].as<std::string>();
+        }
+        if (group == "monado" || group == "MONADO") {
+            plugins    = monado_plugins;
+            have_group = true;
+        } else if (group == "native" || group == "NATIVE") {
+            plugins    = native_plugins;
+            have_group = true;
+        } else if (group == "ci" || group == "CI") {
+            plugins    = ci_plugins;
+            have_group = true;
+        } else if (group == "all" || group == "ALL") {
+            plugins    = all_plugins;
+            have_group = true;
+        } else {
+            have_group = false;
+        }
+    }
+    if (!have_group) {
+        if (result.count("plugins")) {
+            plugins = result["plugins"].as<std::vector<std::string>>();
+        } else if (config["plugins"]) {
+            plugins = config["plugins"].as<std::vector<std::string>>();
+        } else {
+            std::cout << "No plugins specified." << std::endl;
+            std::cout << "Either a list of plugins or a group name must be given. Groups are monado, native, ci, all, or none"
+                      << std::endl;
+            return EXIT_FAILURE;
+        }
+    }
 
     RAC_ERRNO_MSG("main after creating runtime");
 
     std::vector<std::string> lib_paths;
-    std::transform(argv + 1, argv + argc, std::back_inserter(lib_paths), [](const char* arg) {
-        return std::string{arg};
+    std::transform(plugins.begin(), plugins.end(), std::back_inserter(lib_paths), [](const std::string& arg) {
+        return "libplugin." + arg + STRINGIZE(ILLIXR_BUILD_SUFFIX) + ".so";
     });
+
     RAC_ERRNO_MSG("main before loading dynamic libraries");
     r->load_so(lib_paths);
 

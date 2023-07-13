@@ -1,12 +1,12 @@
-#include "common/dynamic_lib.hpp"
-#include "common/error_util.hpp"
-#include "common/extended_window.hpp"
-#include "common/global_module_defs.hpp"
-#include "common/plugin.hpp"
-#include "common/relative_clock.hpp"
-#include "common/runtime.hpp"
-#include "common/stoplight.hpp"
-#include "common/switchboard.hpp"
+#include "illixr/dynamic_lib.hpp"
+#include "illixr/error_util.hpp"
+#include "illixr/extended_window.hpp"
+#include "illixr/global_module_defs.hpp"
+#include "illixr/plugin.hpp"
+#include "illixr/relative_clock.hpp"
+#include "illixr/runtime.hpp"
+#include "illixr/stoplight.hpp"
+#include "illixr/switchboard.hpp"
 #include "noop_record_logger.hpp"
 #include "sqlite_record_logger.hpp"
 #include "stdout_record_logger.hpp"
@@ -15,8 +15,16 @@
 #include <cerrno>
 #include <chrono>
 #include <thread>
+#include <vector>
 
 using namespace ILLIXR;
+
+template<typename T>
+std::vector<T> operator+(const std::vector<T>& a, const std::vector<T>& b) {
+    std::vector<T> c = a;
+    c.insert(c.end(), b.begin(), b.end());
+    return c;
+}
 
 class runtime_impl : public runtime {
 public:
@@ -52,21 +60,24 @@ public:
         });
 
         RAC_ERRNO_MSG("runtime_impl after generating plugin factories");
-
+        std::cout << "runtime_impl after generating plugin factories" << std::endl;
         std::transform(plugin_factories.cbegin(), plugin_factories.cend(), std::back_inserter(plugins),
                        [this](const auto& plugin_factory) {
                            RAC_ERRNO_MSG("runtime_impl before building the plugin");
                            return std::unique_ptr<plugin>{plugin_factory(&pb)};
                        });
+        std::cout << "runtime_impl after generating plugin factories end" << std::endl;
 
         std::for_each(plugins.cbegin(), plugins.cend(), [](const auto& plugin) {
             // Well-behaved plugins (any derived from threadloop) start there threads here, and then wait on the Stoplight.
+            std::cout << "START" << std::endl;
             plugin->start();
         });
-
+        std::cout << "started" << std::endl;
         // This actually kicks off the plugins
         pb.lookup_impl<RelativeClock>()->start();
         pb.lookup_impl<Stoplight>()->signal_ready();
+        std::cout << "LIBS loaded" << std::endl;
     }
 
     virtual void load_so(const std::string_view so) override {
