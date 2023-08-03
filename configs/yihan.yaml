@@ -1,7 +1,11 @@
 plugin_groups:
     - plugin_group:
           #
-          - path: mesh_preprocessing/
+          #- path: mesh_compression/
+          #- path: offline_scannet/
+          #- path: mesh_preprocessing/
+          #- path: mesh_encoding/
+          - path: mesh_decimation/
 
 
 data: /media/yihan/Hy_SSD/IEEE_VR/scannet/scene0005/

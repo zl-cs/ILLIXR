@@ -54,6 +54,7 @@ cmake \
     -D BUILD_EXAMPLES=OFF \
     -D BUILD_JAVA=OFF \
     -D WITH_OPENGL=ON \
+    -D BUILD_opencv_videoio=OFF \
     -D WITH_VTK=ON \
     -D OPENCV_EXTRA_MODULES_PATH="${opencv_dir_extra}/modules"
 make -C "${build_dir}" -j "${illixr_nproc}"
