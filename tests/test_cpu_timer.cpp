@@ -1,7 +1,7 @@
-#include "../cpu_timer.hpp"
+#include "illixr/cpu_timer.hpp"
 
 #include <gtest/gtest.h>
-#include <opencv/cv.hpp>
+#include <opencv2/opencv.hpp>
 
 namespace ILLIXR {
 

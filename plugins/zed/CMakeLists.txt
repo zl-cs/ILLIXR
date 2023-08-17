@@ -25,7 +25,14 @@ endif()
 
 target_include_directories(${PLUGIN_NAME} PUBLIC ${CUDA_INCLUDE_DIRS} ${ZED_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${Eigen3_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(${PLUGIN_NAME} ${ZED_LIBS} ${OpenCV_LIBRARIES} ${Eigen3_LIBRARIES} Threads::Threads)
+target_link_libraries(${PLUGIN_NAME} PUBLIC ${ZED_LIBS} ${OpenCV_LIBRARIES} ${Eigen3_LIBRARIES} Threads::Threads)
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
+
+if(BUILD_TESTS)
+	add_executable(test_${PLUGIN_NAME} test_plugin.cpp)
+	target_include_directories(test_${PLUGIN_NAME} PRIVATE ${ILLIXR_SOURCE_DIR}/include)
+	target_link_libraries(test_${PLUGIN_NAME} PRIVATE GTest::gtest_main ${PLUGIN_NAME})
+	add_test_coverage_plugin(${PLUGIN_NAME})
+endif()
 
 install(TARGETS ${PLUGIN_NAME} DESTINATION lib)

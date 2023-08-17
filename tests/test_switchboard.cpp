@@ -1,4 +1,4 @@
-#include "../switchboard.hpp"
+#include "illixr/switchboard.hpp"
 #include "gtest/gtest.h"
 
 #include <cstdint>
