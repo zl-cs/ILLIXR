@@ -14,13 +14,9 @@ add_library(${PLUGIN_NAME} SHARED plugin.cpp
         ../../include/illixr/data_format.hpp
         )
 
-# if building on CentOS make sure we use the correct OpenCV
-if(BUILD_OPENCV)
-    add_dependencies(${PLUGIN_NAME} OpenCV_Viz)
-endif()
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
-target_include_directories(${PLUGIN_NAME} PRIVATE ${ILLIXR_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS} ${Eigen3_INCLUDE_DIRS})
-target_link_libraries(${PLUGIN_NAME} PUBLIC ${OpenCV_LIBRARIES} ${Eigne3_LIBRARIES})
+target_include_directories(${PLUGIN_NAME} PRIVATE ${ILLIXR_SOURCE_DIR}/include ${Eigen3_INCLUDE_DIRS})
+target_link_libraries(${PLUGIN_NAME} ${Eigne3_LIBRARIES} spdlog::spdlog)
 
 if(BUILD_TESTS)
     add_executable(test_${PLUGIN_NAME} test_plugin.cpp)

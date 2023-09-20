@@ -8,15 +8,17 @@
 #include "illixr/gl_util/obj.hpp"
 #include "illixr/global_module_defs.hpp"
 #include "illixr/math_util.hpp"
+#include "illixr/phonebook.hpp"
 #include "illixr/pose_prediction.hpp"
 #include "illixr/shader_util.hpp"
+#include "illixr/shaders/demo_shader.hpp"
 #include "illixr/switchboard.hpp"
 #include "illixr/threadloop.hpp"
-#include "shaders/demo_shader.hpp"
 
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <eigen3/Eigen/Core>
 #include <future>
 #include <iostream>
 #include <thread>
@@ -33,20 +35,23 @@ public:
     // references to the switchboard plugs, so the component can read the
     // data whenever it needs to.
 
-    gldemo(std::string name_, phonebook* pb_)
+    gldemo(const std::string& name_, phonebook* pb_)
         : threadloop{name_, pb_}
         , xwin{new xlib_gl_extended_window{1, 1, pb->lookup_impl<xlib_gl_extended_window>()->glc}}
         , sb{pb->lookup_impl<switchboard>()}
         , pp{pb->lookup_impl<pose_prediction>()}
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_vsync{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")}
-        , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")} { }
+        , _m_image_handle{sb->get_writer<image_handle>("image_handle")}
+        , _m_eyebuffer{sb->get_writer<rendered_frame>("eyebuffer")} {
+        spdlogger(std::getenv("GLDEMO_LOG_LEVEL"));
+    }
 
     // Essentially, a crude equivalent of XRWaitFrame.
     void wait_vsync() {
         switchboard::ptr<const switchboard::event_wrapper<time_point>> next_vsync = _m_vsync.get_ro_nullable();
         time_point                                                     now        = _m_clock->now();
-        time_point                                                     wait_time;
+        time_point                                                     wait_time{};
 
         if (next_vsync == nullptr) {
             // If no vsync data available, just sleep for roughly a vsync period.
@@ -58,7 +63,7 @@ public:
 #ifndef NDEBUG
         if (log_count > LOG_PERIOD) {
             double vsync_in = duration2double<std::milli>(**next_vsync - now);
-            std::cout << "\033[1;32m[GL DEMO APP]\033[0m First vsync is in " << vsync_in << "ms" << std::endl;
+            spdlog::get(name)->debug("First vsync is in {} ms", vsync_in);
         }
 #endif
 
@@ -79,7 +84,7 @@ public:
 #ifndef NDEBUG
             if (log_count > LOG_PERIOD) {
                 double wait_in = duration2double<std::milli>(wait_time - now);
-                std::cout << "\033[1;32m[GL DEMO APP]\033[0m Waiting until next vsync, in " << wait_in << "ms" << std::endl;
+                spdlog::get(name)->debug("Waiting until next vsync, in {} ms", wait_in);
             }
 #endif
             // Perform the sleep.
@@ -89,7 +94,7 @@ public:
         } else {
 #ifndef NDEBUG
             if (log_count > LOG_PERIOD) {
-                std::cout << "\033[1;32m[GL DEMO APP]\033[0m We haven't rendered yet, rendering immediately." << std::endl;
+                spdlog::get(name)->debug("We haven't rendered yet, rendering immediately");
             }
 #endif
         }
@@ -118,10 +123,6 @@ public:
         glEnable(GL_DEPTH_TEST);
 
         glClearDepth(1);
-
-        // We'll calculate this model view matrix
-        // using fresh pose data, if we have any.
-        Eigen::Matrix4f modelViewMatrix;
 
         Eigen::Matrix4f modelMatrix = Eigen::Matrix4f::Identity();
 
@@ -152,9 +153,11 @@ public:
             // Objects' "view matrix" is inverse of eye matrix.
             auto view_matrix = eye_matrix.inverse();
 
+            // We'll calculate this model view matrix
+            // using fresh pose data, if we have any.
             Eigen::Matrix4f modelViewMatrix = view_matrix * modelMatrix;
-            glUniformMatrix4fv(modelViewAttr, 1, GL_FALSE, (GLfloat*) (modelViewMatrix.data()));
-            glUniformMatrix4fv(projectionAttr, 1, GL_FALSE, (GLfloat*) (basicProjection.data()));
+            glUniformMatrix4fv(static_cast<GLint>(modelViewAttr), 1, GL_FALSE, (GLfloat*) (modelViewMatrix.data()));
+            glUniformMatrix4fv(static_cast<GLint>(projectionAttr), 1, GL_FALSE, (GLfloat*) (basicProjection.data()));
 
             glBindTexture(GL_TEXTURE_2D, eyeTextures[eye_idx]);
             glFramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, eyeTextures[eye_idx], 0);
@@ -175,8 +178,8 @@ public:
         const double fps              = 1.0 / frame_duration_s;
 
         if (log_count > LOG_PERIOD) {
-            std::cout << "\033[1;32m[GL DEMO APP]\033[0m Submitting frame to buffer " << which_buffer
-                      << ", frametime: " << frame_duration_s << ", FPS: " << fps << std::endl;
+            spdlog::get(name)->debug("Submitting frame to buffer {}, frametime: {}, FPS: {}", which_buffer, frame_duration_s,
+                                     fps);
         }
 #endif
         lastTime = _m_clock->now();
@@ -186,7 +189,7 @@ public:
             // Somehow, C++ won't let me construct this object if I remove the `rendered_frame{` and `}`.
             // `allocate<rendered_frame>(...)` _should_ forward the arguments to rendered_frame's constructor, but I guess
             // not.
-            std::array<GLuint, 2>{eyeTextures[0], eyeTextures[1]}, std::array<GLuint, 2>{which_buffer, which_buffer}, fast_pose,
+            std::array<GLuint, 2>{0, 0}, std::array<GLuint, 2>{which_buffer, which_buffer}, fast_pose,
             fast_pose.predict_computed_time, lastTime}));
 
         which_buffer = !which_buffer;
@@ -216,31 +219,32 @@ private:
     // We're not "writing" the actual buffer data,
     // we're just atomically writing the handle to the
     // correct eye/framebuffer in the "swapchain".
+    switchboard::writer<image_handle>   _m_image_handle;
     switchboard::writer<rendered_frame> _m_eyebuffer;
 
-    GLuint eyeTextures[2];
-    GLuint eyeTextureFBO;
-    GLuint eyeTextureDepthTarget;
+    GLuint eyeTextures[2]{};
+    GLuint eyeTextureFBO{};
+    GLuint eyeTextureDepthTarget{};
 
     unsigned char which_buffer = 0;
 
-    GLuint demo_vao;
-    GLuint demoShaderProgram;
+    GLuint demo_vao{};
+    GLuint demoShaderProgram{};
 
-    GLuint vertexPosAttr;
-    GLuint vertexNormalAttr;
-    GLuint modelViewAttr;
-    GLuint projectionAttr;
+    GLuint vertexPosAttr{};
+    GLuint vertexNormalAttr{};
+    GLuint modelViewAttr{};
+    GLuint projectionAttr{};
 
-    GLuint colorUniform;
+    GLuint colorUniform{};
 
     ObjScene demoscene;
 
     Eigen::Matrix4f basicProjection;
 
-    time_point lastTime;
+    time_point lastTime{};
 
-    void createSharedEyebuffer(GLuint* texture_handle) {
+    static void createSharedEyebuffer(GLuint* texture_handle) {
         // Create the shared eye texture handle
         glGenTextures(1, texture_handle);
         glBindTexture(GL_TEXTURE_2D, *texture_handle);
@@ -252,13 +256,13 @@ private:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, display_params::width_pixels, display_params::height_pixels, 0, GL_RGB,
-                     GL_UNSIGNED_BYTE, 0);
+                     GL_UNSIGNED_BYTE, nullptr);
 
         // Unbind texture
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    void createFBO(GLuint* texture_handle, GLuint* fbo, GLuint* depth_target) {
+    void createFBO(const GLuint* texture_handle, GLuint* fbo, GLuint* depth_target) {
         // Create a framebuffer to draw some things to the eye texture
         glGenFramebuffers(1, fbo);
 
@@ -273,7 +277,7 @@ private:
         glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
         // Bind eyebuffer texture
-        std::cout << "About to bind eyebuffer texture, texture handle: " << *texture_handle << std::endl;
+        spdlog::get(name)->info("About to bind eyebuffer texture, texture handle: {}", *texture_handle);
 
         glBindTexture(GL_TEXTURE_2D, *texture_handle);
         glFramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, *texture_handle, 0);
@@ -288,23 +292,27 @@ private:
 
 public:
     // We override start() to control our own lifecycle
-    virtual void start() override {
+    void start() override {
         [[maybe_unused]] const bool gl_result_0 = static_cast<bool>(glXMakeCurrent(xwin->dpy, xwin->win, xwin->glc));
         assert(gl_result_0 && "glXMakeCurrent should not fail");
 
         // Init and verify GLEW
         const GLenum glew_err = glewInit();
         if (glew_err != GLEW_OK) {
-            std::cerr << "[gldemo] GLEW Error: " << glewGetErrorString(glew_err) << std::endl;
-            ILLIXR::abort("[gldemo] Failed to initialize GLEW");
+            spdlog::get(name)->error("GLEW Error: {}", glewGetErrorString(glew_err));
+            ILLIXR::abort("Failed to initialize GLEW");
         }
 
         glEnable(GL_DEBUG_OUTPUT);
-        glDebugMessageCallback(MessageCallback, 0);
+        glDebugMessageCallback(MessageCallback, nullptr);
 
-        // Create two shared eye textures, one for each eye
+        // Create two shared textures, one for each eye.
         createSharedEyebuffer(&(eyeTextures[0]));
+        _m_image_handle.put(
+            _m_image_handle.allocate<image_handle>(image_handle{eyeTextures[0], 1, swapchain_usage::LEFT_SWAPCHAIN}));
         createSharedEyebuffer(&(eyeTextures[1]));
+        _m_image_handle.put(
+            _m_image_handle.allocate<image_handle>(image_handle{eyeTextures[1], 1, swapchain_usage::RIGHT_SWAPCHAIN}));
 
         // Initialize FBO and depth targets, attaching to the frame handle
         createFBO(&(eyeTextures[0]), &eyeTextureFBO, &eyeTextureDepthTarget);
@@ -315,7 +323,7 @@ public:
 
         demoShaderProgram = init_and_link(demo_vertex_shader, demo_fragment_shader);
 #ifndef NDEBUG
-        std::cout << "Demo app shader program is program " << demoShaderProgram << std::endl;
+        spdlog::get(name)->debug("Demo app shader program is program {}", demoShaderProgram);
 #endif
 
         vertexPosAttr    = glGetAttribLocation(demoShaderProgram, "vertexPosition");

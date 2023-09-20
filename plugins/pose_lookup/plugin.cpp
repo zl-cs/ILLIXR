@@ -1,20 +1,19 @@
 #include "illixr/plugin.hpp"
 
 #include "data_loading.hpp"
-#include "illixr/data_format.hpp"
 #include "illixr/global_module_defs.hpp"
 #include "illixr/phonebook.hpp"
 #include "illixr/pose_prediction.hpp"
 #include "utils.hpp"
 
-#include <cmath>
+#include <memory>
 #include <shared_mutex>
 
 using namespace ILLIXR;
 
 class pose_lookup_impl : public pose_prediction {
 public:
-    pose_lookup_impl(const phonebook* const pb)
+    explicit pose_lookup_impl(const phonebook* const pb)
         : sb{pb->lookup_impl<switchboard>()}
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_sensor_data{load_data()}
@@ -38,34 +37,34 @@ public:
         set_offset(newoffset);
     }
 
-    virtual fast_pose_type get_fast_pose() const override {
+    fast_pose_type get_fast_pose() const override {
         const switchboard::ptr<const switchboard::event_wrapper<time_point>> estimated_vsync =
             _m_vsync_estimate.get_ro_nullable();
         if (estimated_vsync == nullptr) {
-            std::cerr << "Vsync estimation not valid yet, returning fast_pose for now()" << std::endl;
+            spdlog::get("illixr")->warn("[pose_lookup] Vsync estimation not valid yet, returning fast_pose for now()");
             return get_fast_pose(_m_clock->now());
         } else {
             return get_fast_pose(**estimated_vsync);
         }
     }
 
-    virtual pose_type get_true_pose() const override {
+    pose_type get_true_pose() const override {
         throw std::logic_error{"Not Implemented"};
     }
 
-    virtual bool fast_pose_reliable() const override {
+    bool fast_pose_reliable() const override {
         return true;
     }
 
-    virtual bool true_pose_reliable() const override {
+    bool true_pose_reliable() const override {
         return false;
     }
 
-    virtual Eigen::Quaternionf get_offset() override {
+    Eigen::Quaternionf get_offset() override {
         return offset;
     }
 
-    virtual pose_type correct_pose(const pose_type pose) const override {
+    pose_type correct_pose(const pose_type& pose) const override {
         pose_type swapped_pose;
 
         // Step 1: Compensate starting point to (0, 0, 0), pos only
@@ -111,7 +110,7 @@ public:
         return swapped_pose;
     }
 
-    virtual void set_offset(const Eigen::Quaternionf& raw_o_times_offset) override {
+    void set_offset(const Eigen::Quaternionf& raw_o_times_offset) override {
         std::unique_lock   lock{offset_mutex};
         Eigen::Quaternionf raw_o = raw_o_times_offset * offset.inverse();
         // std::cout << "pose_prediction: set_offset" << std::endl;
@@ -123,21 +122,23 @@ public:
         return orientation * offset;
     }
 
-    virtual fast_pose_type get_fast_pose(time_point time) const override {
+    fast_pose_type get_fast_pose(time_point time) const override {
         ullong lookup_time = time.time_since_epoch().count() + dataset_first_time;
 
         auto nearest_row = _m_sensor_data.upper_bound(lookup_time);
 
         if (nearest_row == _m_sensor_data.cend()) {
 #ifndef NDEBUG
-            std::cerr << "Time " << lookup_time << " (" << std::chrono::nanoseconds(time.time_since_epoch()).count() << " + "
-                      << dataset_first_time << ") after last datum " << _m_sensor_data.rbegin()->first << std::endl;
+            spdlog::get("illixr")->debug("[pose_lookup] Time {} ({} + {}) after last datum {}", lookup_time,
+                                         std::chrono::nanoseconds(time.time_since_epoch()).count(), dataset_first_time,
+                                         _m_sensor_data.rbegin()->first);
 #endif
             nearest_row--;
         } else if (nearest_row == _m_sensor_data.cbegin()) {
 #ifndef NDEBUG
-            std::cerr << "Time " << lookup_time << " (" << std::chrono::nanoseconds(time.time_since_epoch()).count() << " + "
-                      << dataset_first_time << ") before first datum " << _m_sensor_data.cbegin()->first << std::endl;
+            spdlog::get("illixr")->debug("[pose_lookup] Time {} ({} + {}) before first datum {}", lookup_time,
+                                         std::chrono::nanoseconds(time.time_since_epoch()).count(), dataset_first_time,
+                                         _m_sensor_data.cbegin()->first);
 #endif
         } else {
             // "std::map::upper_bound" returns an iterator to the first pair whose key is GREATER than the argument.

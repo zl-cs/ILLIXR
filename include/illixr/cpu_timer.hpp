@@ -1,17 +1,17 @@
 #pragma once
 
+//
+
 #include "error_util.hpp"
 
-#include <cerrno>
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
-#include <ctime>
 #include <functional>
 #include <iostream>
-#include <sstream>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <thread>
+#include <utility>
 
 /**
  * @brief A C++ translation of [clock_gettime][1]
@@ -25,7 +25,8 @@ static inline std::chrono::nanoseconds cpp_clock_gettime(clockid_t clock_id) {
                  : /* OutputOperands */
                  : /* InputOperands */
                  : "memory" /* Clobbers */);
-    struct timespec ts;
+
+    struct timespec ts { };
 
     RAC_ERRNO_MSG("cpu_timer before clock_gettime");
 
@@ -116,8 +117,8 @@ class print_timer {
 private:
     class print_in_destructor {
     public:
-        print_in_destructor(const std::string& account_name, const duration& _duration)
-            : _p_account_name{account_name}
+        print_in_destructor(std::string account_name, const duration& _duration)
+            : _p_account_name{std::move(account_name)}
             , _p_duration{_duration} { }
 
         ~print_in_destructor() {
@@ -125,7 +126,7 @@ private:
             // os << "cpu_timer," << _p_account_name << "," << count_duration<duration>(_p_duration) << "\n";
             if (rand() % 100 == 0) {
 #ifndef NDEBUG
-                std::cout << "cpu_timer.hpp is DEPRECATED. See logging.hpp.\n";
+                spdlog::get("illixr")->info("cpu_timer.hpp is DEPRECATED. See logging.hpp.");
 #endif
             }
         }
@@ -161,7 +162,7 @@ public:
         actually_should_profile           = ILLIXR_STDOUT_METRICS && (strcmp(ILLIXR_STDOUT_METRICS, "y") == 0);
     }
 
-    bool operator()() {
+    bool operator()() const {
         return actually_should_profile;
     }
 
@@ -179,8 +180,8 @@ private:
     std::size_t       cpu_time_start;
 
 public:
-    print_timer2(std::string name_)
-        : name{name_}
+    explicit print_timer2(std::string name_)
+        : name{std::move(name_)}
         , serial_no{should_profile() ? gen_serial_no() : std::size_t{0}}
         , wall_time_start{should_profile() ? std::chrono::duration_cast<std::chrono::nanoseconds>(
                                                  std::chrono::high_resolution_clock::now().time_since_epoch())
@@ -195,8 +196,8 @@ public:
                                       std::chrono::high_resolution_clock::now().time_since_epoch())
                                       .count();
 
-            std::cout << "cpu_timer," << name << "," << serial_no << "," << wall_time_start << "," << wall_time_stop << ","
-                      << cpu_time_start << "," << cpu_time_stop << "\n";
+            spdlog::get("illixr")->info("[cpu_timer]  cpu_timer,{},{},{},{},{},{}", name, serial_no, wall_time_start,
+                                        wall_time_stop, cpu_time_start, cpu_time_stop);
         }
     }
 };
@@ -220,7 +221,7 @@ std::thread timed_thread(const std::string& account_name, Function&& f, Args&&..
     // See Sam Varshavchik's comment on https://stackoverflow.com/a/62380971/1078199
     return std::thread([=] {
         {
-            PRINT_RECORD_FOR_THIS_BLOCK(account_name);
+            PRINT_RECORD_FOR_THIS_BLOCK(account_name)
             std::invoke(f, args...);
         }
     });

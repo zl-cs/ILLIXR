@@ -1,13 +1,18 @@
 # module to build and install the offload_vio.device_tx ILLIXR plugin
 
 cmake_minimum_required(VERSION 3.16)
+find_package(Protobuf REQUIRED)
+include(../protoc_generate_cpp.cmake)
 
 set(PLUGIN_NAME plugin.offload_vio.device_tx${ILLIXR_BUILD_SUFFIX})
 
 # source files, listed individually so that any changes will trigger a rebuild
 add_library(${PLUGIN_NAME} SHARED plugin.cpp
+        video_encoder.cpp
+        video_encoder.h
         ../../../include/illixr/plugin.hpp
         ../../../include/illixr/data_format.hpp
+        ../../../include/illixr/opencv_data_types.hpp
         ../../../include/illixr/phonebook.hpp
         ../../../include/illixr/switchboard.hpp
         )
@@ -18,20 +23,28 @@ if(BUILD_OPENCV)
 endif()
 
 set(protobuf_files
-    ${CMAKE_CURRENT_SOURCE_DIR}/vio_input.proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/../proto/vio_input.proto
 )
 
-target_include_directories(${PLUGIN_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS} ${eCAL_INCLUDE_DIRS} ${Protobuf_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include)
+target_include_directories(${PLUGIN_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS} ${Protobuf_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include)
 
-PROTOBUF_TARGET_CPP(${PLUGIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${protobuf_files})
-target_link_libraries(${PLUGIN_NAME} PUBLIC
+PROTOBUF_TARGET_CPP(${PLUGIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/../proto ${protobuf_files})
+target_link_libraries(${PLUGIN_NAME}
         ${OpenCV_LIBS}
-        eCAL::core
         protobuf::libprotobuf
         )
 
-target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
+find_package(PkgConfig)
+pkg_search_module(GLIB REQUIRED glib-2.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GST_VIDEO REQUIRED gstreamer-video-1.0)
+pkg_check_modules(GST_AUDIO REQUIRED gstreamer-audio-1.0)
 
+include_directories(
+        ${GSTREAMER_INCLUDE_DIRS}
+        ${GLIB_INCLUDE_DIRS}
+)
 if(BUILD_TESTS)
     add_executable(test_${PLUGIN_NAME} test_plugin.cpp)
     target_include_directories(test_${PLUGIN_NAME} PRIVATE ${ILLIXR_SOURCE_DIR}/include)
@@ -39,4 +52,12 @@ if(BUILD_TESTS)
     add_test_coverage_plugin(${PLUGIN_NAME})
 endif()
 
+target_link_libraries(${PLUGIN_NAME} ${GST_APP_LIBRARIES} ${GST_VIDEO_LIBRARIES} ${GST_AUDIO_LIBRARIES} spdlog::spdlog)
+target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
+
 install(TARGETS ${PLUGIN_NAME} DESTINATION lib)
+
+get_cmake_property(_variableNames VARIABLES)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()

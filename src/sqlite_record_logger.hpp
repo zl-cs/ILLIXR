@@ -1,19 +1,16 @@
 #pragma once
+
 #include "illixr/concurrentqueue/blockingconcurrentqueue.hpp"
 #include "illixr/error_util.hpp"
 #include "illixr/global_module_defs.hpp"
 #include "illixr/record_logger.hpp"
 #include "sqlite3pp/sqlite3pp.hpp"
 
-#include <atomic>
-#include <cassert>
-#include <cerrno>
-#include <chrono>
 #include <filesystem>
-#include <functional>
 #include <iostream>
-#include <memory>
+#include <mutex>
 #include <shared_mutex>
+#include <spdlog/spdlog.h>
 #include <thread>
 
 /**
@@ -104,7 +101,9 @@ public:
         std::vector<record> record_batch{max_record_batch_size};
         std::size_t         actual_batch_size;
 
-        std::cout << "thread," << std::this_thread::get_id() << ",sqlite thread," << table_name << std::endl;
+        spdlog::get("illixr")->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] [sqlite_record_logger] thread %t %v");
+        spdlog::get("illixr")->debug("{}", table_name);
+        spdlog::get("illixr")->set_pattern("%+");
 
         std::size_t processed = 0;
         while (!terminate.load()) {
@@ -126,8 +125,8 @@ public:
             process(record_batch, actual_batch_size);
             post_processed += actual_batch_size;
         }
-        std::cerr << "Drained " << table_name << " (sqlite); " << post_processed << " / " << (processed + post_processed)
-                  << " done post real time" << std::endl;
+        spdlog::get("illixr")->debug("[sqlite_record_logger] Drained {} (sqlite); {}/{} done post real time", table_name,
+                                     post_processed, (processed + post_processed));
     }
 
     void process(const std::vector<record>& record_batch, std::size_t batch_size) {

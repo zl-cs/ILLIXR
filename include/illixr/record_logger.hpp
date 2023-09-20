@@ -1,14 +1,23 @@
 #pragma once
 
-#include "phonebook.hpp"
-
 #include <any>
 #include <atomic>
+#include <cassert>
+#include <chrono>
 #include <memory>
 #include <optional>
-#include <sstream>
+#include <spdlog/spdlog.h>
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+#ifndef NDEBUG
+    #include <iostream>
+    #include <sstream>
+#endif
+
+#include "phonebook.hpp"
 
 namespace ILLIXR {
 
@@ -19,10 +28,10 @@ namespace ILLIXR {
  */
 class record_header {
 public:
-    record_header(std::string name_, std::vector<std::pair<std::string, const std::type_info&>> columns_)
+    record_header(const std::string& name_, std::vector<std::pair<std::string, const std::type_info&>> columns_)
         : id{std::hash<std::string>{}(name_)}
         , name{name_}
-        , columns{columns_} { }
+        , columns{std::move(columns_)} { }
 
     /**
      * @brief Compares two schemata.
@@ -48,27 +57,27 @@ public:
         return !(*this == other);
     }
 
-    std::size_t get_id() const {
+    [[nodiscard]] std::size_t get_id() const {
         return id;
     }
 
-    const std::string& get_name() const {
+    [[nodiscard]] const std::string& get_name() const {
         return name;
     }
 
-    const std::string& get_column_name(unsigned column) const {
+    [[nodiscard]] const std::string& get_column_name(unsigned column) const {
         return columns[column].first;
     }
 
-    const std::type_info& get_column_type(unsigned column) const {
+    [[nodiscard]] const std::type_info& get_column_type(unsigned column) const {
         return columns[column].second;
     }
 
-    unsigned get_columns() const {
+    [[nodiscard]] unsigned get_columns() const {
         return columns.size();
     }
 
-    std::string to_string() const {
+    [[nodiscard]] std::string to_string() const {
         std::string ret = std::string{"record_header "} + name + std::string{" { "};
         for (const auto& pair : columns) {
             ret += std::string{pair.second.name()} + std::string{" "} + pair.first + std::string{"; "};
@@ -136,33 +145,33 @@ class record {
 public:
     record(const record_header& rh_, std::vector<std::any> values_)
         : rh{rh_}
-        , values(values_) {
+        , values(std::move(values_)) {
 #ifndef NDEBUG
         assert(rh);
         if (values.size() != rh->get().get_columns()) {
-            std::cerr << values.size() << " elements passed, but rh for " << rh->get().get_name() << " only specifies "
-                      << rh->get().get_columns() << "." << std::endl;
+            spdlog::get("illixr")->error("[record_logger] {} elements passed, but rh for {} only specifies {}.", values.size(),
+                                         rh->get().get_name(), rh->get().get_columns());
             abort();
         }
         for (std::size_t column = 0; column < values.size(); ++column) {
             if (values[column].type() != rh->get().get_column_type(column)) {
-                std::cerr << "Caller got wrong type for column " << column << " of " << rh->get().get_name() << ". "
-                          << "Caller passed: " << values[column].type().name() << "; "
-                          << "recod_header for specifies: " << rh->get().get_column_type(column).name() << ". " << std::endl;
+                spdlog::get("illixr")->error("[record_logger] Caller got wrong type for column {} of {}.", column,
+                                             rh->get().get_name());
+                spdlog::get("illixr")->error("[record_logger] Caller passed: {}; record_header specifies: {}",
+                                             values[column].type().name(), rh->get().get_column_type(column).name());
                 abort();
             }
         }
 #endif
     }
 
-    record() { }
+    record() = default;
 
     ~record() {
 #ifndef NDEBUG
         if (rh && !data_use_indicator_.is_used()) {
-            std::cerr << "Record was deleted without being logged." << std::endl;
-            // TODO: The sqlite record logger is sometimes loaded after records have started to come in.
-            // abort();
+            spdlog::get("illixr")->error("[record_logger] Record was deleted without being logged.");
+            abort();
         }
 #endif
     }
@@ -216,7 +225,7 @@ private:
  */
 class record_logger : public phonebook::service {
 public:
-    virtual ~record_logger() { }
+    ~record_logger() override = default;
 
     /**
      * @brief Writes one log record.
@@ -302,8 +311,8 @@ private:
     std::vector<record>                                         buffer;
 
 public:
-    record_coalescer(std::shared_ptr<record_logger> logger_)
-        : logger{logger_}
+    explicit record_coalescer(std::shared_ptr<record_logger> logger_)
+        : logger{std::move(logger_)}
         , last_log{std::chrono::high_resolution_clock::now()} { }
 
     ~record_coalescer() {
@@ -313,7 +322,7 @@ public:
     /**
      * @brief Appends a log to the buffer, which will eventually be written.
      */
-    void log(record r) {
+    void log(const record& r) {
         if (logger) {
             buffer.push_back(r);
             // Log coalescer should only be used with
@@ -322,8 +331,8 @@ public:
 #ifndef NDEBUG
             if (&r.get_record_header() != &buffer[0].get_record_header() &&
                 r.get_record_header() == buffer[0].get_record_header()) {
-                std::cerr << "Tried to push a record of type " << r.get_record_header().to_string()
-                          << " to a record logger for type " << buffer[0].get_record_header().to_string() << std::endl;
+                spdlog::get("illixr")->error("[record_logger] Tried to push a record of type {} to a record logger for type {}",
+                                             r.get_record_header().to_string(), buffer[0].get_record_header().to_string());
                 abort();
             }
 #endif
@@ -352,7 +361,7 @@ public:
         }
     }
 
-    operator bool() const {
+    explicit operator bool() const {
         return bool(logger);
     }
 };

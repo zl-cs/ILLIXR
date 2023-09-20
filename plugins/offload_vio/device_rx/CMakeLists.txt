@@ -1,6 +1,8 @@
 # module to build and install the offload_vio.device_rx ILLIXR plugin
 
 cmake_minimum_required(VERSION 3.16)
+find_package(Protobuf REQUIRED)
+include(../protoc_generate_cpp.cmake)
 
 set(PLUGIN_NAME plugin.offload_vio.device_rx${ILLIXR_BUILD_SUFFIX})
 
@@ -12,22 +14,16 @@ add_library(${PLUGIN_NAME} SHARED plugin.cpp
         ../../../include/illixr/switchboard.hpp
         )
 
-# if building on CentOS make sure we use the correct OpenCV
-if(BUILD_OPENCV)
-    add_dependencies(${PLUGIN_NAME} OpenCV_Viz)
-endif()
-
 set(protobuf_files
-    ${CMAKE_CURRENT_SOURCE_DIR}/vio_output.proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/../proto/vio_output.proto
 )
 
-target_include_directories(${PLUGIN_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS} ${eCAL_INCLUDE_DIRS} ${Protobuf_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include)
+target_include_directories(${PLUGIN_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Protobuf_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include)
 
-PROTOBUF_TARGET_CPP(${PLUGIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${protobuf_files})
-target_link_libraries(${PLUGIN_NAME} PUBLIC
-        ${OpenCV_LIBS}
-        eCAL::core
+PROTOBUF_TARGET_CPP(${PLUGIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/../proto ${protobuf_files})
+target_link_libraries(${PLUGIN_NAME}
         protobuf::libprotobuf
+        spdlog::spdlog
         )
 
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)

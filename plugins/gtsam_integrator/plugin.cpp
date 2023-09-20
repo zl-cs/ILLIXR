@@ -1,12 +1,11 @@
 #include "illixr/plugin.hpp"
 
 #include "illixr/data_format.hpp"
+#include "illixr/phonebook.hpp"
 #include "illixr/switchboard.hpp"
+#include "third_party/filter.h"
 
-#include <chrono>
-#include <eigen3/Eigen/Dense>
 #include <gtsam/base/Vector.h>
-#include <gtsam/config.h>
 #include <gtsam/navigation/AHRSFactor.h>
 #include <gtsam/navigation/CombinedImuFactor.h> // Used if IMU combined is off.
 #include <gtsam/navigation/ImuBias.h>
@@ -14,6 +13,7 @@
 #include <iomanip>
 #include <memory>
 #include <thread>
+#include <utility>
 
 using namespace ILLIXR;
 // IMU sample time to live in seconds
@@ -24,18 +24,32 @@ using ImuBias = gtsam::imuBias::ConstantBias;
 class gtsam_integrator : public plugin {
 public:
     gtsam_integrator(std::string name_, phonebook* pb_)
-        : plugin{name_, pb_}
+        : plugin{std::move(name_), pb_}
         , sb{pb->lookup_impl<switchboard>()}
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_imu_integrator_input{sb->get_reader<imu_integrator_input>("imu_integrator_input")}
         , _m_imu_raw{sb->get_writer<imu_raw_type>("imu_raw")} {
-        sb->schedule<imu_type>(id, "imu", [&](switchboard::ptr<const imu_type> datum, size_t) {
+        spdlogger(std::getenv("GTSAM_INTEGRATOR_LOG_LEVEL"));
+        sb->schedule<imu_type>(id, "imu", [&](const switchboard::ptr<const imu_type>& datum, size_t) {
             callback(datum);
         });
+        const double frequency = 200;
+        const double mincutoff = 10;
+        const double beta      = 1;
+        const double dcutoff   = 10;
+
+        for (int i = 0; i < 8; ++i) {
+            filters.emplace_back(frequency, Eigen::Array<double, 3, 1>{mincutoff, mincutoff, mincutoff},
+                                 Eigen::Array<double, 3, 1>{beta, beta, beta},
+                                 Eigen::Array<double, 3, 1>{dcutoff, dcutoff, dcutoff}, Eigen::Array<double, 3, 1>::Zero(),
+                                 Eigen::Array<double, 3, 1>::Ones(), [](auto& in) {
+                                     return in.abs();
+                                 });
+        }
     }
 
-    void callback(switchboard::ptr<const imu_type> datum) {
-        _imu_vec.emplace_back(datum->time, datum->angular_v, datum->linear_a);
+    void callback(const switchboard::ptr<const imu_type>& datum) {
+        _imu_vec.emplace_back(datum->time, datum->angular_v.cast<double>(), datum->linear_a.cast<double>());
 
         clean_imu_vec(datum->time);
         propagate_imu_values(datum->time);
@@ -44,6 +58,10 @@ public:
     }
 
 private:
+    std::vector<one_euro_filter<Eigen::Array<double, 3, 1>, double>> filters;
+    bool                                                             has_prev = false;
+    Eigen::Matrix<double, 3, 1>                                      prev_euler_angles;
+
     const std::shared_ptr<switchboard>   sb;
     const std::shared_ptr<RelativeClock> _m_clock;
 
@@ -55,8 +73,10 @@ private:
 
     std::vector<imu_type> _imu_vec;
 
-    [[maybe_unused]] time_point last_cam_time;
-    duration                    last_imu_offset;
+    // std::vector<pose_type> filtered_poses;
+
+    [[maybe_unused]] time_point last_cam_time{};
+    duration                    last_imu_offset{};
 
     /**
      * @brief Wrapper object protecting the lifetime of IMU integration inputs and biases
@@ -70,7 +90,7 @@ private:
         using pim_t     = gtsam::PreintegratedCombinedMeasurements;
         using pim_ptr_t = gtsam::PreintegrationType*;
 
-        PimObject(const imu_int_t& imu_int_input)
+        explicit PimObject(const imu_int_t& imu_int_input)
             : _imu_bias{imu_int_input.biasAcc, imu_int_input.biasGyro}
             , _pim{nullptr} {
             pim_t::Params _params{imu_int_input.params.n_gravity};
@@ -113,12 +133,12 @@ private:
             _pim->integrateMeasurement(measured_acc, measured_omega, duration2double(delta_t));
         }
 
-        bias_t biasHat() const noexcept {
+        [[nodiscard]] bias_t biasHat() const noexcept {
             assert(_pim != nullptr && "_pim shuold not be null");
             return _pim->biasHat();
         }
 
-        nav_t predict() const noexcept {
+        [[nodiscard]] nav_t predict() const noexcept {
             assert(_pim != nullptr && "_pim should not be null");
             return _pim->predict(_navstate_lkf, _imu_bias);
         }
@@ -155,7 +175,7 @@ private:
 
 #ifndef NDEBUG
         if (input_values->last_cam_integration_time > last_cam_time) {
-            std::cout << "New slow pose has arrived!\n";
+            spdlog::get(name)->debug("New slow pose has arrived!");
             last_cam_time = input_values->last_cam_integration_time;
         }
 #endif
@@ -177,8 +197,7 @@ private:
         // TODO last_imu_offset is 0, t_offset only take effects when it's negative.
         // However, why would we want to integrate to a past time point rather than the current time point?
         time_point time_begin = input_values->last_cam_integration_time + last_imu_offset;
-        // time_point time_end   = input_values->t_offset + real_time;
-        time_point time_end = real_time;
+        time_point time_end   = real_time;
 
         const std::vector<imu_type> prop_data = select_imu_readings(_imu_vec, time_begin, time_end);
 
@@ -192,7 +211,7 @@ private:
         ImuBias bias      = _pim_obj->biasHat();
 
 #ifndef NDEBUG
-        std::cout << "Integrating over " << prop_data.size() << " IMU samples\n";
+        spdlog::get(name)->debug("Integrating over {} IMU samples", prop_data.size());
 #endif
 
         for (std::size_t i = 0; i < prop_data.size() - 1; i++) {
@@ -206,23 +225,54 @@ private:
         gtsam::Pose3    out_pose   = navstate_k.pose();
 
 #ifndef NDEBUG
-        std::cout << "Base Position (x, y, z) = " << input_values->position(0) << ", " << input_values->position(1) << ", "
-                  << input_values->position(2) << std::endl;
-
-        std::cout << "New  Position (x, y, z) = " << out_pose.x() << ", " << out_pose.y() << ", " << out_pose.z() << std::endl;
+        spdlog::get(name)->debug("Base Position (x, y, z) = {}, {}, {}", input_values->position(0), input_values->position(1),
+                                 input_values->position(2));
+        spdlog::get(name)->debug("New Position (x, y, z) = {}, {}, {}", out_pose.x(), out_pose.y(), out_pose.z());
 #endif
 
-        _m_imu_raw.put(_m_imu_raw.allocate<imu_raw_type>(imu_raw_type{prev_bias.gyroscope(), prev_bias.accelerometer(),
-                                                                      bias.gyroscope(), bias.accelerometer(),
-                                                                      out_pose.translation(),             /// Position
-                                                                      navstate_k.velocity(),              /// Velocity
-                                                                      out_pose.rotation().toQuaternion(), /// Eigen Quat
-                                                                      real_time}));
+        auto                        seconds_since_epoch = std::chrono::duration<double>(real_time.time_since_epoch()).count();
+        auto                        original_quaternion = out_pose.rotation().toQuaternion();
+        Eigen::Matrix<double, 3, 1> rotation_angles =
+            original_quaternion.toRotationMatrix().eulerAngles(0, 1, 2).cast<double>();
+        Eigen::Matrix<double, 3, 1> filtered_sins    = filters[6](rotation_angles.array().sin(), seconds_since_epoch);
+        Eigen::Matrix<double, 3, 1> filtered_cosines = filters[7](rotation_angles.array().cos(), seconds_since_epoch);
+        Eigen::Matrix<double, 3, 1> filtered_angles{atan2(filtered_sins[0], filtered_cosines[0]),
+                                                    atan2(filtered_sins[1], filtered_cosines[1]),
+                                                    atan2(filtered_sins[2], filtered_cosines[2])};
+
+        if (has_prev &&
+            (abs(rotation_angles[0] - prev_euler_angles[0]) > M_PI / 2 ||
+             abs(rotation_angles[1] - prev_euler_angles[1]) > M_PI / 2 ||
+             abs(rotation_angles[2] - prev_euler_angles[2]) > M_PI / 2)) {
+            filters[6].clear();
+            filters[7].clear();
+            filtered_sins    = filters[6](rotation_angles.array().sin(), seconds_since_epoch);
+            filtered_cosines = filters[7](rotation_angles.array().cos(), seconds_since_epoch);
+            filtered_angles  = {atan2(filtered_sins[0], filtered_cosines[0]), atan2(filtered_sins[1], filtered_cosines[1]),
+                                atan2(filtered_sins[2], filtered_cosines[2])};
+        } else {
+            has_prev = true;
+        }
+
+        prev_euler_angles = std::move(rotation_angles);
+
+        __attribute__((unused)) auto new_quaternion = Eigen::AngleAxisd(filtered_angles(0, 0), Eigen::Vector3d::UnitX()) *
+            Eigen::AngleAxisd(filtered_angles(1, 0), Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(filtered_angles(2, 0), Eigen::Vector3d::UnitZ());
+
+        auto filtered_pos = filters[4](out_pose.translation().array(), seconds_since_epoch).matrix();
+
+        _m_imu_raw.put(_m_imu_raw.allocate<imu_raw_type>(
+            imu_raw_type{prev_bias.gyroscope(), prev_bias.accelerometer(), bias.gyroscope(), bias.accelerometer(),
+                         filtered_pos,                                                   /// Position
+                         filters[5](navstate_k.velocity().array(), seconds_since_epoch), /// Velocity
+                         new_quaternion,                                                 /// Eigen Quat
+                         real_time}));
     }
 
     // Select IMU readings based on timestamp similar to how OpenVINS selects IMU values to propagate
-    std::vector<imu_type> select_imu_readings(const std::vector<imu_type>& imu_data, const time_point time_begin,
-                                              const time_point time_end) {
+    static std::vector<imu_type> select_imu_readings(const std::vector<imu_type>& imu_data, const time_point time_begin,
+                                                     const time_point time_end) {
         std::vector<imu_type> prop_data;
         if (imu_data.size() < 2) {
             return prop_data;

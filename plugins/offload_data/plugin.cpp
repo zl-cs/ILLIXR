@@ -7,9 +7,9 @@
 #include "illixr/switchboard.hpp"
 
 #include <boost/filesystem.hpp>
-#include <fstream>
-#include <iomanip>
+#include <iostream>
 #include <numeric>
+#include <utility>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -21,34 +21,35 @@ using namespace ILLIXR;
 class offload_data : public plugin {
 public:
     offload_data(std::string name_, phonebook* pb_)
-        : plugin{name_, pb_}
+        : plugin{std::move(name_), pb_}
         , sb{pb->lookup_impl<switchboard>()}
         , percent{0}
         , img_idx{0}
         , enable_offload{ILLIXR::str_to_bool(ILLIXR::getenv_or("ILLIXR_OFFLOAD_ENABLE", "False"))}
         , is_success{true} /// TODO: Set with #198
         , obj_dir{ILLIXR::getenv_or("ILLIXR_OFFLOAD_PATH", "metrics/offloaded_data/")} {
-        sb->schedule<texture_pose>(id, "texture_pose", [&](switchboard::ptr<const texture_pose> datum, size_t) {
+        spdlogger(std::getenv("OFFLOAD_DATA_LOG_LEVEL"));
+        sb->schedule<texture_pose>(id, "texture_pose", [&](const switchboard::ptr<const texture_pose>& datum, size_t) {
             callback(datum);
         });
     }
 
-    void callback(switchboard::ptr<const texture_pose> datum) {
+    void callback(const switchboard::ptr<const texture_pose>& datum) {
 #ifndef NDEBUG
-        std::cout << "Image index: " << img_idx++ << std::endl;
+        spdlog::get(name)->debug("Image index: {}", img_idx++);
 #endif
         /// A texture pose is present. Store it back to our container.
         _offload_data_container.push_back(datum);
     }
 
-    virtual ~offload_data() override {
+    ~offload_data() override {
         // Write offloaded data from memory to disk
         if (enable_offload) {
             boost::filesystem::path p(obj_dir);
             boost::filesystem::remove_all(p);
             boost::filesystem::create_directories(p);
 
-            writeDataToDisk(_offload_data_container);
+            writeDataToDisk();
         }
     }
 
@@ -63,16 +64,16 @@ private:
     bool        is_success;
     std::string obj_dir;
 
-    void writeMetadata(std::vector<long> _time_seq) {
-        double mean  = std::accumulate(_time_seq.begin(), _time_seq.end(), 0.0) / _time_seq.size();
+    void writeMetadata() {
+        double mean  = std::accumulate(_time_seq.begin(), _time_seq.end(), 0.0) / static_cast<double>(_time_seq.size());
         double accum = 0.0;
         std::for_each(std::begin(_time_seq), std::end(_time_seq), [&](const double d) {
             accum += (d - mean) * (d - mean);
         });
-        double stdev = sqrt(accum / (_time_seq.size() - 1));
+        double stdev = sqrt(accum / static_cast<double>((_time_seq.size() - 1)));
 
-        std::vector<long>::iterator max = std::max_element(_time_seq.begin(), _time_seq.end());
-        std::vector<long>::iterator min = std::min_element(_time_seq.begin(), _time_seq.end());
+        auto max = std::max_element(_time_seq.begin(), _time_seq.end());
+        auto min = std::min_element(_time_seq.begin(), _time_seq.end());
 
         std::ofstream meta_file(obj_dir + "metadata.out");
         if (meta_file.is_open()) {
@@ -97,10 +98,10 @@ private:
         meta_file.close();
     }
 
-    void writeDataToDisk(std::vector<switchboard::ptr<const texture_pose>> _offload_data_container) {
+    void writeDataToDisk() {
         stbi_flip_vertically_on_write(true);
 
-        std::cout << "Writing offloaded images to disk ... " << std::endl;
+        spdlog::get(name)->info("Writing offloaded images to disk...");
         img_idx = 0;
         for (auto& container_it : _offload_data_container) {
             // Get collecting time for each frame
@@ -127,7 +128,7 @@ private:
                 pose_file << "strTime: " << duration << std::endl;
 
                 // Write position coordinates in x y z
-                int pose_size = container_it->position.size();
+                int pose_size = static_cast<int>(container_it->position.size());
                 pose_file << "pos: ";
                 for (int pos_idx = 0; pos_idx < pose_size; pos_idx++)
                     pose_file << container_it->position(pos_idx) << " ";
@@ -149,7 +150,7 @@ private:
             pose_file.close();
 
             // Print progress
-            percent = (100 * (img_idx + 1) / _offload_data_container.size());
+            percent = static_cast<int>(100 * (img_idx + 1) / _offload_data_container.size());
             std::cout << "\r"
                       << "[" << std::string(percent / 2, (char) 61u) << std::string(100 / 2 - percent / 2, ' ') << "] ";
             std::cout << percent << "%"
@@ -157,7 +158,7 @@ private:
             std::cout.flush();
         }
         std::cout << std::endl;
-        writeMetadata(_time_seq);
+        writeMetadata();
     }
 };
 

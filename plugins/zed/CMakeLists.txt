@@ -13,8 +13,10 @@ find_package(ZED 3 REQUIRED)
 find_package(CUDA ${ZED_CUDA_VERSION} EXACT REQUIRED)
 
 
-set(SRC_FILES src/plugin.cpp)
-set(HDR_FILES include/zed_opencv.hpp)
+set(SRC_FILES plugin.cpp)
+set(HDR_FILES include/zed_opencv.hpp
+		../../include/illixr/opencv_data_types.hpp
+		)
 
 SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY})
 add_library(${PLUGIN_NAME} SHARED ${HDR_FILES} ${SRC_FILES})
@@ -25,7 +27,7 @@ endif()
 
 target_include_directories(${PLUGIN_NAME} PUBLIC ${CUDA_INCLUDE_DIRS} ${ZED_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${Eigen3_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(${PLUGIN_NAME} PUBLIC ${ZED_LIBS} ${OpenCV_LIBRARIES} ${Eigen3_LIBRARIES} Threads::Threads)
+target_link_libraries(${PLUGIN_NAME} ${ZED_LIBS} ${OpenCV_LIBRARIES} ${Eigen3_LIBRARIES} Threads::Threads spdlog::spdlog)
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
 
 if(BUILD_TESTS)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.16)
 
 project(timewarp_vk)
 
@@ -7,8 +7,10 @@ set(PLUGIN_NAME plugin.timewarp_vk${ILLIXR_BUILD_SUFFIX})
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Vulkan)
-
+find_package(FullVulkan REQUIRED)
+if(USE_MONADO)
+    get_external_for_plugin(Monado_vk)
+endif()
 find_package(glm REQUIRED)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
@@ -25,6 +27,7 @@ foreach (GLSL ${GLSL_SOURCE_FILES})
             COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} ${GLSL} -V -o ${SPIRV}
             DEPENDS ${GLSL})
     list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+    message("${SPIRV}   ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}   ${GLSL}   ${FILE_NAME}")
 endforeach (GLSL)
 
 add_custom_target(
@@ -48,23 +51,14 @@ add_library(${PLUGIN_NAME} SHARED plugin.cpp
         )
 
 add_dependencies(${PLUGIN_NAME} Timewarp_VK_Shaders)
-# if building on CentOS make sure we use the correct OpenCV
-if(BUILD_OPENCV)
-    add_dependencies(${PLUGIN_NAME} OpenCV_Viz)
-endif()
 
-set_target_properties(${PLUGIN_NAME} PROPERTIES OUTPUT_NAME "plugin")
+set_target_properties(${PLUGIN_NAME} PROPERTIES OUTPUT_NAME ${PLUGIN_NAME})
 
-target_link_libraries(${PLUGIN_NAME} PUBLIC ${Vulkan_LIBRARIES})
-target_include_directories(${PLUGIN_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS} ${OpenCV_LIBRARIES})
-target_include_directories(${PLUGIN_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${ILLIXR_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${PLUGIN_NAME} ${Vulkan_LIBRARIES} spdlog::spdlog)
+target_include_directories(${PLUGIN_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS})
+target_include_directories(${PLUGIN_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${ILLIXR_SOURCE_DIR}/include)
 
-add_custom_command(TARGET ${PLUGIN_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/shaders/"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${PROJECT_BINARY_DIR}/shaders"
-        "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/shaders"
-        )
+install_shaders(SPIRV_BINARY_FILES timewarp_vk ${PLUGIN_NAME})
 
 if(BUILD_TESTS)
     add_executable(test_${PLUGIN_NAME} test_plugin.cpp)

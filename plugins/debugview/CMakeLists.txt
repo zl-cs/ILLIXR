@@ -5,6 +5,7 @@ if(NOT glfw3_FOUND)
     pkg_search_module(glfw3 REQUIRED glfw3)
 endif()
 
+find_package(OpenGL REQUIRED)
 
 set(PLUGIN_NAME plugin.debugview${ILLIXR_BUILD_SUFFIX})
 
@@ -24,8 +25,9 @@ set(DEBUGVIEW_SOURCES plugin.cpp
         imgui/imstb_rectpack.h
         imgui/imstb_textedit.h
         imgui/imstb_truetype.h
-        shaders/demo_shader.hpp
+        ../../include/illixr/shaders/demo_shader.hpp
         ../../include/illixr/data_format.hpp
+        ../../include/illixr/opencv_data_types.hpp
         ../../include/illixr/error_util.hpp
         ../../include/illixr/gl_util/obj.hpp
         ../../include/illixr/global_module_defs.hpp
@@ -44,7 +46,7 @@ if(BUILD_OPENCV)
 endif()
 
 target_include_directories(${PLUGIN_NAME} PRIVATE ${X11_INCLUDE_DIR} ${GLEW_INCLUDE_DIR} ${GLU_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS} ${glfw3_INCLUDE_DIRS} ${gl_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include ${Eigen3_INCLUDE_DIRS})
-target_link_libraries(${PLUGIN_NAME} PUBLIC ${X11_LIBRARIES} ${GLEW_LIBRARIES} ${glu_LDFLAGS} ${OpenCV_LIBRARIES} ${glfw3_LIBRARIES} ${gl_LIBRARIES} ${Eigen3_LIBRARIES} dl pthread)
+target_link_libraries(${PLUGIN_NAME} ${X11_LIBRARIES} ${GLEW_LIBRARIES} ${glu_LDFLAGS} ${OpenCV_LIBRARIES} glfw OpenGL::GL ${Eigen3_LIBRARIES} dl Threads::Threads spdlog::spdlog)
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
 
 if(BUILD_TESTS)

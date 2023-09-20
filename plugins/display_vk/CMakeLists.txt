@@ -7,7 +7,10 @@ set(PLUGIN_NAME plugin.display_vk${ILLIXR_BUILD_SUFFIX})
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Vulkan REQUIRED)
+find_package(FullVulkan REQUIRED)
+if(USE_MONADO)
+    get_external_for_plugin(Monado_vk)
+endif()
 
 find_package(glfw3 3.3 REQUIRED)
 find_package(glm REQUIRED)
@@ -45,17 +48,12 @@ add_library(${PLUGIN_NAME} SHARED plugin.cpp
         ../../include/illixr/vk_util/vulkan_utils.hpp
         )
 
-# if building on CentOS make sure we use the correct OpenCV
-if(BUILD_OPENCV)
-    add_dependencies(${PLUGIN_NAME} OpenCV_Viz)
-endif()
-
 add_dependencies(${PLUGIN_NAME} Display_VK_Shaders)
-set_target_properties(${PLUGIN_NAME} PROPERTIES OUTPUT_NAME "plugin")
+set_target_properties(${PLUGIN_NAME} PROPERTIES OUTPUT_NAME ${PLUGIN_NAME})
 
-target_link_libraries(${PLUGIN_NAME} PUBLIC glfw)
-target_link_libraries(${PLUGIN_NAME} PUBLIC ${Vulkan_LIBRARIES} ${OpenCV_LIBRARIES})
-target_include_directories(${PLUGIN_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${PLUGIN_NAME} glfw)
+target_link_libraries(${PLUGIN_NAME} ${Vulkan_LIBRARIES} spdlog::spdlog)
+target_include_directories(${PLUGIN_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include)
 
 add_custom_command(TARGET ${PLUGIN_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/shaders/"

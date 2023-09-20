@@ -1,15 +1,14 @@
-#include "csv_iterator.hpp"
+#pragma once
+
+#include "illixr/csv_iterator.hpp"
 #include "illixr/data_format.hpp"
 #include "illixr/error_util.hpp"
 
 #include <eigen3/Eigen/Dense>
 #include <fstream>
+#include <iostream>
 #include <map>
-#include <math.h>
-#include <opencv2/core/mat.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc.hpp>
-#include <optional>
+#include <spdlog/spdlog.h>
 #include <string>
 
 // timestamp
@@ -36,7 +35,7 @@ static std::map<ullong, sensor_types> load_data() {
     std::ifstream gt_file{illixr_data + subpath};
 
     if (!gt_file.good()) {
-        std::cerr << "${ILLIXR_DATA}" << subpath << " (" << illixr_data << subpath << ") is not a good path" << std::endl;
+        spdlog::get("illixr")->error("[groundtruthslam] ${ILLIXR_DATA} {0} ({1}{0}) is not a good path", subpath, illixr_data);
         ILLIXR::abort();
     }
 

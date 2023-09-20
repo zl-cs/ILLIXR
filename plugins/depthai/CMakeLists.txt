@@ -7,6 +7,7 @@ set(PLUGIN_NAME plugin.depthai${ILLIXR_BUILD_SUFFIX})
 # source files, listed individually so that any changes will trigger a rebuild
 add_library(${PLUGIN_NAME} SHARED plugin.cpp
         ../../include/illixr/data_format.hpp
+        ../../include/illixr/opencv_data_types.hpp
         ../../include/illixr/relative_clock.hpp
         ../../include/illixr/switchboard.hpp
         ../../include/illixr/threadloop.hpp
@@ -23,7 +24,7 @@ target_include_directories(${PLUGIN_NAME} PRIVATE ${DepthAI_INCLUDE_DIRS} ${Open
 # if we are building DepthAI from source
 if(DepthAI_EXTERNAL)
     add_dependencies(${PLUGIN_NAME} DepthAI_ext)
-    target_link_libraries(${PLUGIN_NAME} PUBLIC ${DEPENDENCIES} ${OpenCV_LIBRARIES} PRIVATE ${DepthAI_LIBRARIES})
+    target_link_libraries(${PLUGIN_NAME} PUBLIC ${DEPENDENCIES} ${OpenCV_LIBRARIES} PRIVATE ${DepthAI_LIBRARIES} spdlog::spdlog)
 else()  # DepthAI already installed
     target_link_libraries(${PLUGIN_NAME} PUBLIC ${DEPENDENCIES} ${OpenCV_LIBRARIES} PRIVATE depthai::core)
 endif()

@@ -3,13 +3,8 @@
 # This is the install script for ILLIXR
 # This will compile the main ILLIXR binary along with any requested plugins.
 #
-# In addition to the standard CMake options, the following arguments can be used:
-#
-# BUILD_GROUP : which subgroup of plugins are to be built
-#
-# To build specific plugins use the following format:
-#   USE_<PLUGIN>=ON
-# where <PLUGIN> is the name of the plugin in upper case.
+# See the documentation at https://illixr.github.io/ILLIXR/getting_started/
+# for complete build instructions.#
 #
 ########################################################################################
 
@@ -48,6 +43,12 @@ if(UNIX)
     else()
         set(HAVE_CENTOS No)
     endif()
+elseif(WIN32)
+    message(FATAL_ERROR "Windows is currently not supported")
+elseif(APPLE)
+    message(FATAL_ERROR "MacOS is currently not supported")
+else()
+    message(FATAL_ERROR "Unknown operating system")
 endif()
 
 if(PACKAGE_VERSION_LABEL)
@@ -56,7 +57,6 @@ else()
     set(PACKAGE_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_PATCH}")
 endif()
 
-include(CMakeDependentOption)
 include(ExternalProject)
 
 project(ILLIXR VERSION 3.2.0)
@@ -64,14 +64,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_definitions(-DGLSL_VERSION="330")
 
-set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -Wall -Wextra -fPIC")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -Wextra -fPIC")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-ggdb -O3 -Wall -Wextra -fPIC")
+set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -Wall -Wextra -rdynamic -Wno-attributes -Wno-unknown-pragmas -fPIC")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -Wextra -Wno-attributes -Wno-unknown-pragmas -fPIC")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-ggdb -O3 -Wall -Wextra -Wno-attributes -Wno-unknown-pragmas -fPIC")
+
+# needed to generate runtime scripts
+set(MONADO_RUNTIME_VK "")
+set(MONADO_RUNTIME_GL "")
+set(OPENXR_RUNTIME "")
+set(OPENXR_PLUGINS "")
 
 # set the CMake search path to include the local files
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
-
-set(BUILD_GROUP "NONE" CACHE STRING "Which components to build")
+option(COLOR_OUTPUT "Produce color output to the screen" ON)
 option(DATA_FILE "The data file to get" ON)
 set(DATA_FILE "http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/vicon_room1/V1_02_medium/V1_02_medium.zip")
 
@@ -81,16 +86,18 @@ if(ENABLE_COVERAGE AND NOT BUILD_TESTS)
     message("Coverage was enabled, automatically enabling tests.")
     set(BUILD_TESTS ON CACHE BOOL "enable tests?" FORCE)
 endif()
+option(BUILD_DOCS "Build documentation" OFF)
+option(USE_MONADO "Build for monado use" OFF)
 include(cmake/HelperFunctions.cmake)
 
+set(VISUALIZER "" CACHE STRING "")
+set(VISUALIZER_TO_USE "ALL" CACHE INTERNAL "")
+if(VISUALIZER)
+    string(TOUPPER ${VISUALIZER} VISUALIZER)
+    set(VISUALIZER_TO_USE ${VISUALIZER} CACHE INTERNAL "")
+endif()
+
 generate_yaml()
-
-# plugins, only exposed if BUILD_GROUP is OFF
-foreach(ITEM IN LISTS PLUGIN_LIST EXT_PLUGIN_LIST)
-    string(TOUPPER "USE_${ITEM}" ITEM_UPPER)
-    option("${ITEM_UPPER}" "" OFF)
-endforeach()
-
 check_plugins()
 
 set(CORE_PLUGINS OFF)
@@ -98,6 +105,9 @@ set(RT_SLAM_PLUGINS OFF)
 
 if(YAML_FILE)
     read_yaml(${YAML_FILE})
+    if(LOCAL_BUILD_FLAGS)
+        add_definitions("${LOCAL_BUILD_FLAGS}")
+    endif()
 endif()
 
 set(ILLIXR_BUILD_SUFFIX "")
@@ -109,73 +119,21 @@ endif()
 # the plugin library names will depend on the build type
 string(TOLOWER "${CMAKE_BUILD_TYPE}" lower_type)
 if(lower_type MATCHES "debug")
+    set(DO_DEBUG Yes)
     set(ILLIXR_BUILD_SUFFIX ".dbg")
 elseif(lower_type MATCHES "release")
     set(ILLIXR_BUILD_SUFFIX ".opt")
 elseif(lower_type MATCHES "relwithdebinfo")
+    set(DO_DEBUG Yes)
     set(ILLIXR_BUILD_SUFFIX ".optdbg")
 endif()
 
-set(CMAKE_PREFIX_PATH "${CMAKE_INSTALL_PREFIX}/lib/cmake;${CMAKE_INSTALL_PREFIX}/lib64/cmake")
+set(CMAKE_PREFIX_PATH "${CMAKE_INSTALL_PREFIX}/lib/cmake ${CMAKE_INSTALL_PREFIX}/lib64/cmake")
+
 set(ENV{PKG_CONFIG_PATH} "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig:${CMAKE_INSTALL_PREFIX}/lib64/pkgconfig")
 
 link_directories(BEFORE ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib64)
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/include)
-
-#STILL NEED DEMO DATA
-if(BUILD_GROUP STREQUAL "NATIVE")
-    set(RT_SLAM_PLUGINS ON)
-    set(USE_GROUND_TRUTH_SLAM ON)
-    set(USE_GLDEMO ON)
-    set(USE_DEBUGVIEW ON)
-    set(USE_OFFLOAD_DATA ON)
-    set(CORE_PLUGINS ON)
-    set(USE_ORB_SLAM ON)
-elseif(BUILD_GROUP STREQUAL "CI")
-    set(RT_SLAM_PLUGINS ON)
-    set(USE_GROUND_TRUTH_SLAM ON)
-    set(USE_GLDEMO ON)
-    set(CORE_PLUGINS ON)
-elseif(BUILD_GROUP STREQUAL "MONADO")
-    set(RT_SLAM_PLUGINS ON)
-    set(CORE_PLUGINS ON)
-    set(USE_MONADO ON)
-    set(USE_OPENXR_APP ON)
-elseif(BUILD_GROUP STREQUAL "ALL")
-    foreach(ITEM IN LISTS PLUGIN_LIST EXT_PLUGIN_LIST)
-        string(TOUPPER "USE_${ITEM}" ITEM_UPPER)
-        set(${ITEM_UPPER} ON)
-    endforeach()
-elseif(BUILD_GROUP STREQUAL "HEADLESS")
-    set(RT_SLAM_PLUGINS ON)
-    set(CORE_PLUGINS ON)
-    set(USE_GROUND_TRUTH_SLAM ON)
-    set(USE_GLDEMO ON)
-else()
-    set(SUBTARGETS No)
-    foreach(ITEM IN LISTS PLUGIN_LIST EXT_PLUGIN_LIST)
-        string(TOUPPER "USE_${ITEM}" ITEM_UPPER)
-        if(${ITEM_UPPER})
-            set(SUBTARGETS Yes)
-        endif()
-    endforeach()
-    if(NOT SUBTARGETS)
-        message(WARNING "BUILD_GROUP is not defined and no Plugins were selected. Only the main binary will be built.")
-    endif()
-endif()
-
-if(RT_SLAM_PLUGINS)
-    set(USE_OFFLINE_CAM ON)
-    set(USE_OFFLINE_IMU ON)
-    set(USE_KIMERA_VIO ON)
-    set(USE_GTSAM_INTEGRATOR ON)
-    set(USE_POSE_PREDICTION ON)
-endif()
-
-if(CORE_PLUGINS)
-    set(USE_TIMEWARP_GL ON)
-    set(USE_AUDIO_PIPELINE ON)
-endif()
 
 find_package(PkgConfig REQUIRED)
 
@@ -183,21 +141,13 @@ if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source build prohibited.")
 endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake")
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake")
 
 add_definitions(-DILLIXR_BUILD_SUFFIX=${ILLIXR_BUILD_SUFFIX})
-add_executable(main${ILLIXR_BUILD_SUFFIX}.exe src/main.cpp)
-
 ##############
 # dependencies
 ##############
 set(EXTERNAL_LIBRARIES "")
-
-##############
-# yaml parser
-##############
-
-get_external(Yamlcpp)
 
 ##############
 # opencv
@@ -214,7 +164,6 @@ if(HAVE_CENTOS)
     if(NOT OpenCV_FOUND OR NOT OPENCV_VIZ_FOUND)
 	    message("Building OpenCV")
         include(cmake/GetOpenCV_Viz.cmake)
-        add_dependencies(main${ILLIXR_BUILD_SUFFIX}.exe OpenCV_Viz)
         set(OpenCV_DEP_STR OpenCV_Viz)
         set(INTERNAL_OPENCV ${OpenCV_DIR})
         set(BUILD_OPENCV Yes)
@@ -236,7 +185,7 @@ pkg_check_modules(gl REQUIRED gl)
 find_package(Eigen3 REQUIRED)
 
 #############
-# plugin specific dependencies
+# plugin specific dependencies that are used by several plugins
 #############
 
 find_package(Git REQUIRED)
@@ -251,13 +200,12 @@ endif()
 
 find_package(Boost REQUIRED COMPONENTS filesystem serialization)
 
+find_package(spdlog REQUIRED)
 
-if(USE_GTSAM_INTEGRATOR OR USE_KIMERA_VIO)
-    get_external(GTSAM)
-endif()
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads)
 
-target_include_directories(main${ILLIXR_BUILD_SUFFIX}.exe PUBLIC ${X11_INCLUDE_DIR} ${GLEW_INCLUDE_DIR} ${SQLite3_INCLUDE_DIR} ${GLU_INCLUDE_DIR} ${gl_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${yaml-cpp_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(main${ILLIXR_BUILD_SUFFIX}.exe ${X11_LIBRARIES} ${GLEW_LIBRARIES} ${SQLite3_LIBRARIES} ${glu_LDFLAGS} ${gl_LIBRARIES} ${OpenCV_LIBRARIES} dl pthread stdc++fs ${yaml-cpp_LIBRARIES})
+include(src/CMakeLists.txt)
 
 if(BUILD_TESTS)
     enable_testing()
@@ -266,32 +214,38 @@ if(BUILD_TESTS)
 endif()
 
 # set any plugins that are being built
-foreach(ITEM IN LISTS PLUGIN_LIST)
+set(FULL_PLUGIN_LIST "")
+foreach(ITEM IN LISTS PLUGIN_LIST VISUALIZER_LIST)
     string(TOUPPER "USE_${ITEM}" ITEM_UPPER)
+    string(TOLOWER ${ITEM} ITEM_LOWER)
+    list(APPEND FULL_PLUGIN_LIST ${ITEM})
     if(${ITEM_UPPER})
-        add_subdirectory(plugins/${ITEM})
+        list(APPEND OPENXR_PLUGINS ${ITEM_LOWER})
+        string(REPLACE "." "/" ITEM_LOWER "${ITEM_LOWER}")
+        message("Adding plugins/${ITEM_LOWER}")
+        add_subdirectory(plugins/${ITEM_LOWER})
     endif()
+    unset(ITEM_LOWER)
+    unset(ITEM_UPPER)
 endforeach()
 
-# external plugin dependecnies
-if(USE_KIMERA_VIO OR USE_ORB_SLAM)
-    get_external(DBoW2)
-endif()
-
-# external plugins
-foreach(ITEM IN LISTS EXT_PLUGIN_LIST)
-    string(TOUPPER "USE_${ITEM}" ITEM_UPPER)
-    if(${ITEM_UPPER})
-        include(cmake/Get${ITEM}.cmake)
-    endif()
+list(SORT FULL_PLUGIN_LIST COMPARE STRING CASE INSENSITIVE ORDER ASCENDING)
+set(FULL_PLUGIN_LIST_STRING "")
+foreach(PLUGIN_NAME IN LISTS FULL_PLUGIN_LIST)
+    set(FULL_PLUGIN_LIST_STRING "${FULL_PLUGIN_LIST_STRING}\n- ${PLUGIN_NAME}")
 endforeach()
+set(CURRENT_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}" CACHE INTERNAL "")
 
-if(USE_DISPLAY_VK OR USE_TIMEWARP_VK OR USE_VKDEMO OR USE_NATIVE_REDERER)
-    get_external(MonadoVK)
-endif()
+# set up documentaiton build
+add_subdirectory(docs)
 
+# deal with the data file if there is one
 if(DATA_FILE)
-    if(EXISTS "./data.zip")
+    string(REGEX MATCH "^http" HAVE_MATCH ${DATA_FILE})
+    if(NOT HAVE_MATCH)
+        message("Data file appears local")
+        set(LOCAL_DATA "${DATA_FILE}")
+    elseif(EXISTS "./data.zip")
         message("Data file already exists, not re-downloding")
     else()
         message("Downloading ${DATA_FILE} to data.zip")
@@ -304,13 +258,26 @@ if(DATA_FILE)
     endif()
 endif()
 
-install(TARGETS main${ILLIXR_BUILD_SUFFIX}.exe DESTINATION bin)
-
+# give a summary of what will be done
 if(ENABLE_COVERAGE)
     setup_target_for_coverage_gcovr_html(NAME coverage EXECUTABLE ctest --schedule-random -j2 --test_dir tests EXCLUDE "_deps/*" "test/test_*.cpp" "plugins/*/test_*.cpp" DEPENDENCIES ${COVERAGE_DEPENDENCIES})
 endif()
 include(cmake/ConfigurationSummary.cmake)
 message("${COVERAGE_DEPENDENCIES}")
+
+# set up to install profile files
+if(ILLIXR_PROFILE_NAMES)
+    foreach(GRP IN LISTS ILLIXR_PROFILE_NAMES)
+        install(FILES "profiles/${GRP}.yaml"
+                DESTINATION $ENV{HOME}/.illixr/profiles)
+        install(FILES "profiles/${GRP}.yaml"
+                DESTINATION ${CMAKE_INSTALL_PREFIX}/share/illixr/profiles)
+    endforeach()
+endif()
+
+# reset this, so it is clean for subsequent runs of cmake
+set(VISUALIZER "" CACHE STRING "")
+
 #get_cmake_property(_variableNames VARIABLES)
 #foreach (_variableName ${_variableNames})
 #    message(STATUS "${_variableName}=${${_variableName}}")

@@ -1,7 +1,15 @@
 #pragma once
-
 #include "phonebook.hpp"
 #include "record_logger.hpp"
+#include "spdlog/common.h"
+#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
+
+#include <memory>
+#include <spdlog/spdlog.h>
+#include <string>
+#include <typeinfo>
+#include <utility>
 
 namespace ILLIXR {
 
@@ -47,11 +55,13 @@ public:
      * class's destructor is called before its parent (threadloop), so threadloop doesn't get a
      * chance to join the thread before the derived class is destroyed, and the thread accesses
      * freed memory. Instead, we call plugin->stop manually before destrying anything.
+     *
+     * Concrete plugins are responsible for initializing their specific logger and sinks.
      */
     virtual void stop() { }
 
-    plugin(const std::string& name_, phonebook* pb_)
-        : name{name_}
+    plugin(std::string name_, phonebook* pb_)
+        : name{std::move(name_)}
         , pb{pb_}
         , record_logger_{pb->lookup_impl<record_logger>()}
         , gen_guid_{pb->lookup_impl<gen_guid>()}
@@ -59,8 +69,26 @@ public:
 
     virtual ~plugin() = default;
 
-    std::string get_name() const noexcept {
+    [[nodiscard]] std::string get_name() const noexcept {
         return name;
+    }
+
+    void spdlogger(const char* log_level) {
+        if (!log_level) {
+#ifdef NDEBUG
+            log_level = "warn";
+#else
+            log_level = "debug";
+#endif
+        }
+        std::vector<spdlog::sink_ptr> sinks;
+        auto                          file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs/" + name + ".log");
+        auto                          console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        sinks.push_back(file_sink);
+        sinks.push_back(console_sink);
+        auto plugin_logger = std::make_shared<spdlog::logger>(name, begin(sinks), end(sinks));
+        plugin_logger->set_level(spdlog::level::from_str(log_level));
+        spdlog::register_logger(plugin_logger);
     }
 
 protected:
@@ -71,9 +99,9 @@ protected:
     const std::size_t                    id;
 };
 
-#define PLUGIN_MAIN(plugin_class)                                \
-    extern "C" plugin* this_plugin_factory(phonebook* pb) {      \
-        plugin_class* obj = new plugin_class{#plugin_class, pb}; \
-        return obj;                                              \
+#define PLUGIN_MAIN(plugin_class)                           \
+    extern "C" plugin* this_plugin_factory(phonebook* pb) { \
+        auto* obj = new plugin_class{#plugin_class, pb};    \
+        return obj;                                         \
     }
 } // namespace ILLIXR

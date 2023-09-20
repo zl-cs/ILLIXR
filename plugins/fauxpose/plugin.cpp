@@ -30,9 +30,16 @@
 
 #include "illixr/plugin.hpp"
 
+#include "illixr/data_format.hpp"
+#include "illixr/phonebook.hpp"
 #include "illixr/pose_prediction.hpp"
 
-#include <cstring>
+#include <cstdlib>
+#include <eigen3/Eigen/Core>
+#include <eigen3/Eigen/Geometry>
+#include <iostream>
+#include <memory>
+#include <mutex>
 
 using namespace ILLIXR;
 
@@ -41,24 +48,24 @@ class faux_pose_impl : public pose_prediction {
 public:
     // ********************************************************************
     /* Constructor: Provide handles to faux_pose */
-    faux_pose_impl(const phonebook* const pb)
+    explicit faux_pose_impl(const phonebook* const pb)
         : sb{pb->lookup_impl<switchboard>()}
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_vsync_estimate{sb->get_reader<switchboard::event_wrapper<time_point>>("vsync_estimate")} {
         char* env_input; /* pointer to environment variable input */
 #ifndef NDEBUG
-        std::cout << "[fauxpose] Starting Service\n";
+        spdlog::get("illixr")->debug("[fauxpose] Starting Service");
 #endif
 
         // Store the initial time
         if (_m_clock->is_started()) {
             sim_start_time = _m_clock->now();
 #ifndef NDEBUG
-            std::cout << "[fauxpose] Starting Service\n";
+            spdlog::get("illixr")->debug("[fauxpose] Starting Service");
 #endif
         } else {
 #ifndef NDEBUG
-            std::cout << "[fauxpose] Warning: the clock isn't started yet\n";
+            spdlog::get("illixr")->debug("[fauxpose] Warning: the clock isn't started yet");
 #endif
         }
 
@@ -69,69 +76,68 @@ public:
 
         // Adjust parameters based on environment variables
         if ((env_input = getenv("FAUXPOSE_PERIOD"))) {
-            period = atof(env_input);
+            period = std::strtof(env_input, nullptr);
         }
         if ((env_input = getenv("FAUXPOSE_AMPLITUDE"))) {
-            amplitude = atof(env_input);
+            amplitude = std::strtof(env_input, nullptr);
         }
         if ((env_input = getenv("FAUXPOSE_CENTER"))) {
-            center_location[0] = atof(env_input);
-            center_location[1] = atof(strchrnul(env_input, ',') + 1);
-            center_location[2] = atof(strchrnul(strchrnul(env_input, ',') + 1, ',') + 1);
+            center_location[0] = std::strtof(env_input, nullptr);
+            center_location[1] = std::strtof(strchrnul(env_input, ',') + 1, nullptr);
+            center_location[2] = std::strtof(strchrnul(strchrnul(env_input, ',') + 1, ',') + 1, nullptr);
         }
 #ifndef NDEBUG
-        std::cout << "[fauxpose] Period is " << period << "\n";
-        std::cout << "[fauxpose] Amplitude is " << amplitude << "\n";
-        std::cout << "[fauxpose] Center is " << center_location[0] << ", " << center_location[1] << ", " << center_location[2]
-                  << ", "
-                  << "\n";
+        spdlog::get("illixr")->debug("[fauxpose] Period is {}", period);
+        spdlog::get("illixr")->debug("[fauxpose] Amplitude is {}", amplitude);
+        spdlog::get("illixr")->debug("[fauxpose] Center is {}, {}, {}", center_location[0], center_location[1],
+                                     center_location[2]);
 #endif
     }
 
     // ********************************************************************
-    virtual ~faux_pose_impl() {
+    ~faux_pose_impl() override {
 #ifndef NDEBUG
-        std::cout << "[fauxpose] Ending Service\n";
+        spdlog::get("illixr")->debug("[fauxpose] Ending Service");
 #endif
     }
 
     // ********************************************************************
-    virtual pose_type get_true_pose() const override {
+    pose_type get_true_pose() const override {
         throw std::logic_error{"Not Implemented"};
     }
 
     // ********************************************************************
-    virtual bool fast_pose_reliable() const override {
+    bool fast_pose_reliable() const override {
         return true;
     }
 
     // ********************************************************************
-    virtual bool true_pose_reliable() const override {
+    bool true_pose_reliable() const override {
         return false;
     }
 
     // ********************************************************************
-    virtual pose_type correct_pose([[maybe_unused]] const pose_type pose) const override {
+    pose_type correct_pose([[maybe_unused]] const pose_type& pose) const override {
 #ifndef NDEBUG
-        std::cout << "[fauxpose] Returning (passthru) pose\n";
+        spdlog::get("illixr")->debug("[fauxpose] Returning (passthru) pose");
 #endif
         return pose;
     }
 
     // ********************************************************************
-    virtual Eigen::Quaternionf get_offset() override {
+    Eigen::Quaternionf get_offset() override {
         return offset;
     }
 
     // ********************************************************************
-    virtual void set_offset(const Eigen::Quaternionf& raw_o_times_offset) override {
+    void set_offset(const Eigen::Quaternionf& raw_o_times_offset) override {
         std::unique_lock   lock{offset_mutex};
         Eigen::Quaternionf raw_o = raw_o_times_offset * offset.inverse();
         offset                   = raw_o.inverse();
     }
 
     // ********************************************************************
-    virtual fast_pose_type get_fast_pose() const override {
+    fast_pose_type get_fast_pose() const override {
         // In actual pose prediction, the semantics are that we return
         //   the pose for next vsync, not now.
         switchboard::ptr<const switchboard::event_wrapper<time_point>> vsync_estimate = _m_vsync_estimate.get_ro_nullable();
@@ -157,18 +163,18 @@ public:
         // Calculate simulation time from start of execution
         std::chrono::nanoseconds elapsed_time;
         elapsed_time = time - sim_start_time;
-        sim_time     = elapsed_time.count() * 0.000000001;
+        sim_time     = static_cast<double>(elapsed_time.count()) * 0.000000001;
 
         // Calculate new pose values
         //   Pose values are calculated from the passage of time to maintain consistency */
-        simulated_pose.position[0] = center_location[0] + amplitude * sin(sim_time * period); // X
-        simulated_pose.position[1] = center_location[1];                                      // Y
-        simulated_pose.position[2] = center_location[2] + amplitude * cos(sim_time * period); // Z
+        simulated_pose.position[0] = static_cast<float>(center_location[0] + amplitude * sin(sim_time * period)); // X
+        simulated_pose.position[1] = static_cast<float>(center_location[1]);                                      // Y
+        simulated_pose.position[2] = static_cast<float>(center_location[2] + amplitude * cos(sim_time * period)); // Z
         simulated_pose.orientation = Eigen::Quaternionf(0.707, 0.0, 0.707, 0.0); // (W,X,Y,Z) Facing forward (90deg about Y)
 
         // Return the new pose
 #ifndef NDEBUG
-        std::cout << "[fauxpose] Returning pose\n";
+        spdlog::get("illixr")->debug("[fauxpose] Returning pose");
 #endif
         return fast_pose_type{.pose = simulated_pose, .predict_computed_time = _m_clock->now(), .predict_target_time = time};
     }
@@ -183,7 +189,7 @@ private:
     mutable Eigen::Quaternionf                                  offset{Eigen::Quaternionf::Identity()};
     mutable std::shared_mutex                                   offset_mutex;
 
-    time_point sim_start_time; /* Store the initial time to calculate a known runtime */
+    time_point sim_start_time{}; /* Store the initial time to calculate a known runtime */
 
     // Parameters
     double          period;          /* The period of the circular movment (in seconds) */
@@ -203,14 +209,14 @@ public:
         //   It is described in "pose_prediction.hpp"
         pb->register_impl<pose_prediction>(std::static_pointer_cast<pose_prediction>(std::make_shared<faux_pose_impl>(pb)));
 #ifndef NDEBUG
-        printf("[fauxpose] Starting Plugin\n");
+        spdlog::get("illixr")->debug("[fauxpose] Starting Plugin");
 #endif
     }
 
     // ********************************************************************
-    virtual ~faux_pose() override {
+    ~faux_pose() override {
 #ifndef NDEBUG
-        std::cout << "[fauxpose] Ending Plugin\n";
+        spdlog::get("illixr")->debug("[fauxpose] Ending Plugin");
 #endif
     }
 };

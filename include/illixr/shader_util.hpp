@@ -1,10 +1,12 @@
-#include "error_util.hpp"
-#include "GL/gl.h"
+#pragma once
 
+#include "error_util.hpp"
+
+#include <cassert>
 #include <cstring>
-#include <fstream>
-#include <iostream>
-#include <sstream>
+#include <GL/gl.h>
+#include <GL/glew.h>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <vector>
 
@@ -20,8 +22,9 @@ static void GLAPIENTRY MessageCallback([[maybe_unused]] GLenum source, [[maybe_u
         /// Don't show message if severity level is notification. Non-fatal.
         return;
     }
-    std::cerr << "GL CALLBACK: " << (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "") << " type = 0x" << std::hex << type
-              << std::dec << ", severity = 0x" << std::hex << severity << std::dec << ", message = " << message << std::endl;
+    std::string type_error = (type == GL_DEBUG_TYPE_ERROR) ? "** GL ERROR **" : "";
+    spdlog::get("illixr")->warn("[shader_util] GL CALLBACK: {} type = {:x}, severity = {:x}, message = {}", type_error, type,
+                                severity, message);
     // https://www.khronos.org/opengl/wiki/Debug_Output#Message_Components
     if (severity == GL_DEBUG_SEVERITY_HIGH) {
         /// Fatal error if severity level is high.
@@ -35,7 +38,7 @@ static GLuint init_and_link(const char* vertex_shader, const char* fragment_shad
     GLint result, vertex_shader_handle, fragment_shader_handle, shader_program;
 
     vertex_shader_handle = glCreateShader(GL_VERTEX_SHADER);
-    GLint vshader_len    = strlen(vertex_shader);
+    auto vshader_len     = static_cast<GLint>(strlen(vertex_shader));
     glShaderSource(vertex_shader_handle, 1, &vertex_shader, &vshader_len);
     glCompileShader(vertex_shader_handle);
     glGetShaderiv(vertex_shader_handle, GL_COMPILE_STATUS, &result);
@@ -52,7 +55,7 @@ static GLuint init_and_link(const char* vertex_shader, const char* fragment_shad
 
     GLint fragResult       = GL_FALSE;
     fragment_shader_handle = glCreateShader(GL_FRAGMENT_SHADER);
-    GLint fshader_len      = strlen(fragment_shader);
+    auto fshader_len       = static_cast<GLint>(strlen(fragment_shader));
     glShaderSource(fragment_shader_handle, 1, &fragment_shader, &fshader_len);
     glCompileShader(fragment_shader_handle);
     glGetShaderiv(fragment_shader_handle, GL_COMPILE_STATUS, &fragResult);

@@ -7,8 +7,10 @@ set(PLUGIN_NAME plugin.vkdemo${ILLIXR_BUILD_SUFFIX})
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Vulkan)
-
+find_package(FullVulkan REQUIRED)
+if(USE_MONADO)
+    get_external_for_plugin(Monado_vk)
+endif()
 file(GLOB_RECURSE GLSL_SOURCE_FILES
         "shaders/*.frag"
         "shaders/*.vert"
@@ -42,23 +44,14 @@ add_library(${PLUGIN_NAME} SHARED plugin.cpp
         ../../include/illixr/gl_util/lib/tiny_obj_loader.h
         ../../include/illixr/gl_util/lib/stb_image.h
         )
-# if building on CentOS make sure we use the correct OpenCV
-if(BUILD_OPENCV)
-    add_dependencies(${PLUGIN_NAME} OpenCV_Viz)
-endif()
 
 add_dependencies(${PLUGIN_NAME} Vkdemo_Shaders)
-set_target_properties(${PLUGIN_NAME} PROPERTIES OUTPUT_NAME "plugin")
+set_target_properties(${PLUGIN_NAME} PROPERTIES OUTPUT_NAME ${PLUGIN_NAME})
 
-target_link_libraries(${PLUGIN_NAME} PUBLIC ${Vulkan_LIBRARIES} ${OpenCV_LIBRARIES})
-target_include_directories(${PLUGIN_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${PLUGIN_NAME} ${Vulkan_LIBRARIES} spdlog::spdlog)
+target_include_directories(${PLUGIN_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS} ${ILLIXR_SOURCE_DIR}/include)
 
-add_custom_command(TARGET ${PLUGIN_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/shaders/"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${PROJECT_BINARY_DIR}/shaders"
-        "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/shaders"
-        )
+install_shaders(SPIRV_BINARY_FILES vkdemo ${PLUGIN_NAME})
 
 if(BUILD_TESTS)
     add_executable(test_${PLUGIN_NAME} test_plugin.cpp)

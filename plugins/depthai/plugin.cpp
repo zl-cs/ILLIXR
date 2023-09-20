@@ -1,12 +1,19 @@
-#include <cstdio>
+#include <chrono>
+#include <eigen3/Eigen/Core>
+#include <functional>
 #include <iostream>
+#include <mutex>
 #include <opencv2/opencv.hpp>
+#include <string>
 
 // Inludes common necessary includes for development using depthai library
 #include <depthai/depthai.hpp>
+#include <utility>
 
 // ILLIXR includes
 #include "illixr/data_format.hpp"
+#include "illixr/opencv_data_types.hpp"
+#include "illixr/phonebook.hpp"
 #include "illixr/relative_clock.hpp"
 #include "illixr/switchboard.hpp"
 #include "illixr/threadloop.hpp"
@@ -16,15 +23,16 @@ using namespace ILLIXR;
 class depthai : public plugin {
 public:
     depthai(std::string name_, phonebook* pb_)
-        : plugin{name_, pb_}
+        : plugin{std::move(name_), pb_}
         , sb{pb->lookup_impl<switchboard>()}
         , _m_clock{pb->lookup_impl<RelativeClock>()}
         , _m_imu{sb->get_writer<imu_type>("imu")}
         , _m_cam{sb->get_writer<cam_type>("cam")}
         , _m_rgb_depth{sb->get_writer<rgb_depth_type>("rgb_depth")} // Initialize DepthAI pipeline and device
         , device{createCameraPipeline()} {
+        spdlogger(std::getenv("DEPTHAI_LOG_LEVEL"));
 #ifndef NDEBUG
-        std::cout << "Depthai pipeline started" << std::endl;
+        spdlog::get(name)->debug("pipeline started");
 #endif
         colorQueue                             = device.getOutputQueue("preview", 1, false);
         depthQueue                             = device.getOutputQueue("depth", 1, false);
@@ -80,17 +88,20 @@ public:
 
             time_point cam_time_point{*_m_first_real_time_cam + std::chrono::nanoseconds(cam_time - *_m_first_cam_time)};
 
-            cv::Mat color = cv::Mat(colorFrame->getHeight(), colorFrame->getWidth(), CV_8UC3, colorFrame->getData().data());
+            cv::Mat color = cv::Mat(static_cast<int>(colorFrame->getHeight()), static_cast<int>(colorFrame->getWidth()),
+                                    CV_8UC3, colorFrame->getData().data());
             cv::Mat rgb_out{color.clone()};
-            cv::Mat rectifiedLeftFrame = cv::Mat(rectifL->getHeight(), rectifL->getWidth(), CV_8UC1, rectifL->getData().data());
+            cv::Mat rectifiedLeftFrame = cv::Mat(static_cast<int>(rectifL->getHeight()), static_cast<int>(rectifL->getWidth()),
+                                                 CV_8UC1, rectifL->getData().data());
             cv::Mat LeftOut{rectifiedLeftFrame.clone()};
             cv::flip(LeftOut, LeftOut, 1);
-            cv::Mat rectifiedRightFrame =
-                cv::Mat(rectifR->getHeight(), rectifR->getWidth(), CV_8UC1, rectifR->getData().data());
+            cv::Mat rectifiedRightFrame = cv::Mat(static_cast<int>(rectifR->getHeight()), static_cast<int>(rectifR->getWidth()),
+                                                  CV_8UC1, rectifR->getData().data());
             cv::Mat RightOut{rectifiedRightFrame.clone()};
             cv::flip(RightOut, RightOut, 1);
 
-            cv::Mat depth = cv::Mat(depthFrame->getHeight(), depthFrame->getWidth(), CV_16UC1, depthFrame->getData().data());
+            cv::Mat depth = cv::Mat(static_cast<int>(depthFrame->getHeight()), static_cast<int>(depthFrame->getWidth()),
+                                    CV_16UC1, depthFrame->getData().data());
             cv::Mat converted_depth;
             depth.convertTo(converted_depth, CV_32FC1, 1000.f);
 
@@ -144,13 +155,14 @@ public:
         }
     }
 
-    virtual ~depthai() override {
+    ~depthai() override {
 #ifndef NDEBUG
-        std::printf("Depthai Destructor: Packets Received %d Published: IMU: %d RGB-D: %d\n", imu_packet, imu_pub, rgbd_pub);
+        spdlog::get(name)->debug("Destructor: Packets Received {} Published: IMU: {} RGB-D: {}", imu_packet, imu_pub, rgbd_pub);
         auto dur = std::chrono::steady_clock::now() - first_packet_time;
-        std::printf("Time since first packet: %ld ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
-        std::printf("Depthai RGB: %d Left: %d Right: %d Depth: %d All: %d\n", rgb_count, left_count, right_count, depth_count,
-                    all_count);
+        spdlog::get(name)->debug("Time since first packet: {} ms",
+                                 std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+        spdlog::get(name)->debug("RGB: {} Left: {} Right: {} Depth: {} All: {}", rgb_count, left_count, right_count,
+                                 depth_count, all_count);
 #endif
     }
 
@@ -189,9 +201,9 @@ private:
     std::optional<ullong>     _m_first_cam_time;
     std::optional<time_point> _m_first_real_time_cam;
 
-    dai::Pipeline createCameraPipeline() {
+    dai::Pipeline createCameraPipeline() const {
 #ifndef NDEBUG
-        std::cout << "Depthai creating pipeline" << std::endl;
+        spdlog::get(name)->debug("creating pipeline");
 #endif
         dai::Pipeline p;
 
@@ -259,7 +271,7 @@ private:
         auto xoutRectifR = p.create<dai::node::XLinkOut>();
         auto xoutDepth   = p.create<dai::node::XLinkOut>();
 
-        stereo->setConfidenceThreshold(200);
+        stereo->initialConfig.setConfidenceThreshold(200);
         stereo->setLeftRightCheck(lrcheck);
         stereo->setExtendedDisparity(extended);
         stereo->setSubpixel(subpixel);
@@ -281,4 +293,4 @@ private:
 };
 
 // This line makes the plugin importable by Spindle
-PLUGIN_MAIN(depthai);
+PLUGIN_MAIN(depthai)

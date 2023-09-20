@@ -2,13 +2,18 @@
 
 #include "cpu_timer.hpp"
 #include "error_util.hpp"
+#include "phonebook.hpp"
 #include "plugin.hpp"
+#include "record_logger.hpp"
 #include "stoplight.hpp"
 
-#include <algorithm>
 #include <atomic>
-#include <future>
+#include <cassert>
+#include <chrono>
+#include <functional>
 #include <iostream>
+#include <memory>
+#include <thread>
 
 namespace ILLIXR {
 
@@ -33,7 +38,7 @@ const record_header __threadloop_iteration_header{
  */
 class threadloop : public plugin {
 public:
-    threadloop(std::string name_, phonebook* pb_)
+    threadloop(const std::string& name_, phonebook* pb_)
         : plugin{name_, pb_}
         , _m_stoplight{pb->lookup_impl<Stoplight>()} { }
 
@@ -50,7 +55,7 @@ public:
      * [1]: https://stackoverflow.com/questions/962132/calling-virtual-functions-inside-constructors
      * [2]: https://isocpp.org/wiki/faq/strange-inheritance#calling-virtuals-from-ctor-idiom
      */
-    virtual void start() override {
+    void start() override {
         plugin::start();
         _m_thread = std::thread(std::bind(&threadloop::thread_main, this));
         assert(!_m_stoplight->check_should_stop());
@@ -62,7 +67,7 @@ public:
      *
      * Must have already stopped the stoplight.
      */
-    virtual void stop() override {
+    void stop() override {
         assert(_m_stoplight->check_should_stop());
         assert(_m_thread.joinable());
         _m_thread.join();
@@ -77,7 +82,7 @@ public:
         _m_internal_stop.store(true);
     }
 
-    virtual ~threadloop() override {
+    ~threadloop() override {
         assert(_m_stoplight->check_should_stop());
         assert(!_m_thread.joinable());
     }
@@ -89,7 +94,6 @@ protected:
 private:
     void thread_main() {
         record_coalescer it_log{record_logger_};
-        std::cout << "thread," << std::this_thread::get_id() << ",threadloop," << name << std::endl;
 
         // TODO: In the future, synchronize the main loop instead of the setup.
         // This is currently not possible because RelativeClock is required in
