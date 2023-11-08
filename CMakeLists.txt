@@ -98,6 +98,7 @@ set(CORE_PLUGINS OFF)
 set(RT_SLAM_PLUGINS OFF)
 
 if(YAML_FILE)
+    message(STATUS "YAML_FILE is set to ${YAML_FILE}")
     read_yaml(${YAML_FILE})
     if(LOCAL_BUILD_FLAGS)
         add_definitions("${LOCAL_BUILD_FLAGS}")

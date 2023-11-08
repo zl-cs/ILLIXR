@@ -17,6 +17,7 @@ data_record/
 build
 deps
 cmake-build*
+.history
 
 illixr.yaml
 

@@ -7,7 +7,7 @@ if(yaml-cpp_FOUND)
     set(Yamlcpp_VERSION "${yaml-cpp_VERSION}")   # set current version
 else()
     EXTERNALPROJECT_ADD(cpp-yaml
-            GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git   # Git repo for source code
+            GIT_REPOSITORY git@github.com:jbeder/yaml-cpp.git   # Git repo for source code
             GIT_TAG 0579ae3d976091d7d664aa9d2527e0d0cff25763        # sha5 hash for specific commit to pull (if there is no specific tag to use)
             PREFIX ${CMAKE_BINARY_DIR}/_deps/yaml-cpp               # the build directory
             # arguments to pass to CMake

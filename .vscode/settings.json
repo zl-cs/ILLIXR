@@ -1,0 +1,14 @@
+{
+    "cmake.configureArgs": ["-DCMAKE_INSTALL_PREFIX=/home/zhang/install/ILLIXR/", "-DYAML_FILE=/home/zhang/code/ILLIXR/profiles/native_lup.yaml"],
+    "cmake.buildArgs": ["-j4"],
+    "cmake.debugConfig": {
+        "args": [
+            "--yaml",
+            "/home/zhang/code/ILLIXR/illixr_native_lookup.yaml"
+        ]
+    },
+    "files.associations": {
+        "chrono": "cpp",
+        "ratio": "cpp"
+    }
+}

@@ -77,7 +77,7 @@ public:
         // Timewarp poses a "second channel" by which pose data can correct the video stream,
         // which results in a "multipath" between the pose and the video stream.
         // In production systems, this is certainly a good thing, but it makes the system harder to analyze.
-        , disable_warp{ILLIXR::str_to_bool(ILLIXR::getenv_or("ILLIXR_TIMEWARP_DISABLE", "False"))}
+        , disable_warp{ILLIXR::str_to_bool(ILLIXR::getenv_or("ILLIXR_TIMEWARP_DISABLE", "True"))}
         , enable_offload{ILLIXR::str_to_bool(ILLIXR::getenv_or("ILLIXR_OFFLOAD_ENABLE", "False"))}
 #else
         , _m_signal_quad{sb->get_writer<signal_to_quad>("signal_quad")}
@@ -301,9 +301,22 @@ private:
 
         // Read the contents of the default framebuffer to the PBO
         glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO_buffer);
-        glReadPixels(0, 0, display_params::width_pixels, display_params::height_pixels, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+        // int sssize;
+        // glGetBufferParameteriv(GL_PIXEL_PACK_BUFFER, GL_BUFFER_SIZE, &sssize);
+        // spdlog::get(name)->debug("check the size of PBO ...,{}",sssize);
+        spdlog::get(name)->debug("check the size of window ...,{} * {}",display_params::width_pixels,display_params::height_pixels);
+        // GLubyte pixel[4];
+        // spdlog::get(name)->debug("check the size of pixel ...,{}",sizeof(pixel[0]));
+        glReadPixels(0, 0, display_params::width_pixels, display_params::height_pixels, GL_RGB, GL_UNSIGNED_BYTE, nullptr); //nullptr,pixels
+        GLubyte* pboData = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+        if (pboData) {
+            memcpy(pixels, pboData, memSize);
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        }
+        // spdlog::get(name)->debug("pixels:{},{},{},{}",pixel[0],pixel[1],pixel[2],pixel[3]);
 
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        spdlog::get(name)->debug(memSize);
 
         // Record the image collection time
         offload_duration = _m_clock->now() - startGetTexTime;
@@ -615,8 +628,13 @@ public:
             // Config PBO for texture image collection
             glGenBuffers(1, &PBO_buffer);
             glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO_buffer);
+            // glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            // spdlog::get(name)->info("add glPixelStorei: {}",4);
+            
             glBufferData(GL_PIXEL_PACK_BUFFER, display_params::width_pixels * display_params::height_pixels * 3, nullptr,
                          GL_STREAM_DRAW);
+            
+            spdlog::get(name)->info("size of PBO_buffer, {}",display_params::width_pixels * display_params::height_pixels * 3);
         }
 
         [[maybe_unused]] const bool gl_result_1 = static_cast<bool>(glXMakeCurrent(dpy, None, nullptr));

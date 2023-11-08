@@ -20,6 +20,10 @@ add_library(plugin.main${ILLIXR_BUILD_SUFFIX} SHARED
 
 get_external(Yamlcpp)
 
+set(yaml-cpp_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
+set(yaml-cpp_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
+set(yaml-cpp_LIBRARIES yaml-cpp)
+
 target_compile_definitions(plugin.main${ILLIXR_BUILD_SUFFIX} PRIVATE "ILLIXR_VISUALIZERS='${VIS_NAMES}'")
 
 target_include_directories(main${ILLIXR_BUILD_SUFFIX}.exe PUBLIC ${CMAKE_SOURCE_DIR}/include)

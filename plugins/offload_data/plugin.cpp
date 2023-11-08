@@ -101,7 +101,9 @@ private:
     void writeDataToDisk() {
         stbi_flip_vertically_on_write(true);
 
-        spdlog::get(name)->info("Writing offloaded images to disk...");
+        spdlog::get(name)->info("Writing offloaded images to disk...,{}",sizeof(_offload_data_container));
+        img_idx =  _offload_data_container.size();
+        spdlog::get(name)->debug("_offload_data_container: {}",_offload_data_container.size());
         img_idx = 0;
         for (auto& container_it : _offload_data_container) {
             // Get collecting time for each frame

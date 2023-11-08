@@ -1,0 +1,10 @@
+plugins: pose_lookup,timewarp_gl,gldemo,debugview,offload_data,audio_pipeline
+visualizers: openvins
+duration: 10
+data: /home/zhang/code/ILLIXR/data/mav0
+demo_data: /home/zhang/code/ILLIXR/demo_data
+install_prefix: /home/zhang/install/ILLIXR
+enable_offload: true
+enable_alignment: false
+enable_verbose_errors: true
+enable_pre_sleep: false

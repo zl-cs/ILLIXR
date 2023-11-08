@@ -1,0 +1,9 @@
+plugins: offline_imu,offline_cam,gtsam_integrator,pose_prediction,ground_truth_slam,gldemo,timewarp_gl,debugview,offload_data,audio_pipeline
+visualizers: openvins
+data: /home/zhang/code/ILLIXR/data/mav0
+demo_data: /home/zhang/code/ILLIXR/demo_data
+install_prefix: /home/zhang/install/ILLIXR
+enable_offload: true
+enable_alignment: false
+enable_verbose_errors: false
+enable_pre_sleep: false
