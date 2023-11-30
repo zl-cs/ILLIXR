@@ -35,7 +35,7 @@ protected:
     }
 
     /* maximum size of a read */
-    const static size_t BUFFER_SIZE = 1024 * 1024;
+    constexpr static size_t BUFFER_SIZE = 1024 * 1024;
 
 public:
     /* construct from fd number */

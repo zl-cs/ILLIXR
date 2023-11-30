@@ -58,7 +58,7 @@ public:
             {
                 std::lock_guard<std::mutex> lock{mutex};
                 this->img0 = img0;
-                this->img1 = img1;
+                this->img1 = img1; 
                 img_ready  = true;
             }
             cv.notify_one();

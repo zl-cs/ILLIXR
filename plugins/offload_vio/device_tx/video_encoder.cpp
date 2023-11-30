@@ -21,7 +21,7 @@ namespace ILLIXR {
     #define IMG_HEIGHT 480
 #endif
 
-#define ILLIXR_BITRATE 5242880
+#define ILLIXR_BITRATE 5120//5242880
 
 // Alternative encoding bitrates
 // 50Mbps = 52428800
@@ -47,41 +47,61 @@ void video_encoder::create_pipelines() {
     _appsink_img0 = gst_element_factory_make("appsink", "appsink_img0");
     _appsink_img1 = gst_element_factory_make("appsink", "appsink_img1");
 
+    //  NVIDIA-specific elements that convert video frames to a format suitable for encoding
     auto nvvideoconvert_0 = gst_element_factory_make("nvvideoconvert", "nvvideoconvert0");
     auto nvvideoconvert_1 = gst_element_factory_make("nvvideoconvert", "nvvideoconvert1");
+    if (!nvvideoconvert_0) {
+        g_printerr("nvvideoconvert_0 fail.\n");
+    }
+    if (!nvvideoconvert_1) {
+        g_printerr("nvvideoconvert_1 fail.\n");
+    }
+    // cpu: x264enc
+    // gpu: nvh264enc
+    // jetson: nvv4l2h264enc gst_element_factory_find("nvv4l2h264enc")
+    if (! gst_element_factory_find("nvh264enc")) {
+        g_printerr("'nvh264enc' factory is not available.\n");
+    }
+    auto encoder_img0 = gst_element_factory_make("nvh264enc", "encoder_img0");
+    auto encoder_img1 = gst_element_factory_make("nvh264enc", "encoder_img1");
 
-    auto encoder_img0 = gst_element_factory_make("nvv4l2h264enc", "encoder_img0");
-    auto encoder_img1 = gst_element_factory_make("nvv4l2h264enc", "encoder_img1");
+    if (!encoder_img0 || !encoder_img1) {
+        g_printerr("Failed to create encoder.\n");
+    }
 
     auto caps_8uc1 = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "GRAY8", "framerate", GST_TYPE_FRACTION, 0, 1,
-                                         "width", G_TYPE_INT, IMG_WIDTH, "height", G_TYPE_INT, IMG_HEIGHT, NULL);
+                                         "width", G_TYPE_INT, IMG_WIDTH, "height", G_TYPE_INT, IMG_HEIGHT, NULL); //set on appsrc elements
+    std::cout << "flag1: " << std::endl;
     g_object_set(G_OBJECT(_appsrc_img0), "caps", caps_8uc1, nullptr);
     g_object_set(G_OBJECT(_appsrc_img1), "caps", caps_8uc1, nullptr);
+    std::cout << "flag2: " << std::endl;
     gst_caps_unref(caps_8uc1);
-
+    std::cout << "flag3: " << std::endl;
     // set bitrate from environment variables
     // g_object_set(G_OBJECT(encoder_img0), "bitrate", std::stoi(std::getenv("ILLIXR_BITRATE")), nullptr, 10);
     // g_object_set(G_OBJECT(encoder_img1), "bitrate", std::stoi(std::getenv("ILLIXR_BITRATE")), nullptr, 10);
 
-    // set bitrate from defined variables
+    // set bitrate from defined variable
     g_object_set(G_OBJECT(encoder_img0), "bitrate", ILLIXR_BITRATE, nullptr);
     g_object_set(G_OBJECT(encoder_img1), "bitrate", ILLIXR_BITRATE, nullptr);
+    std::cout << "flag4: " << std::endl;
 
     g_object_set(G_OBJECT(_appsrc_img0), "stream-type", 0, "format", GST_FORMAT_BYTES, "is-live", TRUE, nullptr);
     g_object_set(G_OBJECT(_appsrc_img1), "stream-type", 0, "format", GST_FORMAT_BYTES, "is-live", TRUE, nullptr);
-
+    std::cout << "flag5: " << std::endl;
     g_object_set(_appsink_img0, "emit-signals", TRUE, "sync", FALSE, nullptr);
     g_object_set(_appsink_img1, "emit-signals", TRUE, "sync", FALSE, nullptr);
-
+    std::cout << "flag6: " << std::endl;
     g_signal_connect(_appsink_img0, "new-sample", G_CALLBACK(cb_new_sample), this);
     g_signal_connect(_appsink_img1, "new-sample", G_CALLBACK(cb_new_sample), this);
-
+    std::cout << "flag7: " << std::endl;
     _pipeline_img0 = gst_pipeline_new("pipeline_img0");
     _pipeline_img1 = gst_pipeline_new("pipeline_img1");
-
+    std::cout << "flag8: " << std::endl;
     gst_bin_add_many(GST_BIN(_pipeline_img0), _appsrc_img0, nvvideoconvert_0, encoder_img0, _appsink_img0, nullptr);
     gst_bin_add_many(GST_BIN(_pipeline_img1), _appsrc_img1, nvvideoconvert_1, encoder_img1, _appsink_img1, nullptr);
-
+    // abort("flag position");
+    std::cout << "flag9: " << std::endl;
     // link elements
     if (!gst_element_link_many(_appsrc_img0, nvvideoconvert_0, encoder_img0, _appsink_img0, nullptr) ||
         !gst_element_link_many(_appsrc_img1, nvvideoconvert_1, encoder_img1, _appsink_img1, nullptr)) {

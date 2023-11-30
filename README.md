@@ -1,4 +1,28 @@
 # ILLIXR
+## my doc
+### 1. Testing
+- native_lookup json
+<!-- 插入代码 -->
+```json
+{
+    "cmake.configureArgs": ["-DCMAKE_INSTALL_PREFIX=/home/zhang/install/ILLIXR/", "-DYAML_FILE=/home/zhang/code/ILLIXR/profiles/native_lup.yaml"],
+    "cmake.buildArgs": ["-j4"],
+    "cmake.debugConfig": {
+        "args": [
+            "--yaml",
+            "/home/zhang/code/ILLIXR/illixr_native_lookup.yaml"
+        ]
+    },
+    "files.associations": {
+        "chrono": "cpp",
+        "ratio": "cpp"
+    }
+}
+```
+
+
+
+## oringin doc
 
 [![NCSA licensed](https://img.shields.io/badge/license-NCSA-blue.svg)](LICENSE)
 [![CI](https://github.com/ILLIXR/ILLIXR/workflows/illixr-tests-master/badge.svg)](https://github.com/ILLIXR/ILLIXR/actions)
